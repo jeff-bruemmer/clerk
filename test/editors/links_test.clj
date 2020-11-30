@@ -3,7 +3,6 @@
              [checks :as checks]
              [text :as text]]
             [editors.links :as l]
-            [clj-http.client :as c]
             [clojure.test :as t :refer [deftest is]])
   (:use clj-http.fake))
 
