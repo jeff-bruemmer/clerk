@@ -72,7 +72,7 @@ Clerk accepts txt, md, org, and tex files.
 
 ## Checks
 
-[Editors](#editors) | [Custom checks](#custom-checks) | [Modifying checks](#modifying-checks) | [Adding checks](#adding-checks)
+[Editors](#editors) | [Default checks](#default-checks) | [Modifying checks](#modifying-checks) | [Adding checks](#adding-checks)
 
 Checks are stored as data in EDN format. Clerk's default set of checks are in the [default checks repository](https://github.com/jeff-bruemmer/clerk-default-checks).
 You can list enabled checks with the `--checks` flag:
@@ -117,7 +117,7 @@ Clerk has different editors, each for a different type of check. You can disable
 | Repetition  | Consecutive word repetition.            | No                |
 | Links       | Checks for broken links.                | No                |
 
-### Custom checks
+### Default checks
 
 When Clerk first runs, it will download the [default checks](https://github.com/jeff-bruemmer/clerk-default-checks), and store then in the `.clerk` directory in your home directory:
 
@@ -134,6 +134,7 @@ When Clerk first runs, it will download the [default checks](https://github.com/
     ├── corporate-speak.edn
     ... and more checks
 ```
+Consider versioning your `.clerk` directory.
 
 ### Modifying checks
 
