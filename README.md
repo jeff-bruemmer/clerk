@@ -206,7 +206,7 @@ For Recommender checks, add maps to the Recommendations vector:
 
 ## Installation
 
-[Download](#download) | [Build from source](#build-from-source) |
+[Download](#download) | [Build from source](#build-from-source) | [Clojure CLI tools](#clojure-cli-tools)
 
 ### Download
 
