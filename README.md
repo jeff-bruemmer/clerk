@@ -62,7 +62,7 @@ CLI options:
 
 ```
 
-For example, to export results EDN:
+Here's an example command to export results to EDN:
 
 ```
 $ clerk -f /path/to/drivel.md -o edn
@@ -72,7 +72,7 @@ Clerk accepts txt, md, org, and tex files.
 
 ## Checks
 
-[Editors](#editors) | [Custom checks](#custom-checks) | [Modifying checks](#modifying-checks) | [Adding checks](#adding-checks)
+[Editors](#editors) | [Default checks](#default-checks) | [Modifying checks](#modifying-checks) | [Adding checks](#adding-checks)
 
 Checks are stored as data in EDN format. Clerk's default set of checks are in the [default checks repository](https://github.com/jeff-bruemmer/clerk-default-checks).
 You can list enabled checks with the `--checks` flag:
@@ -117,9 +117,9 @@ Clerk has different editors, each for a different type of check. You can disable
 | Repetition  | Consecutive word repetition.            | No                |
 | Links       | Checks for broken links.                | No                |
 
-### Custom checks
+### Default checks
 
-When Clerk first runs, it will download the [default checks](https://github.com/jeff-bruemmer/clerk-default-checks), and store then in the `.clerk` directory in your home directory:
+When Clerk first runs, it will download the [default checks](https://github.com/jeff-bruemmer/clerk-default-checks), and store them in the `.clerk` directory in your home directory:
 
 ```
 ├── README.md
@@ -134,6 +134,7 @@ When Clerk first runs, it will download the [default checks](https://github.com/
     ├── corporate-speak.edn
     ... and more checks
 ```
+Once Clerk has downloaded the default checks, consider versioning your `.clerk` directory.
 
 ### Modifying checks
 
@@ -199,30 +200,35 @@ For Recommender checks, add maps to the Recommendations vector:
 ```edn
 {:name "Handsome",
  :kind "recommender",
- :message "" ;; prefer
  :recommendations [{:avoid "Unseemly phrase",
                     :prefer "Handsome phrase"}]}
 ```
 
 ## Installation
 
-[Download](#download) | [Build from source](#build-from-source) |
+[Download](#download) | [Build from source](#build-from-source) | [Clojure CLI tools](#clojure-cli-tools)
 
 ### Download
 
 Clerk uses GraalVM's Native Image utility to compile to a binary executable.
 
-1. Download the binary for your system. Linux and MacOS binaries are available. Windows users can run Clerk on Windows Subsystem for Linux.
+1. Download the [latest binary](https://github.com/jeff-bruemmer/clerk-prototype/releases) for your system. Linux and Mac OS (Darwin) binaries are available. Windows users can run Clerk on Windows Subsystem for Linux.
 2. `cd` into your Downloads directory and rename download to `clerk`.
 3. `chmod +x clerk`.
 4. Add Clerk to your \$PATH, e.g., `sudo cp clerk /usr/local/bin`.
 
 ### Build from source
 
-If you have [GraalVM](https://www.graalvm.org/) and [Native-Image](https://www.graalvm.org/reference-manual/native-image/) installed, you can build the binary yourself:
+If you've installed [GraalVM](https://www.graalvm.org/) and [Native Image](https://www.graalvm.org/reference-manual/native-image/), you can build the binary yourself:
 
 ```
 clj -M:build
+```
+
+Or install it with:
+
+```
+./tools/install.sh
 ```
 
 ### Clojure CLI tools
