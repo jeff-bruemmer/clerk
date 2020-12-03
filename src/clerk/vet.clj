@@ -7,6 +7,7 @@
              [text :as text]]
             [editors
              [case :as c]
+             [case-recommender :as cr]
              [existence :as existence]
              [links :as links]
              [recommender :as recommender]
@@ -47,6 +48,7 @@
       "recommender" (recommender/proofread line check)
       "repetition" (repetition/proofread line check)
       "case" (c/proofread line check)
+      "case-recommender" (cr/proofread line check)
       "links" (links/proofread line check)
       (throw (Exception. (str "Not a valid check: " kind))))))
 

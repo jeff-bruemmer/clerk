@@ -109,13 +109,14 @@ You can enable, modify, or disable any check by commenting out entire checks or 
 
 Clerk has different editors, each for a different type of check. You can disable any check, and can extend Existence, Case, and Recommender checks.
 
-| **Editor**  | **Description**                         | **Customizable?** |
-| :---------- | :-------------------------------------- | :---------------- |
-| Existence   | Does the line contain the specimen?     | Yes               |
-| Case        | Same as Existence, only case sensitive. | Yes               |
-| Recommender | Avoid X; prefer Y.                      | Yes               |
-| Repetition  | Consecutive word repetition.            | No                |
-| Links       | Checks for broken links.                | No                |
+| **Editor**       | **Description**                          | **Customizable?** |
+| :--------------- | :--------------------------------------- | :---------------- |
+| Existence        | Does the line contain the specimen?      | Yes               |
+| Case             | Same as Existence, only case sensitive.  | Yes               |
+| Recommender      | Avoid X; prefer Y.                       | Yes               |
+| Case-recommender | Same as Recommender, only case sensitive | Yes               |
+| Repetition       | Consecutive word repetition.             | No                |
+| Links            | Checks for broken links.                 | No                |
 
 ### Default checks
 
@@ -134,6 +135,7 @@ When Clerk first runs, it will download the [default checks](https://github.com/
     ├── corporate-speak.edn
     ... and more checks
 ```
+
 Once Clerk has downloaded the default checks, consider versioning your `.clerk` directory.
 
 ### Modifying checks

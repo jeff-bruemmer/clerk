@@ -38,14 +38,14 @@
 
 (defn create-issue-collector
   "Samples lines for each specimen in check, and adds any issues to the line."
-  [case-sensitivity]
+  [case-sensitive?]
   (fn
     [line
      {:keys [kind specimens message name]}]
     (if (empty? specimens)
       line
       (let [re-core (string/join "|" specimens)
-            matches (seek (:text line) re-core case-sensitivity)]
+            matches (seek (:text line) re-core case-sensitive?)]
         (if (empty? matches)
           line
           (reduce
@@ -56,3 +56,26 @@
                                      :message message}))
            line
            matches))))))
+
+(defn create-recommender
+  "Returns a function that accepts a boolean to determine whether the
+  recommender is case sensitive."
+  [case-sensitive?]
+  (fn [line check]
+    (let [{:keys [recommendations message name kind]} check]
+      (if (empty? recommendations)
+        line
+        (reduce (fn [line {:keys [prefer avoid]}]
+                  (let [{:keys [text]} line
+                        matches (seek text avoid case-sensitive?)]
+                    (if (empty? matches)
+                      line
+                      (reduce (fn [l match] (add-issue {:line l
+                                                             :specimen match
+                                                             :name name
+                                                             :kind kind
+                                                             :message (str message "Prefer: " prefer)}))
+                              line
+                              matches))))
+                line
+                recommendations)))))
