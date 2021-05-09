@@ -7,4 +7,4 @@
 (defn filepath
   "Builds filepath with using the home directory."
   ([& args]
-   (str (string/join (java.io.File/separator) (concat [(System/getProperty "user.home")] args)))))
+   (str (string/join (java.io.File/separator) (concat [home-dir] args)))))
