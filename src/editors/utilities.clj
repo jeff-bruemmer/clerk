@@ -62,7 +62,7 @@
   recommender is case sensitive."
   [case-sensitive?]
   (fn [line check]
-    (let [{:keys [recommendations message name kind]} check]
+    (let [{:keys [recommendations name kind]} check]
       (if (empty? recommendations)
         line
         (reduce (fn [line {:keys [prefer avoid]}]
