@@ -74,7 +74,7 @@
                                                              :specimen match
                                                              :name name
                                                              :kind kind
-                                                             :message (str message "Prefer: " prefer)}))
+                                                             :message (str "Prefer: " prefer)}))
                               line
                               matches))))
                 line
