@@ -25,7 +25,7 @@
        (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
 
 (defn capitalize-first-char
-  "Like string/capitalize, only it leaves the rest of the string in tact
+  "Like string/capitalize, only it ignores the rest of the string
   to retain case-sensitive recommendations."
   [s]
     (if (< (count s) 2)
