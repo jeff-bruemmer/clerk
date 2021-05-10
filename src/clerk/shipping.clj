@@ -24,7 +24,7 @@
        (map (fn [m] (assoc m :option (str (:short-opt m) ", " (:long-opt m)))))
        (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
 
-(defn captialize-first-char
+(defn capitalize-first-char
   "Like string/capitalize, only it leaves the rest of the string in tact
   to retain case-sensitive recommendations."
   [s]
