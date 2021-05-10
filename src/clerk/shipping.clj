@@ -24,6 +24,14 @@
        (map (fn [m] (assoc m :option (str (:short-opt m) ", " (:long-opt m)))))
        (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
 
+(defn captialize-first-char
+  "Like string/capitalize, only it leaves the rest of the string in tact
+  to retain case-sensitive recommendations."
+  [s]
+    (if (< (count s) 2)
+      (string/upper-case s)
+      (str (string/upper-case (subs s 0 1))
+           (subs s 1))))
 (defn prep
   "Prepares results for printing by merging line data with each issue."
   [{:keys [line-num issues]}]
@@ -33,7 +41,7 @@
                        :col-num col-num
                        :specimen specimen
                        :name (string/capitalize (string/replace name "-" " "))
-                       :message (str (string/capitalize message) ".")})))
+                       :message (str (capitalize-first-char message) ".")})))
           []
           issues))
 
