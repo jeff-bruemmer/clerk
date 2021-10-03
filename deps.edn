@@ -11,7 +11,7 @@
  :aliases
  {:build
   {:main-opts
-   ["-m clj.native-image clerk.core"
+   ["-m" "clj.native-image" "clerk.core"
     "--initialize-at-build-time"
     "-H:Name=clerk"
     "--report-unsupported-elements-at-runtime"
