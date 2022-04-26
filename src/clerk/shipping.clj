@@ -28,10 +28,10 @@
   "Like string/capitalize, only it ignores the rest of the string
   to retain case-sensitive recommendations."
   [s]
-    (if (< (count s) 2)
-      (string/upper-case s)
-      (str (string/upper-case (subs s 0 1))
-           (subs s 1))))
+  (if (< (count s) 2)
+    (string/upper-case s)
+    (str (string/upper-case (subs s 0 1))
+         (subs s 1))))
 (defn prep
   "Prepares results for printing by merging line data with each issue."
   [{:keys [line-num issues]}]
@@ -130,7 +130,6 @@
 
 (defn print-usage
   "Prints usage, optionally with a message."
-
   ([{:keys [summary]}]
    (println "\nClerk vets a text with the supplied checks.\n")
    (print-opts summary "USAGE:"))
@@ -155,7 +154,7 @@
   "Takes results, preps them, and prints them in the supplied output format."
   [{:keys [results output]}]
   (cond
-    (and (empty? results)) (println "Flawless victory.")
+    (empty? results) (println "Flawless victory.")
     (some? results) (let [r (sort-by (juxt :line-num :col-num) (mapcat prep results))]
                       (case (string/lower-case output)
                         "edn" (pp/pprint r)

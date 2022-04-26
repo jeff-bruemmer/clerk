@@ -9,7 +9,9 @@
   metosin/jsonista #:mvn{:version "0.2.7"}},
  :paths ["src" "classes" "resources"],
  :aliases
- {:build
+ {:run
+  {:main-opts ["-m" "clerk.core"]}
+  :build
   {:main-opts
    ["-m" "clj.native-image" "clerk.core"
     "--initialize-at-build-time"
@@ -17,13 +19,19 @@
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
     "-H:EnableURLProtocols=http,https"
-    "--enable-all-security-services"],
+    "--enable-all-security-services"
+    "--native-image-info"
+    "--enable-http"
+    "--enable-https"
+    "-J-Xmx3G"
+    "--no-fallback"
+    "--no-server"],
    :extra-deps
    #:clj.native-image{clj-native-image
                       {:git/url
                        "https://github.com/taylorwood/clj.native-image.git",
                        :sha
-                       "b3823a48be75122b9671c86ce5353a85589ef15f"}}},
+                       "7708e7fd4572459c81f6a6b8e44c96f41cdd92d4"}}},
   :test
   {:extra-paths ["test"],
    :extra-deps
