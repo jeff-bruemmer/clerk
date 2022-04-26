@@ -12,4 +12,4 @@
 
 (deftest compute
   (is (false? (empty? results)))
-  (is (= 15 (count (:results results)))))
+  (is (= 14 (count (:results results)))))
