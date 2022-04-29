@@ -23,7 +23,7 @@
 (def options
   "CLI option configuration. See:
   https://github.com/clojure/tools.cli"
-  [["-f" "--file FILE" "File to proofread." :default nil
+  [["-f" "--file FILE" "File or dir to proofread." :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table"
