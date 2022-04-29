@@ -2,9 +2,11 @@
   (:gen-class)
   (:require [clojure.string :as string]))
 
+(set! *warn-on-reflection* true)
+
 (def home-dir (System/getProperty "user.home"))
 
 (defn filepath
-  "Builds filepath with using the home directory."
+  "Builds filepath using the home directory."
   ([& args]
    (str (string/join (java.io.File/separator) (concat [home-dir] args)))))

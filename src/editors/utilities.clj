@@ -21,7 +21,7 @@
 (defn add-issue
   "Adds an issue to a text/Line's issues."
   [{:keys [line specimen name kind message]}]
-  (let [{:keys [text]} line
+  (let [{:keys [file text]} line
         col (string/index-of (string/lower-case text) (string/lower-case specimen))]
     ;; If the string is not in the line, there is no issue.
     ;; Guards against legitimate repetition hits, hits that are valid.
@@ -30,6 +30,7 @@
       (-> line
           (assoc :issue? true)
           (update :issues #(conj % (text/->Issue
+                                    (text/home-path file)
                                     name
                                     kind
                                     specimen
@@ -41,7 +42,7 @@
   [case-sensitive?]
   (fn
     [line
-     {:keys [kind specimens message name]}]
+     {:keys [file kind specimens message name]}]
     (if (empty? specimens)
       line
       (let [re-core (string/join "|" specimens)
@@ -49,7 +50,8 @@
         (if (empty? matches)
           line
           (reduce
-           (fn [l match] (add-issue {:line l
+           (fn [l match] (add-issue {:file file
+                                     :line l
                                      :specimen match
                                      :name name
                                      :kind kind
@@ -66,15 +68,16 @@
       (if (empty? recommendations)
         line
         (reduce (fn [line {:keys [prefer avoid]}]
-                  (let [{:keys [text]} line
+                  (let [{:keys [file text]} line
                         matches (seek text avoid case-sensitive?)]
                     (if (empty? matches)
                       line
-                      (reduce (fn [l match] (add-issue {:line l
-                                                             :specimen match
-                                                             :name name
-                                                             :kind kind
-                                                             :message (str "Prefer: " prefer)}))
+                      (reduce (fn [l match] (add-issue {:file file
+                                                        :line l
+                                                        :specimen match
+                                                        :name name
+                                                        :kind kind
+                                                        :message (str "Prefer: " prefer)}))
                               line
                               matches))))
                 line

@@ -10,6 +10,8 @@
             [clojure.java.io :as io])
   (:import java.io.File))
 
+(set! *warn-on-reflection* true)
+
 (def remote-address "https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip")
 
 (defrecord Config [checks])

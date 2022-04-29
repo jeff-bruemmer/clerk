@@ -11,16 +11,23 @@
 
 (set! *warn-on-reflection* true)
 
+(defn format-summary
+  "Function supplied to cli/parse-opts to format map of command line options.
+   Map produced sent to ship/print-options."
+  [summary]
+  (->> summary
+       ;; combine short and long option
+       (map (fn [m] (assoc m :option (str (:short-opt m) ", " (:long-opt m)))))
+       (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
+
 (def options
   "CLI option configuration. See:
   https://github.com/clojure/tools.cli"
-  [["-f" "--file FILE" "File to proofread."
-    :default nil
+  [["-f" "--file FILE" "File or dir to proofread." :default nil
     :validate [text/file-exists? text/file-error-msg
-               text/supported-file-type? text/file-type-msg
                text/less-than-10-MB? text/file-size-msg]]
-   ["-o" "--output FORMAT" "Output type: table, EDN, or JSON."
-    :default "table"]
+   ["-o" "--output FORMAT" "Output type: group, edn, json, table"
+    :default "group"]
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file."
     :default (sys/filepath ".clerk" "config.edn")
@@ -39,7 +46,7 @@
 (defn reception
   "Parses command line `args` and applies the relevant function."
   [args]
-  (let [opts (cli/parse-opts args options :summary-fn ship/format-summary)
+  (let [opts (cli/parse-opts args options :summary-fn format-summary)
         {:keys [options errors]} opts
         {:keys [file config help checks version]} options]
     (if (seq errors)

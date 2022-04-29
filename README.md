@@ -3,23 +3,28 @@
 Clerk is a customizable prose linter.
 
 ```
-$ clerk -f /path/to/drivel.md
+$ clerk -f resources
 
-| Line | Col | Specimen                | Name               | Message                            |
-|------+-----+-------------------------+--------------------+------------------------------------|
-| 3    | 13  | quick as lightning      | Clichés            | A tired phrase.                    |
-| 7    | 40  | software program        | Redundancies       | Redundancy.                        |
-| 11   | 49  | hopefully               | Skunked terms      | Skunked term: consider rephrasing. |
-| 17   | 13  | FIX THIS                | Annotations        | Draft litter.                      |
-| 21   | 9   | I would argue           | Hedging            | Omit this phrase.                  |
-| 25   | 10  | perchance               | Archaisms          | Modernize.                         |
-| 27   | 31  | abolishment             | Needless variant   | Prefer: abolition.                 |
-| 31   | 17  | intense apathy          | Oxymorons          | Oxymoron.                          |
-| 33   | 29  | zero sum game           | Phrasal adjectives | Hyphenate:prefer: zero-sum game.   |
-| 35   | 8   | Per your request        | Jargon             | Jargon.                            |
-| 37   | 36  | no brainer              | Corporate speak    | Avoid corporate-speak.             |
-| 39   | 16  | https://08952d51.com    | Links              | Broken link.                       |
-...
+ ~/clerk/resources/drivel.md
+3:13	"quick as lightning" -> A tired phrase.
+7:15	"software program" -> Pleonastic phrase.
+11:49	"hopefully" -> Skunked term: consider rephrasing.
+13:8	"Female booksalesman" -> Sexist or ridiculous term.
+17:13	"FIX THIS" -> Draft litter.
+
+ ~/clerk/resources/more/words.md
+3:9	"I would argue" -> Omit this phrase.
+3:55	", so to speak" -> Omit this phrase.
+5:11	"Squelch" -> Prefer: quell.
+7:10	"Perchance" -> Modernize.
+9:31	"abolishment" -> Prefer: abolition.
+9:69	"ironical" -> Prefer: ironic.
+11:20	"the the" -> Consecutive word repetition.
+11:113	"punctuation punctuation" -> Consecutive word repetition.
+13:17	"intense apathy" -> Oxymoron.
+15:29	"zero sum game" -> Prefer: zero-sum game.
+17:8	"Per your request" -> Jargon.
+19:36	"no brainer" -> Avoid corporate-speak.
 ```
 
 You can edit what Clerk checks for, and create your own checks for Clerk to run. You can use Clerk to vet documents against your style guide, or simply guard against your writing tics.
@@ -44,17 +49,17 @@ Clerk includes many of Proselint's default checks, but Clerk pruned some checks 
 
 ## Usage
 
-Clerk outputs a table of issues with the prose. Clerk does not alter text. To proofread a document:
+Clerk outputs a table of issues with the prose. Clerk does not alter text. To proofread a document or directory:
 
 ```
-$ clerk -f /path/to/drivel.md
+$ clerk -f /path/to/thing-to-lint
 ```
 
 CLI options:
 
 ```
 
--f, --file FILE File to proofread.
+-f, --file FILE File or dir to proofread.
 -o, --output FORMAT Output type: table, EDN, or JSON.
 -C, --checks List enabled checks.
 -c, --config CONFIG Set temporary configuration file.
@@ -238,5 +243,5 @@ Or install it with:
 Run with Clojure's CLI tools.
 
 ```
-clj -M -m clerk.core -f /path/to/file.org
+clj -M:run -f /path/to/file
 ```

@@ -1,27 +1,41 @@
 (ns clerk.vet
   (:gen-class)
-  (:require [clerk
-             [checks :as checks]
-             [config :as conf]
-             [storage :as store]
-             [text :as text]]
-            [editors
-             [case :as c]
-             [case-recommender :as cr]
-             [existence :as existence]
-             [links :as links]
-             [recommender :as recommender]
-             [repetition :as repetition]]))
+  (:require
+   [clojure.java.io :as io]
+   [clerk
+    [checks :as checks]
+    [config :as conf]
+    [storage :as store]
+    [text :as text]]
+   [editors
+    [case :as c]
+    [case-recommender :as cr]
+    [existence :as existence]
+    [links :as links]
+    [recommender :as recommender]
+    [repetition :as repetition]]))
+
+(set! *warn-on-reflection* true)
 
 ;;;; Combine user input and the relevant cached results
 
 (defrecord Input
-           [file
+           [files
             lines
             config
             checks
             cached-result
             output])
+
+(defn get-lines-from-all-files
+  [file]
+  (->> file
+       io/file
+       file-seq
+       (map #(.getAbsolutePath %))
+       (filter text/supported-file-type?)
+       text/handle-invalid-file
+       (mapcat text/fetch!)))
 
 (defn make-input
   "Input combines user-defined options and arguments
@@ -30,7 +44,7 @@
   (let [c (conf/fetch-or-create! config)]
     (map->Input
      {:file file
-      :lines (text/fetch! file)
+      :lines (get-lines-from-all-files file)
       :config c
       :checks (checks/create c)
       :cached-result (store/inventory file)
@@ -61,7 +75,7 @@
        (filter #(:issue? %))))
 
 (defn compute
-  "Takes a file and a configuration, and returns the results of
+  "Takes an input, and returns the results of
   running the configured checks on each line of text in the file."
   [{:keys [file lines config checks output]}]
   (store/map->Result {:lines lines

@@ -3,8 +3,10 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as string]))
 
-(defrecord Line [text line-num issue? issues])
-(defrecord Issue [name kind specimen col-num message])
+(set! *warn-on-reflection* true)
+
+(defrecord Line [file text line-num issue? issues])
+(defrecord Issue [file name kind specimen col-num message])
 
 (def file-error-msg "file must exist.")
 (def file-size-msg "file size must be less than 10MB.")
@@ -28,23 +30,32 @@
    #{"txt" "tex" "md" "markdown" "org"}
    (peek (string/split filepath #"\."))))
 
+(defn handle-invalid-file
+  [files]
+  (if (empty? files) (throw (Exception. "Not a valid file")))
+  files)
+
 ;;;; Load text and create lines to vet.
 
 (defn create-line
-  "Decorates a line of text with a map of metadata and a
-  vector to store issues."
   [idx text]
   {:line-num (inc idx)
    :text text
    :issue? false
    :issues []})
 
+(defn home-path
+  [filepath]
+  (string/replace filepath (System/getProperty "user.home") "~"))
+
 (defn fetch!
   "Loads a text and returns its lines."
   [filepath]
-  (->> filepath
-       (slurp)
-       (string/split-lines)
-       (map-indexed create-line)
-       (map map->Line)
-       (remove #(string/blank? (:text %)))))
+  (let [homepath (home-path filepath)]
+    (->> filepath
+         (slurp)
+         (string/split-lines)
+         (map-indexed create-line)
+         (map map->Line)
+         (map #(assoc % :file homepath))
+         (remove #(string/blank? (:text %))))))
