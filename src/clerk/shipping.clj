@@ -49,7 +49,7 @@
 
 (defn issue-str
   "Creates a simplified result string for grouped results."
-  [{:keys [line-num col-num specimen name message]}]
+  [{:keys [line-num col-num specimen message]}]
   (string/join "\t" [(str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
 
 (defn group-results
