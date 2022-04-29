@@ -5,18 +5,21 @@
             [clojure.test :as t :refer [deftest is]]))
 
 (def error-line (text/->Line
+                 "resources"
                  "This sentence is ironical."
                  42
                  false
                  []))
 
 (def error-line-double (text/->Line
+                        "resources"
                         "This sentence is ironical and extensible."
                         42
                         false
                         []))
 
 (def handsome-line (text/->Line
+                    "resources"
                     "This sentence looks handsome."
                     42
                     false

@@ -6,18 +6,21 @@
             [editors.existence :as e]))
 
 (def error-line (text/->Line
+                 "resources"
                  "There is hopefully something wrong with this sentence."
                  42
                  false
                  []))
 
 (def error-line-double (text/->Line
+                        "resources"
                         "There is hopefully something deceptively wrong with this sentence."
                         42
                         false
                         []))
 
 (def handsome-line (text/->Line
+                    "resources"
                     "This sentence looks handsome."
                     42
                     false

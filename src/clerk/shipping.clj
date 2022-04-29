@@ -1,4 +1,5 @@
 (ns clerk.shipping
+  "Shipping contains resources for printing results."
   (:gen-class)
   (:require [clerk
              [version :as ver]
@@ -10,21 +11,11 @@
              [string :as string]]
             [jsonista.core :as json]))
 
-(defn print-version
-  "Prints version number."
-  []
-  (println "Clerk version: " ver/number))
+(set! *warn-on-reflection* true)
 
-(defn format-summary
-  "Function supplied to cli/parse-opts to format map of command line options.
-   Map produced sent to ship/print-options."
-  [summary]
-  (->> summary
-       ;; combine short and long option
-       (map (fn [m] (assoc m :option (str (:short-opt m) ", " (:long-opt m)))))
-       (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
+;;;; Utitlies
 
-(defn capitalize-first-char
+(defn ^:private capitalize-first-char
   "Like string/capitalize, only it ignores the rest of the string
   to retain case-sensitive recommendations."
   [s]
@@ -32,18 +23,51 @@
     (string/upper-case s)
     (str (string/upper-case (subs s 0 1))
          (subs s 1))))
+
+(defn ^:private add-period
+  "Ensures a `phrase` ends with a period."
+  [phrase]
+  (if (string/ends-with? phrase ".")
+    phrase
+    (str phrase ".")))
+
 (defn prep
   "Prepares results for printing by merging line data with each issue."
   [{:keys [line-num issues]}]
   (reduce (fn [l issue]
-            (let [{:keys [name specimen col-num message]} issue]
-              (conj l {:line-num line-num
+            (let [{:keys [file name specimen col-num message]} issue]
+              (conj l {:file file
+                       :line-num line-num
                        :col-num col-num
                        :specimen specimen
                        :name (string/capitalize (string/replace name "-" " "))
                        :message (str (capitalize-first-char message) ".")})))
           []
           issues))
+
+;;;; Default print option: group
+
+(defn issue-str
+  "Creates a simplified result string for grouped results."
+  [{:keys [line-num col-num specimen name message]}]
+  (string/join "\t" [(str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
+
+(defn group-results
+  "Groups results by file."
+  [results]
+  (doseq [[k v] (group-by :file results)]
+    (println "\n" k)
+    (doseq [issue (map issue-str v)]
+      (println issue))))
+
+;;;; Print version
+
+(defn print-version
+  "Prints version number."
+  []
+  (println "Clerk version: " ver/number))
+
+;;;; Printing results as a table
 
 (defn make-key-printer
   "Used for printing in a table: makes for sentence-case column headings."
@@ -86,6 +110,8 @@
          (println (fmt-row "| " " | " " |" row))))))
   ([rows] (print-table (keys (first rows)) rows)))
 
+;;;; Printing command line options
+
 (defn print-options
   "Modified from pprint library to left-justify columns in table
   and remove borders. Prints a collection of maps in a textual table."
@@ -98,28 +124,6 @@
        (doseq [row rows]
          (println (fmt-row "  " "   " "  " row))))))
   ([rows] (print-table (keys (first rows)) rows)))
-
-(defn ^:private add-period
-  "Ensures a `phrase` ends with a period."
-  [phrase]
-  (if (string/ends-with? phrase ".")
-    phrase
-    (str phrase ".")))
-
-(defn print-checks
-  "Prints a table of the enabled checks: names, kind, and description."
-  [c]
-  (println "Enabled checks:")
-  (->> c
-       (conf/fetch-or-create!)
-       (checks/create)
-       (map (fn [{:keys [name kind explanation]}]
-              {:name (string/capitalize name)
-               :kind (string/capitalize kind)
-               :explanation (add-period explanation)}))
-       (sort-by :name)
-       (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
-       (print-table)))
 
 (defn print-opts
   "Utiltiy for printing usage."
@@ -143,24 +147,30 @@
   "Takes results and prints them as a table."
   [results]
   (->> results
-       (map (make-key-printer {:line-num "Line"
+       (map (make-key-printer {:file "File"
+                               :line-num "Line"
                                :col-num "Col"
                                :specimen "Specimen"
                                :name "Name"
                                :message "Message"}))
        (print-table)))
 
-(defn out
-  "Takes results, preps them, and prints them in the supplied output format."
-  [{:keys [results output]}]
-  (cond
-    (empty? results) (println "Flawless victory.")
-    (some? results) (let [r (sort-by (juxt :line-num :col-num) (mapcat prep results))]
-                      (case (string/lower-case output)
-                        "edn" (pp/pprint r)
-                        "json" (json/write-value *out* r)
-                        (results-table r)))
-    :else nil))
+;;;; Print checks
+
+(defn print-checks
+  "Prints a table of the enabled checks: names, kind, and description."
+  [c]
+  (println "Enabled checks:")
+  (->> c
+       (conf/fetch-or-create!)
+       (checks/create)
+       (map (fn [{:keys [name kind explanation]}]
+              {:name (string/capitalize name)
+               :kind (string/capitalize kind)
+               :explanation (add-period explanation)}))
+       (sort-by :name)
+       (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
+       (print-table)))
 
 ;;;; Utilities for generating checks README
 
@@ -181,3 +191,19 @@
        (map print-explanation)
        (string/join \newline)
        (str "| **Check** | **Description** |" \newline "|-|-|" \newline)))
+
+;;;; Main egress
+
+(defn out
+  "Takes results, preps them, and prints them in the supplied output format."
+  [{:keys [results output]}]
+  (cond
+    (empty? results) nil
+    (some? results) (let [r (sort-by (juxt :file :line-num :col-num) (mapcat prep results))]
+                      (case (string/lower-case output)
+                        "edn" (pp/pprint r)
+                        "json" (json/write-value *out* r)
+                        "group" (group-results r)
+                        (results-table r)))
+    :else nil))
+

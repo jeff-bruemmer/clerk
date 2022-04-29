@@ -4,7 +4,7 @@
 
 (def config-path (str (System/getProperty "user.home") (java.io.File/separator) ".clerk" (java.io.File/separator) "config.edn"))
 
-(def input (vet/make-input {:file "resources/drivel.md"
+(def input (vet/make-input {:file "resources"
                             :config config-path
                             :output "table"}))
 

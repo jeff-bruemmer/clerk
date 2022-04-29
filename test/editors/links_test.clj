@@ -7,18 +7,21 @@
   (:use clj-http.fake))
 
 (def handsome-line (text/->Line
+                    "resources"
                     "This [link](http://good.com) is working."
                     42
                     false
                     []))
 
 (def error-line (text/->Line
+                 "resources"
                  "This [link](http://bad.com) is broken"
                  42
                  false
                  []))
 
 (def linkless-line (text/->Line
+                    "resources"
                     "This [link](not-even-a-link) is broken"
                     42
                     false

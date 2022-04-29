@@ -8,6 +8,8 @@
              [walk :as walk]]
             [clojure.java.io :as io]))
 
+(set! *warn-on-reflection* true)
+
 (defrecord Recommendation [prefer avoid])
 (defrecord Check [name specimens message kind explanation recommendations])
 

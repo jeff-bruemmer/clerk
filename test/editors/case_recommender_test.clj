@@ -5,28 +5,31 @@
             [clojure.test :as t :refer [deftest is]]))
 
 (def error-line (text/->Line
+                 "resources"
                  "We love monday."
                  42
                  false
                  []))
 
 (def error-line-double (text/->Line
+                        "resources"
                         "Week starts on monday, not sunday."
                         42
                         false
                         []))
 
 (def handsome-line (text/->Line
+                    "resources"
                     "This sentence looks handsome."
                     42
                     false
                     []))
 
 (def case-sensitive-check (checks/map->Check {:name "Case sensitive check."
-                                          :kind "case-recommender"
-                                          :explanation "explanation"
-                                          :recommendations [{:avoid "monday" :prefer "Monday"}
-                                                            {:avoid "sunday", :prefer "Sunday"}]}))
+                                              :kind "case-recommender"
+                                              :explanation "explanation"
+                                              :recommendations [{:avoid "monday" :prefer "Monday"}
+                                                                {:avoid "sunday", :prefer "Sunday"}]}))
 
 (deftest recommender
   (is (true? (:issue? (cr/proofread error-line case-sensitive-check))))

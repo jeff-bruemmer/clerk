@@ -9,6 +9,8 @@
              [string :as string]]
             [clojure.java.io :as io]))
 
+(set! *warn-on-reflection* true)
+
 (defrecord Result [lines
                    lines-hash
                    file-hash

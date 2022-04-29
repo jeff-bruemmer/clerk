@@ -6,12 +6,14 @@
             [editors.repetition :as r]))
 
 (def error-line (text/->Line
+                 "resources"
                  "There is is something wrong with this this sentence."
                  42
                  false
                  []))
 
 (def handsome-line (text/->Line
+                    "resources"
                     "This sentence looks handsome."
                     42
                     false

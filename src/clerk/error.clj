@@ -2,6 +2,8 @@
   (:gen-class)
   (:require [clojure.string :as string]))
 
+(set! *warn-on-reflection* true)
+
 (def exit-msg "Clerk needs to go lie down for a bit.\n")
 
 (defn message
