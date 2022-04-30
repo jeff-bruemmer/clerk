@@ -32,10 +32,6 @@ echo "Making the clerk image executable."
 
 chmod +x clerk
 
-echo "Moving clerk binary to /usr/local/bin directory."
-
-mv clerk /usr/local/bin
-
 ## Bus the table
 
 echo "Cleaning up..."
