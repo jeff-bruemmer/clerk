@@ -20,7 +20,7 @@
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
     "-H:EnableURLProtocols=http,https"
-    "-H:ReflectionConfigurationFiles=reflect-config.json"
+;;    "-H:ReflectionConfigurationFiles=reflect-config.json"
     "--native-image-info"
     "--enable-http"
     "--enable-https"

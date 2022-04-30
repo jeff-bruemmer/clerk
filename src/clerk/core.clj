@@ -62,7 +62,7 @@
 
 (defn -main
   [& args]
-  (let [start-time (System/currentTimeMillis)]
+ (let [start-time (System/currentTimeMillis)]
     (reception args)
     (shutdown-agents)
     (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))

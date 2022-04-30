@@ -17,6 +17,3 @@ phrasal-adjective: This is a zero sum game.
 jargon: Per your request, this sentence includes jargon.
 
 corporate-speak: This sentence is a no brainer.
-
-links: [broken](https://08952d51.com) should return a 404. [Wikipedia](https://www.wikipedia.org) is terrific.
-
