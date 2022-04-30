@@ -1,4 +1,5 @@
 (ns clerk.error
+  "Utilities for error messages."
   (:gen-class)
   (:require [clojure.string :as string]))
 

@@ -1,4 +1,5 @@
 (ns clerk.config
+  "Functions for creating a configuration directory."
   (:gen-class)
   (:require [clerk
              [error :as error]

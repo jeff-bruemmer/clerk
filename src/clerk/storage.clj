@@ -1,4 +1,5 @@
 (ns clerk.storage
+  "Functions used for storing and retreiving cached results."
   (:gen-class)
   (:require [clerk
              [checks :as checks]
@@ -39,6 +40,8 @@
   (io/file (str dir (java.io.File/separator) "file" (:file-hash result) ".edn")))
 
 (defn save!
+  "Creates a storage directory in the OS's temp directory (if it hasn't already,
+  and writes the result to that storage directory."
   [result]
   (let [dir (mk-tmp-dir! "clerk-storage")
         storage-file (io/file (filepath dir result))]
@@ -55,6 +58,7 @@
                     'clerk.checks.Recommendation checks/map->Recommendation})})
 
 (defn inventory
+  "Checks the storage directory for revelant cached results"
   [file]
   (let [fp (str (string/join (java.io.File/separator)
                              [(System/getProperty "java.io.tmpdir") "clerk-storage" "file"])
@@ -63,6 +67,8 @@
     (if use-cache?
       (edn/read-string edn-readers (slurp fp))
       false)))
+
+;;;; Predicate functions for validating cached results by comparing hashes.
 
 (defn valid-checks?
   [cached-result chs]

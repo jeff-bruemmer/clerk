@@ -1,4 +1,5 @@
 (ns clerk.system
+  "Utilites for clerk to figure out what OS it's on so it can follow system mores."
   (:gen-class)
   (:require [clojure.string :as string]))
 
