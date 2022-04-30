@@ -62,11 +62,15 @@
 
 (defn -main
   [& args]
-  (reception args)
-  (shutdown-agents))
+  (let [start-time (System/currentTimeMillis)]
+    (reception args)
+    (shutdown-agents)
+    (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
 
 ;;;; For development; prevents Cider REPL from closing.
 
 ;; (defn -main
 ;;   [& args]
-;;   (reception args))
+;;   (let [start-time (System/currentTimeMillis)]
+;;     (reception args)
+;;     (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
