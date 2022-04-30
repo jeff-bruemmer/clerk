@@ -61,13 +61,13 @@
         version (ship/print-version)
         :else (ship/print-usage opts "You must supply an option.")))))
 
-;; (defn -main
-;;   [& args]
-;;   (reception args)
-;;   (shutdown-agents))
+(defn -main
+  [& args]
+  (reception args)
+  (shutdown-agents))
 
 ;;;; For development; prevents Cider REPL from closing.
 
-(defn -main
-  [& args]
-  (reception args))
+;; (defn -main
+;;   [& args]
+;;   (reception args))
