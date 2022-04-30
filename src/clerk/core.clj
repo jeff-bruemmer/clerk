@@ -26,7 +26,7 @@
   [["-f" "--file FILE" "File or dir to proofread." :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
-   ["-o" "--output FORMAT" "Output type: group, edn, json, table"
+   ["-o" "--output FORMAT" "Output type: group, edn, json, table."
     :default "group"]
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file."
@@ -40,7 +40,6 @@
 (defn clerk
   "Clerk vets a text with the supplied checks."
   [options]
-  (println "options" options)
   (->> options
        (vet/compute-or-cached)
        (ship/out)))
