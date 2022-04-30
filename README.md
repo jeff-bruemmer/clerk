@@ -96,7 +96,6 @@ Enabled checks:
 | Corporate-speak    | Existence   | Words and phrases that make you sound like an automaton.                                        |
 | Hedging            | Existence   | Say, or say not. There is no hedging.                                                           |
 | Jargon             | Existence   | Phrases infected with bureaucracy.                                                              |
-| Links              | Links       | The Markdown/Org link should return a status code in the 200-299.                               |
 | Needless-variant   | Recommender | Prefer the more common term.                                                                    |
 | Non-words          | Recommender | Identifies sequences of letters masquerading as words, and suggests an actual word.             |
 | Not the negative.  | Recommender | Prefer the word to the negation of the word's opposite.                                         |
@@ -121,7 +120,6 @@ Clerk has different editors, each for a different type of check. You can disable
 | Recommender      | Avoid X; prefer Y.                       | Yes               |
 | Case-recommender | Same as Recommender, only case sensitive | Yes               |
 | Repetition       | Consecutive word repetition.             | No                |
-| Links            | Checks for broken links.                 | No                |
 
 ### Default checks
 
@@ -158,7 +156,6 @@ You can disable entire checks by commenting out lines in the `:files` vector in 
    ["cliches"
     "redundancies"
     "skunked-terms"
-    "links"
     "sexism"
     "non-words"
     "hedging"
