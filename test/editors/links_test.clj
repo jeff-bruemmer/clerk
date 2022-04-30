@@ -11,6 +11,7 @@
                     "This [link](http://good.com) is working."
                     42
                     false
+                    false
                     []))
 
 (def error-line (text/->Line
@@ -18,12 +19,14 @@
                  "This [link](http://bad.com) is broken"
                  42
                  false
+                 false
                  []))
 
 (def linkless-line (text/->Line
                     "resources"
                     "This [link](not-even-a-link) is broken"
                     42
+                    false
                     false
                     []))
 

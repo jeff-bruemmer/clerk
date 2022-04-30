@@ -58,13 +58,13 @@ $ clerk -f /path/to/thing-to-lint
 CLI options:
 
 ```
-
--f, --file FILE File or dir to proofread.
--o, --output FORMAT Output type: table, EDN, or JSON.
--C, --checks List enabled checks.
--c, --config CONFIG Set temporary configuration file.
--h, --help Prints this help message.
-
+-f, --file          FILE        File or dir to proofread. 
+-o, --output        FORMAT      Output format: group, edn, json, table.
+-C, --checks                    List enabled checks.
+-c, --config        CONFIG      Set temporary configuration file.
+-h, --help                      Prints this help message.
+-b, --code-blocks               Include code blocks. 
+-v, --version                   Prints version number.
 ```
 
 Here's an example command to export results to EDN:

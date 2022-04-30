@@ -26,7 +26,7 @@
   [["-f" "--file FILE" "File or dir to proofread." :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
-   ["-o" "--output FORMAT" "Output type: group, edn, json, table"
+   ["-o" "--output FORMAT" "Output type: group, edn, json, table."
     :default "group"]
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file."
@@ -34,6 +34,7 @@
     :validate [text/file-exists? text/file-error-msg
                conf/valid? conf/invalid-msg]]
    ["-h" "--help" "Prints this help message."]
+   ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk

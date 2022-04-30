@@ -10,6 +10,11 @@ This sentence is fine.
 
 skunked-term: This paragraph has a skunked term, hopefully.
 
+```
+This is a code block.
+It has an error error.
+```
+
 sexism: Female booksalesman is a sexist and ridiculous term.
 
 This sentence is handsome.
