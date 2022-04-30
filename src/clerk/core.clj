@@ -34,11 +34,13 @@
     :validate [text/file-exists? text/file-error-msg
                conf/valid? conf/invalid-msg]]
    ["-h" "--help" "Prints this help message."]
+   ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk
   "Clerk vets a text with the supplied checks."
   [options]
+  (println "options" options)
   (->> options
        (vet/compute-or-cached)
        (ship/out)))
@@ -59,13 +61,13 @@
         version (ship/print-version)
         :else (ship/print-usage opts "You must supply an option.")))))
 
-(defn -main
-  [& args]
-  (reception args)
-  (shutdown-agents))
+;; (defn -main
+;;   [& args]
+;;   (reception args)
+;;   (shutdown-agents))
 
 ;;;; For development; prevents Cider REPL from closing.
 
-;; (defn -main
-;;   [& args]
-;;   (reception args))
+(defn -main
+  [& args]
+  (reception args))

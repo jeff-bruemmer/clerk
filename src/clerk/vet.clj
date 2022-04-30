@@ -28,23 +28,23 @@
             output])
 
 (defn get-lines-from-all-files
-  [file]
+  [code-blocks file]
   (->> file
        io/file
        file-seq
        (map #(.getAbsolutePath %))
        (filter text/supported-file-type?)
        text/handle-invalid-file
-       (mapcat text/fetch!)))
+       (mapcat (partial text/fetch! code-blocks))))
 
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
-  [{:keys [file config output]}]
+  [{:keys [file config output code-blocks]}]
   (let [c (conf/fetch-or-create! config)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files file)
+      :lines (get-lines-from-all-files code-blocks file)
       :config c
       :checks (checks/create c)
       :cached-result (store/inventory file)

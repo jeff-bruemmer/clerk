@@ -6,7 +6,8 @@
 
 (def input (vet/make-input {:file "resources"
                             :config config-path
-                            :output "table"}))
+                            :output "table"
+                            :code-blocks false}))
 
 (def results (vet/compute input))
 

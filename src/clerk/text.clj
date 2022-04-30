@@ -33,7 +33,7 @@
 (defn handle-invalid-file
   [files]
   (if (empty? files) (throw (Exception. "Not a valid file"))
-  files))
+      files))
 
 ;;;; Load text and create lines to vet.
 
@@ -49,14 +49,17 @@
   (string/replace filepath (System/getProperty "user.home") "~"))
 
 (defn fetch!
-  "Loads a text and returns its lines."
-  [filepath]
-  (let [code (atom false)
-        boundary "```"
+  "Takes a code-blocks boolean and a filepath string. It loads the file
+  and returns decorated lines. Code-blocks is false by default, but
+  if true, the lines inside code blocks are kept."
+  [code-blocks filepath]
+  (let [homepath (home-path filepath)
+        code (atom false) ;; Are we in a code block?
+        boundary "```" ;; assumes code blocks are wrapped in triple backticks.
+        ;; If we see a boundry, we're either entering or exiting a code block.
         code? (fn [line] (if (string/starts-with? (:text line) boundary)
                            (assoc line :code? (swap! code not))
-                           (assoc line :code? @code)))
-        homepath (home-path filepath)]
+                           (assoc line :code? @code)))]
     (->> filepath
          slurp
          string/split-lines
@@ -67,4 +70,5 @@
                code?))
          (remove #(or (string/blank? (:text %))
                       (= boundary (:text %))
-                      (:code? %))))))
+                      (and (not code-blocks)
+                           (:code? %)))))))
