@@ -1,7 +1,8 @@
 (ns clerk.error
-  "Utilities for error messages."
+  "Utilities for error messages"
   (:gen-class)
-  (:require [clojure.string :as string]))
+  (:require [clerk.fmt :as fmt]
+            [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
 
@@ -20,6 +21,5 @@
 
   ([msg]
    (println exit-msg)
-   (println msg)
+   (println (fmt/sentence-dress msg))
    (System/exit 0)))
-

@@ -3,6 +3,7 @@
   (:gen-class)
   (:require [clerk
              [version :as ver]
+             [fmt :as fmt]
              [checks :as checks]
              [config :as conf]]
             [clojure
@@ -12,24 +13,6 @@
             [jsonista.core :as json]))
 
 (set! *warn-on-reflection* true)
-
-;;;; Utitlies
-
-(defn ^:private capitalize-first-char
-  "Like string/capitalize, only it ignores the rest of the string
-  to retain case-sensitive recommendations."
-  [s]
-  (if (< (count s) 2)
-    (string/upper-case s)
-    (str (string/upper-case (subs s 0 1))
-         (subs s 1))))
-
-(defn ^:private add-period
-  "Ensures a `phrase` ends with a period."
-  [phrase]
-  (if (string/ends-with? phrase ".")
-    phrase
-    (str phrase ".")))
 
 (defn prep
   "Prepares results for printing by merging line data with each issue."
@@ -41,7 +24,7 @@
                        :col-num col-num
                        :specimen specimen
                        :name (string/capitalize (string/replace name "-" " "))
-                       :message (str (capitalize-first-char message) ".")})))
+                       :message (fmt/sentence-dress message)})))
           []
           issues))
 
@@ -167,7 +150,7 @@
        (map (fn [{:keys [name kind explanation]}]
               {:name (string/capitalize name)
                :kind (string/capitalize kind)
-               :explanation (add-period explanation)}))
+               :explanation (fmt/sentence-dress explanation)}))
        (sort-by :name)
        (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
        (print-table)))
@@ -178,7 +161,7 @@
   "Prints line of table with check and explanation."
   [{:keys [name explanation]}]
   (let [heading (string/capitalize name)]
-    (str "| **" heading "** | " (add-period explanation) " |")))
+    (str "| **" heading "** | " (fmt/sentence-dress explanation) " |")))
 
 (defn generate-checks-readme
   "Creates markdown table with checks and their descriptions."

@@ -1,7 +1,8 @@
 (ns clerk.vet
+  "Computes results of running all the checks on each file,
+   using cached results where possible."
   (:gen-class)
   (:require
-   [clojure.java.io :as io]
    [clerk
     [checks :as checks]
     [config :as conf]
@@ -26,16 +27,6 @@
             cached-result
             output])
 
-(defn get-lines-from-all-files
-  [code-blocks file]
-  (->> file
-       io/file
-       file-seq
-       (map str)
-       (filter text/supported-file-type?)
-       text/handle-invalid-file
-       (mapcat (partial text/fetch! code-blocks))))
-
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
@@ -43,7 +34,7 @@
   (let [c (conf/fetch-or-create! config)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files code-blocks file)
+      :lines (text/get-lines (text/get-file-paths file) code-blocks)
       :config c
       :checks (checks/create c)
       :cached-result (store/inventory file)
@@ -122,7 +113,7 @@
   (->> new-results
        (concat cached-results)
        (remove #(nil? (:line-num %)))
-       (distinct)))
+       distinct))
 
 (defn compute-changed
   "Only process lines that have changed since the last vetting. If line numbers
@@ -132,8 +123,8 @@
         ;; build a map of previous lines
         ;; to determine which lines we need to reprocess.
         cached-line-map (->> cached-result
-                             (:lines)
-                             (text-ln))
+                             :lines
+                             text-ln)
         line-num-map (text-ln lines)
         ;; Changes to text may have shifted line numbers,
         ;; so we update the cached results.
@@ -165,14 +156,17 @@
        (store/valid-lines? cached-result lines)))
 
 (defn valid-checks?
-  "If no changes to config or checks: they remain valid.
+  "If no changes to config or checks: the checks remain valid.
   We need only compute the changes to lines."
   [{:keys [cached-result config checks]}]
   (and (store/valid-config? cached-result config)
        (store/valid-checks? cached-result checks)))
 
+;;;; Main vet function
+
 (defn compute-or-cached
-  "Returns computed or cached results of running checks on text."
+  "Returns computed or cached results of running checks on text.
+  Saves the results to the cache in a temp directory."
   [options]
   (let [inputs (make-input options)
         {:keys [cached-result output]} inputs]
