@@ -22,7 +22,7 @@
               (conj l {:file file
                        :line-num line-num
                        :col-num col-num
-                       :specimen specimen
+                       :specimen (string/trim specimen)
                        :name (string/capitalize (string/replace name "-" " "))
                        :message (fmt/sentence-dress message)})))
           []
