@@ -209,6 +209,21 @@ For Recommender checks, add maps to the Recommendations vector:
                     :prefer "Handsome phrase"}]}
 ```
 
+#### Regex checks
+
+If you want to use raw regular expressions to do more sophisticated checks, use the Regex check. Each check requires an expression `:re` and a message `:message`.
+
+```
+{:name "regex"
+ :kind "regex"
+ :explanation "Raw regular expressions."
+ :expressions
+ [
+  {:re "(##+.*\\.(\\s)*(?!.))" :message "Headings shouldn't end with period."}
+  ]}
+``` 
+
+
 ## Installation
 
 [Download](#download) | [Build from source](#build-from-source) | [Clojure CLI tools](#clojure-cli-tools)
