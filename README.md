@@ -120,6 +120,7 @@ Clerk has different editors, each for a different type of check. You can disable
 | Recommender      | Avoid X; prefer Y.                       | Yes               |
 | Case-recommender | Same as Recommender, only case sensitive | Yes               |
 | Repetition       | Consecutive word repetition.             | No                |
+| Regex            | Run raw regular expressions.             | Yes               |
 
 ### Default checks
 
