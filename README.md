@@ -58,12 +58,12 @@ $ clerk -f /path/to/thing-to-lint
 CLI options:
 
 ```
--f, --file          FILE        File or dir to proofread. 
+-f, --file          FILE        File or dir to proofread.
 -o, --output        FORMAT      Output format: group, edn, json, table.
 -C, --checks                    List enabled checks.
 -c, --config        CONFIG      Set temporary configuration file.
 -h, --help                      Prints this help message.
--b, --code-blocks               Include code blocks. 
+-b, --code-blocks               Include code blocks.
 -v, --version                   Prints version number.
 ```
 
@@ -120,6 +120,7 @@ Clerk has different editors, each for a different type of check. You can disable
 | Recommender      | Avoid X; prefer Y.                       | Yes               |
 | Case-recommender | Same as Recommender, only case sensitive | Yes               |
 | Repetition       | Consecutive word repetition.             | No                |
+| Regex            | Run raw regular expressions.             | Yes               |
 
 ### Default checks
 
@@ -206,6 +207,20 @@ For Recommender checks, add maps to the Recommendations vector:
  :kind "recommender",
  :recommendations [{:avoid "Unseemly phrase",
                     :prefer "Handsome phrase"}]}
+```
+
+#### Regex checks
+
+If you want to use raw regular expressions to do more sophisticated checks, use the Regex check. Each check requires an expression `:re` and a message `:message`.
+
+```
+{:name "regex"
+ :kind "regex"
+ :explanation "Raw regular expressions."
+ :expressions
+ [
+  {:re "(##+.*\\.(\\s)*(?!.))" :message "Headings shouldn't end with period."}
+  ]}
 ```
 
 ## Installation

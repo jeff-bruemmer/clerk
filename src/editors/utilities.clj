@@ -6,7 +6,12 @@
 (defn make-pattern
   "Used to concat regex pattern to search for multiple specimens at once."
   [re-payload case-sensitive?]
-  (let [leftb (if case-sensitive? "\\b(" "(?i)\\b(")]
+  (let [ignore-chars "[^\\[\\#-_]"
+        boundary "\\b("
+        leftb (if case-sensitive?
+                ;; Ignore matches in markdown/org links
+                (str ignore-chars boundary)
+                (str "(?i)" ignore-chars boundary))]
     (->> re-payload
          (#(str leftb  % ")\\b"))
          (re-pattern))))

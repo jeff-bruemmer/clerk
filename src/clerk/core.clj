@@ -35,6 +35,7 @@
                conf/valid? conf/invalid-msg]]
    ["-h" "--help" "Prints this help message."]
    ["-b" "--code-blocks" "Include code blocks." :default false]
+   ["-n" "--no-cache" "Don't use cached results." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk

@@ -3,12 +3,14 @@
    using cached results where possible."
   (:gen-class)
   (:require
+   [clojure.java.io :as io]
    [clerk
     [checks :as checks]
     [config :as conf]
     [storage :as store]
     [text :as text]]
    [editors
+    [re :as re]
     [case :as c]
     [case-recommender :as cr]
     [existence :as existence]
@@ -27,6 +29,16 @@
             cached-result
             output])
 
+(defn get-lines-from-all-files
+  [code-blocks file]
+  (->> file
+       io/file
+       file-seq
+       (map str)
+       (filter text/supported-file-type?)
+       text/handle-invalid-file
+       (mapcat (partial text/fetch! code-blocks))))
+
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
@@ -34,7 +46,7 @@
   (let [c (conf/fetch-or-create! config)]
     (map->Input
      {:file file
-      :lines (text/get-lines (text/get-file-paths file) code-blocks)
+      :lines (get-lines-from-all-files code-blocks file)
       :config c
       :checks (checks/create c)
       :cached-result (store/inventory file)
@@ -53,6 +65,7 @@
       "repetition" (repetition/proofread line check)
       "case" (c/proofread line check)
       "case-recommender" (cr/proofread line check)
+      "regex" (re/proofread line check)
       (throw (Exception. (str "Not a valid check: " kind))))))
 
 (defn process
@@ -162,15 +175,19 @@
   (and (store/valid-config? cached-result config)
        (store/valid-checks? cached-result checks)))
 
-;;;; Main vet function
+(defn compute-and-store
+  [inputs]
+  (let [result (compute inputs)]
+    (store/save! result)
+    result))
 
 (defn compute-or-cached
-  "Returns computed or cached results of running checks on text.
-  Saves the results to the cache in a temp directory."
+  "Returns computed or cached results of running checks on text."
   [options]
   (let [inputs (make-input options)
         {:keys [cached-result output]} inputs]
     (cond
+      (:no-cache options) (compute-and-store inputs)
       ;; If nothing has changed, return cached results
       ;; As well as the output format, which may have changed.
       (valid-result? inputs) (assoc cached-result :output output)
@@ -180,7 +197,4 @@
                                (store/save! result)
                                result)
       ;; Otherwise process texts and cache results.
-      :else (let [result (compute inputs)]
-              (store/save! result)
-              result))))
-
+      :else (compute-and-store inputs))))

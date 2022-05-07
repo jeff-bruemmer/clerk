@@ -55,7 +55,8 @@
                     'clerk.text.Line text/map->Line
                     'clerk.text.Issue text/map->Issue
                     'clerk.checks.Check checks/map->Check
-                    'clerk.checks.Recommendation checks/map->Recommendation})})
+                    'clerk.checks.Recommendation checks/map->Recommendation
+                    'clerk.checks.Expression checks/map->Expression})})
 
 (defn inventory
   "Checks the storage directory for revelant cached results"
