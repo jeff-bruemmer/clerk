@@ -11,13 +11,15 @@
 (set! *warn-on-reflection* true)
 
 (defrecord Recommendation [prefer avoid])
-(defrecord Check [name specimens message kind explanation recommendations])
+(defrecord Expression [re message])
+(defrecord Check [name specimens message kind explanation recommendations expressions])
 
 (defn make
   "Returns a `Check`."
-  [{:keys [name specimens message kind recommendations explanation]}]
+  [{:keys [name specimens message kind recommendations explanation expressions]}]
   (->Check name specimens message kind explanation
-           (map map->Recommendation recommendations)))
+           (map map->Recommendation recommendations)
+           (map map->Expression expressions)))
 
 (defn path
   "Builds full path for `filename`."

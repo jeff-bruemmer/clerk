@@ -10,6 +10,7 @@
     [storage :as store]
     [text :as text]]
    [editors
+    [re :as re]
     [case :as c]
     [case-recommender :as cr]
     [existence :as existence]
@@ -64,6 +65,7 @@
       "repetition" (repetition/proofread line check)
       "case" (c/proofread line check)
       "case-recommender" (cr/proofread line check)
+      "regex" (re/proofread line check)
       (throw (Exception. (str "Not a valid check: " kind))))))
 
 (defn process
