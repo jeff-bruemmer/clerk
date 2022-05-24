@@ -54,14 +54,14 @@
   [args]
   (let [opts (cli/parse-opts args options :summary-fn format-summary)
         {:keys [options errors]} opts
-        {:keys [file config help checks version]} options
-        options (generate-config options)]
+        options (generate-config options)
+        {:keys [file config help checks version]} options]
     (if (seq errors)
       (do (error/message errors)
           (error/exit))
       (cond
         file (clerk options)
-        checks (ship/print-checks options)
+        checks (ship/print-checks config)
         help (ship/print-usage opts)
         version (ship/print-version)
         :else (ship/print-usage opts "You must supply an option.")))))
