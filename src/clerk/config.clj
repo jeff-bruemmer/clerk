@@ -82,8 +82,8 @@
       (println "Initializing Clerk...")
       (println "Downloading default checks from: " remote-address ".")
       (try
-        (unzip-file! (get-remote-zip! remote-address) sys/home-dir "clerk-default-checks-main" ".clerk")
-        (catch Exception e (error/exit (str "Couldn't unzip default checks" (.getMessage e)))))
+        (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
+        (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
       (println "Created Clerk directory: " (sys/filepath ".clerk"))
       (println "You can store custom checks in: " (sys/filepath ".clerk" "custom"))
       (make-config (fetch! config-filepath)))))

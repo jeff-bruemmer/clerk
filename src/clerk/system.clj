@@ -5,9 +5,12 @@
 
 (set! *warn-on-reflection* true)
 
-(def home-dir (System/getProperty "user.home"))
+(defn home-dir
+  "Gets home directory for storing config directory."
+  []
+  (System/getProperty "user.home"))
 
 (defn filepath
   "Builds filepath using the home directory."
   ([& args]
-   (str (string/join (java.io.File/separator) (concat [home-dir] args)))))
+   (str (string/join (java.io.File/separator) (concat [(home-dir)] args)))))
