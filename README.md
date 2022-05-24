@@ -231,7 +231,7 @@ If you want to use raw regular expressions to do more sophisticated checks, use 
 
 Clerk uses GraalVM's Native Image utility to compile to a binary executable.
 
-1. Download the [latest binary](https://github.com/jeff-bruemmer/clerk-prototype/releases) for your system. Linux and Mac OS (Darwin) binaries are available. Windows users can run Clerk on Windows Subsystem for Linux.
+1. Download the [latest binary](https://github.com/jeff-bruemmer/clerk/releases) for your system. Linux and Mac OS (Darwin) binaries are available. Windows users can run Clerk on Windows Subsystem for Linux.
 2. `cd` into your Downloads directory and rename download to `clerk`.
 3. `chmod +x clerk`.
 4. Add Clerk to your \$PATH, e.g., `sudo cp clerk /usr/local/bin`.
