@@ -23,16 +23,14 @@
 (def options
   "CLI option configuration. See:
   https://github.com/clojure/tools.cli"
-  [["-f" "--file FILE" "File or dir to proofread." :default nil
+  [["-f" "--file FILE" "File or dir to proofread."
+    :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table."
     :default "group"]
    ["-C" "--checks" "List enabled checks."]
-   ["-c" "--config CONFIG" "Set temporary configuration file."
-    :default (sys/filepath ".clerk" "config.edn")
-    :validate [text/file-exists? text/file-error-msg
-               conf/valid? conf/invalid-msg]]
+   ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-h" "--help" "Prints this help message."]
    ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
@@ -45,25 +43,32 @@
        (vet/compute-or-cached)
        (ship/out)))
 
+(defn generate-config
+  [options]
+  (if (nil? (:config options))
+    (assoc options :config (sys/filepath ".clerk" "config.edn"))
+    options))
+
 (defn reception
   "Parses command line `args` and applies the relevant function."
   [args]
   (let [opts (cli/parse-opts args options :summary-fn format-summary)
         {:keys [options errors]} opts
-        {:keys [file config help checks version]} options]
+        {:keys [file config help checks version]} options
+        options (generate-config options)]
     (if (seq errors)
       (do (error/message errors)
           (error/exit))
       (cond
         file (clerk options)
-        checks (ship/print-checks config)
+        checks (ship/print-checks options)
         help (ship/print-usage opts)
         version (ship/print-version)
         :else (ship/print-usage opts "You must supply an option.")))))
 
 (defn -main
   [& args]
- (let [start-time (System/currentTimeMillis)]
+  (let [start-time (System/currentTimeMillis)]
     (reception args)
     (shutdown-agents)
     (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
