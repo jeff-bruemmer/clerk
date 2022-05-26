@@ -47,6 +47,14 @@
        (walk/keywordize-keys)
        (make)))
 
+(defn load-ignore-set!
+  "TODO"
+  [filename]
+  (->> filename
+       (path)
+       (slurp)
+       (edn/read-string)))
+
 (defn create
   "Takes a config, and loads all the specified checks."
   [{:keys [checks]}]

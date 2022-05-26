@@ -177,16 +177,22 @@
 
 ;;;; Main egress
 
+(defn ignore?
+  [ignore-set issue]
+  (contains? ignore-set (:specimen issue)))
+
 (defn out
   "Takes results, preps them, and prints them in the supplied output format."
-  [{:keys [results output]}]
-  (cond
-    (empty? results) nil
-    (some? results) (let [r (sort-by (juxt :file :line-num :col-num) (mapcat prep results))]
-                      (case (string/lower-case output)
-                        "edn" (pp/pprint r)
-                        "json" (json/write-value *out* r)
-                        "group" (group-results r)
-                        (results-table r)))
-    :else nil))
+  [payload]
+  (let [{:keys [results output]} payload]
+    (cond
+      (empty? results) nil
+      (some? results) (let [ignore-set (checks/load-ignore-set! (-> payload :config :ignore))
+                            r (sort-by (juxt :file :line-num :col-num) (remove (partial ignore? ignore-set) (mapcat prep results)))]
+                        (case (string/lower-case output)
+                          "edn" (pp/pprint r)
+                          "json" (json/write-value *out* r)
+                          "group" (group-results r)
+                          (results-table r)))
+      :else nil)))
 

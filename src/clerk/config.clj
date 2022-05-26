@@ -15,7 +15,7 @@
 
 (def remote-address "https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip")
 
-(defrecord Config [checks])
+(defrecord Config [checks ignore])
 
 (defn make-config
   [file]

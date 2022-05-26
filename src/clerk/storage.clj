@@ -4,6 +4,7 @@
   (:require [clerk
              [checks :as checks]
              [error :as error]
+             [config :as conf]
              [text :as text]]
             [clojure
              [edn :as edn]
@@ -15,6 +16,7 @@
 (defrecord Result [lines
                    lines-hash
                    file-hash
+                   config
                    config-hash
                    check-hash
                    output
@@ -55,6 +57,7 @@
                     'clerk.text.Line text/map->Line
                     'clerk.text.Issue text/map->Issue
                     'clerk.checks.Check checks/map->Check
+                    'clerk.config.Config conf/map->Config
                     'clerk.checks.Recommendation checks/map->Recommendation
                     'clerk.checks.Expression checks/map->Expression})})
 

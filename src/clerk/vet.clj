@@ -83,6 +83,7 @@
   (store/map->Result {:lines lines
                       :lines-hash (hash lines)
                       :file-hash (hash file)
+                      :config config
                       :config-hash (hash config)
                       :check-hash (hash checks)
                       :output output
@@ -147,7 +148,7 @@
      lines
      (hash lines)
      (hash file)
-     (hash config)
+     config
      (hash checks)
      output
      (->> lines
