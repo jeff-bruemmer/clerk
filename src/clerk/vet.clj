@@ -74,7 +74,7 @@
   [checks lines]
   (->> lines
        (pmap #(reduce dispatch % checks))
-       (filter #(:issue? %))))
+       (filter :issue?)))
 
 (defn compute
   "Takes an input, and returns the results of
@@ -186,16 +186,19 @@
   "Returns computed or cached results of running checks on text."
   [options]
   (let [inputs (make-input options)
-        {:keys [cached-result output]} inputs]
-    (cond
-      (:no-cache options) (compute-and-store inputs)
+        {:keys [cached-result output]} inputs
+        results
+        (cond
+          (:no-cache options) (compute-and-store inputs)
       ;; If nothing has changed, return cached results
       ;; As well as the output format, which may have changed.
-      (valid-result? inputs) (assoc cached-result :output output)
+          (valid-result? inputs) (assoc cached-result :output output)
       ;; If checks and config are the same, we only need to reprocess
       ;; any lines that have changed.
-      (valid-checks? inputs) (let [result (compute-changed inputs)]
-                               (store/save! result)
-                               result)
+          (valid-checks? inputs) (let [result (compute-changed inputs)]
+                                   (store/save! result)
+                                   result)
       ;; Otherwise process texts and cache results.
-      :else (compute-and-store inputs))))
+          :else (compute-and-store inputs))]
+
+    (assoc options :results results)))

@@ -184,11 +184,12 @@
 (defn out
   "Takes results, preps them, and prints them in the supplied output format."
   [payload]
+;;  (println "Payload" payload)
   (let [{:keys [results output]} payload]
     (cond
       (empty? results) nil
-      (some? results) (let [ignore-set (checks/load-ignore-set! (-> payload :config :ignore))
-                            r (sort-by (juxt :file :line-num :col-num) (remove (partial ignore? ignore-set) (mapcat prep results)))]
+      (some? results) (let [ignore-set (checks/load-ignore-set! "ignore"); (-> payload :config :ignore))
+                            r (sort-by (juxt :file :line-num :col-num) (remove (partial ignore? ignore-set) (mapcat prep (:results results))))]
                         (case (string/lower-case output)
                           "edn" (pp/pprint r)
                           "json" (json/write-value *out* r)

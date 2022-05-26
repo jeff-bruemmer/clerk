@@ -34,6 +34,7 @@
    ["-h" "--help" "Prints this help message."]
    ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
+   ["-t" "--time" "Print time elapsed." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk
@@ -59,19 +60,20 @@
     (if (seq errors)
       (do (error/message errors)
           (error/exit))
-      (cond
-        file (clerk options)
-        checks (ship/print-checks config)
-        help (ship/print-usage opts)
-        version (ship/print-version)
-        :else (ship/print-usage opts "You must supply an option.")))))
+      (do (cond
+            file (clerk options)
+            checks (ship/print-checks config)
+            help (ship/print-usage opts)
+            version (ship/print-version)
+            :else (ship/print-usage opts "You must supply an option."))
+          options))))
 
 (defn -main
   [& args]
-  (let [start-time (System/currentTimeMillis)]
-    (reception args)
+  (let [start-time (System/currentTimeMillis)
+        options (reception args)]
     (shutdown-agents)
-    (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
+    (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
 
 ;;;; For development; prevents Cider REPL from closing.
 
