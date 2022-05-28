@@ -168,7 +168,7 @@
   [config]
   (->> config
        (conf/fetch!)
-       (conf/make-config)
+       (conf/load-config)
        (checks/create)
        (sort-by :name)
        (map print-explanation)
@@ -184,16 +184,18 @@
 (defn out
   "Takes results, preps them, and prints them in the supplied output format."
   [payload]
-;;  (println "Payload" payload)
-  (let [{:keys [results output]} payload]
+  (let [{:keys [results output check-dir config]} payload]
     (cond
       (empty? results) nil
-      (some? results) (let [ignore-set (set (checks/load-ignore-set! (-> payload :config :ignore)))
-                            r (sort-by (juxt :file :line-num :col-num) (remove (partial ignore? ignore-set) (mapcat prep (:results results))))]
+      (some? results) (let [ignore-set (set (checks/load-ignore-set! check-dir (:ignore config)))
+                            prepped-results (mapcat prep (:results results))
+                            results-minus-ignored (if (empty? ignore-set) prepped-results
+                                                      (remove (partial ignore? ignore-set) prepped-results))
+                            final-results (sort-by (juxt :file :line-num :col-num) results-minus-ignored)]
                         (case (string/lower-case output)
-                          "edn" (pp/pprint r)
-                          "json" (json/write-value *out* r)
-                          "group" (group-results r)
-                          (results-table r)))
+                          "edn" (pp/pprint final-results)
+                          "json" (json/write-value *out* final-results)
+                          "group" (group-results final-results)
+                          (results-table final-results)))
       :else nil)))
 

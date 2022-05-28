@@ -23,9 +23,9 @@
 
 (defn path
   "Builds full path for `filename`."
-  [filename]
+  [options filename]
   (->> filename
-       (sys/filepath ".clerk")
+       (str (:checks-dir options))
        (#(str % ".edn"))))
 
 (defn valid-config?
@@ -40,7 +40,6 @@
    Clerk will exit if it cannot load a check."
   [filename]
   (->> filename
-       (path)
        (valid-config?)
        (slurp)
        (edn/read-string)
@@ -49,17 +48,19 @@
 
 (defn load-ignore-set!
   "TODO"
-  [filename]
+  [check-dir filename]
+  (if (nil? filename) #{}
+  (let [make-path (partial path check-dir)]
   (->> filename
-       (path)
-       (slurp)
-       (edn/read-string)))
+       make-path
+       slurp
+       edn/read-string))))
 
 (defn create
   "Takes a config, and loads all the specified checks."
-  [{:keys [checks]}]
+  [check-dir config]
   (let [all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (map #(str directory java.io.File/separator %) files)) checks)]
+                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) (:checks config))]
     (pmap load-edn! all-checks)))
 

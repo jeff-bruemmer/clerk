@@ -4,10 +4,12 @@
   (:gen-class)
   (:require
    [clojure.java.io :as io]
+   [clojure.string :as string]
    [clerk
     [checks :as checks]
     [config :as conf]
     [storage :as store]
+    [system :as sys]
     [text :as text]]
    [editors
     [re :as re]
@@ -39,16 +41,34 @@
        text/handle-invalid-file
        (mapcat (partial text/fetch! code-blocks))))
 
+(defn check-dir
+  "Infer the directory when supplied a config filepath."
+  [config]
+  (let [cd (-> config
+      (string/split (re-pattern (java.io.File/separator)))
+      drop-last
+      (#(string/join "/" %))
+      (str (java.io.File/separator)))]
+    (if (.exists (io/file cd))
+      cd
+      (let [dd (sys/filepath ".clerk/")]
+        (do (println "Couldn't find: " cd)
+            (println "Using default directory: " dd))
+            dd))))
+
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
-  [{:keys [file config output code-blocks]}]
-  (let [c (conf/fetch-or-create! config)]
+  [options]
+  (let [{:keys [file config output code-blocks]} options
+        c (conf/fetch-or-create! config)
+        cd (check-dir config)]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks file)
       :config c
-      :checks (checks/create c)
+      :check-dir cd 
+      :checks (checks/create cd  c)
       :cached-result (store/inventory file)
       :output output})))
 
@@ -189,7 +209,7 @@
         {:keys [cached-result output]} inputs
         results
         (cond
-          (:no-cache options) (compute-and-store inputs)
+          (:no-cache inputs) (compute-and-store inputs)
       ;; If nothing has changed, return cached results
       ;; As well as the output format, which may have changed.
           (valid-result? inputs) (assoc cached-result :output output)
@@ -200,5 +220,4 @@
                                    result)
       ;; Otherwise process texts and cache results.
           :else (compute-and-store inputs))]
-
     (assoc inputs :results results)))
