@@ -201,4 +201,4 @@
       ;; Otherwise process texts and cache results.
           :else (compute-and-store inputs))]
 
-    (assoc options :results results)))
+    (assoc inputs :results results)))

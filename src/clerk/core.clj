@@ -4,8 +4,7 @@
              [config :as conf]
              [error :as error]
              [shipping :as ship]
-             [text :as text]
-             [vet :as vet]
+             [text :as text] [vet :as vet]
              [system :as sys]]
             [clojure.tools.cli :as cli]))
 
@@ -32,6 +31,7 @@
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-h" "--help" "Prints this help message."]
+   ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
    ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
    ["-t" "--time" "Print time elapsed." :default false]
@@ -68,17 +68,19 @@
             :else (ship/print-usage opts "You must supply an option."))
           options))))
 
+;; (defn -main
+;;   [& args]
+;;   (let [start-time (System/currentTimeMillis)
+;;         options (reception args)]
+;;     (shutdown-agents)
+;;     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
+
+;;;; For development; prevents Cider REPL from closing.
+
 (defn -main
   [& args]
   (let [start-time (System/currentTimeMillis)
         options (reception args)]
-    (shutdown-agents)
     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
 
-;;;; For development; prevents Cider REPL from closing.
 
-;; (defn -main
-;;   [& args]
-;;   (let [start-time (System/currentTimeMillis)]
-;;     (reception args)
-;;     (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))

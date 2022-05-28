@@ -188,7 +188,7 @@
   (let [{:keys [results output]} payload]
     (cond
       (empty? results) nil
-      (some? results) (let [ignore-set (checks/load-ignore-set! "ignore"); (-> payload :config :ignore))
+      (some? results) (let [ignore-set (set (checks/load-ignore-set! (-> payload :config :ignore)))
                             r (sort-by (juxt :file :line-num :col-num) (remove (partial ignore? ignore-set) (mapcat prep (:results results))))]
                         (case (string/lower-case output)
                           "edn" (pp/pprint r)
