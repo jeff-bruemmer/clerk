@@ -21,6 +21,16 @@
   [file]
   (map->Config (edn/read-string file)))
 
+(defn default
+  "If current config isn't valid, use the default."
+  [options]
+  (let [cur-config (:config options)
+        new-config (sys/filepath ".clerk" "config.edn")]
+  (if (or (nil? cur-config)
+          (not (.exists (io/file cur-config))))
+    (assoc options :config new-config)
+    options)))
+
 (def invalid-msg "config must be an edn file.")
 
 (defn valid?
@@ -78,8 +88,9 @@
   [config-filepath]
   (let [default-config (sys/filepath ".clerk" "config.edn")]
   (cond 
-       (.exists (io/file config-filepath)) (load-config (fetch! config-filepath))
-       (.exists (io/file default-config)) (load-config (fetch! default-config))
+    (and (not (nil? config-filepath))
+         (.exists (io/file config-filepath))) (load-config (fetch! config-filepath))
+    (.exists (io/file default-config)) (load-config (fetch! default-config))
     :else (do
       (println "Initializing Clerk...")
       (println "Downloading default checks from: " remote-address ".")

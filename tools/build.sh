@@ -44,6 +44,6 @@ echo "Done."
 
 echo "Running clerk -h"
 
-clerk -h
+./clerk -h
 
 

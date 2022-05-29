@@ -4,8 +4,8 @@
              [config :as conf]
              [error :as error]
              [shipping :as ship]
-             [text :as text] [vet :as vet]
-             [system :as sys]]
+             [text :as text]
+             [vet :as vet]]
             [clojure.tools.cli :as cli]))
 
 (set! *warn-on-reflection* true)
@@ -44,29 +44,23 @@
        (vet/compute-or-cached)
        (ship/out)))
 
-(defn generate-config
-  [options]
-  (if (nil? (:config options))
-    (assoc options :config (sys/filepath ".clerk" "config.edn"))
-    options))
-
 (defn reception
   "Parses command line `args` and applies the relevant function."
   [args]
   (let [opts (cli/parse-opts args options :summary-fn format-summary)
         {:keys [options errors]} opts
-        options (generate-config options)
-        {:keys [file config help checks version]} options]
+        expanded-options (conf/default (merge opts options))
+        {:keys [file config help checks version]} expanded-options]
     (if (seq errors)
       (do (error/message errors)
           (error/exit))
       (do (cond
-            file (clerk options)
+            file (clerk expanded-options)
             checks (ship/print-checks config)
-            help (ship/print-usage opts)
+            help (ship/print-usage expanded-options)
             version (ship/print-version)
-            :else (ship/print-usage opts "You must supply an option."))
-          options))))
+            :else (ship/print-usage expanded-options "You must supply an option."))
+          expanded-options))))
 
 ;; (defn -main
 ;;   [& args]

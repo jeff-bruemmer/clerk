@@ -4,7 +4,6 @@
   (:gen-class)
   (:require
    [clojure.java.io :as io]
-   [clojure.string :as string]
    [clerk
     [checks :as checks]
     [config :as conf]
@@ -41,20 +40,6 @@
        text/handle-invalid-file
        (mapcat (partial text/fetch! code-blocks))))
 
-(defn check-dir
-  "Infer the directory when supplied a config filepath."
-  [config]
-  (let [cd (-> config
-      (string/split (re-pattern (java.io.File/separator)))
-      drop-last
-      (#(string/join "/" %))
-      (str (java.io.File/separator)))]
-    (if (.exists (io/file cd))
-      cd
-      (let [dd (sys/filepath ".clerk/")]
-        (do (println "Couldn't find: " cd)
-            (println "Using default directory: " dd))
-            dd))))
 
 (defn make-input
   "Input combines user-defined options and arguments
@@ -62,7 +47,7 @@
   [options]
   (let [{:keys [file config output code-blocks]} options
         c (conf/fetch-or-create! config)
-        cd (check-dir config)]
+        cd (sys/check-dir config)]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks file)
@@ -169,6 +154,7 @@
      (hash lines)
      (hash file)
      config
+     (hash config)
      (hash checks)
      output
      (->> lines

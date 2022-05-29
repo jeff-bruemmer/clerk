@@ -5,6 +5,7 @@
              [version :as ver]
              [fmt :as fmt]
              [checks :as checks]
+             [system :as sys]
              [config :as conf]]
             [clojure
              [pprint :as pp]
@@ -110,21 +111,22 @@
 
 (defn print-opts
   "Utiltiy for printing usage."
-  [summary title]
+  [summary title config]
   (println title)
   (print-options [:option :required :desc] summary)
-  (println "\nConfig file: " (:default (first (filter #(= "CONFIG" (:required %)) summary))) "\n"))
+  (println "\nConfig file: " config)
+  (print-version))
 
 (defn print-usage
   "Prints usage, optionally with a message."
-  ([{:keys [summary]}]
+  ([{:keys [summary config]}]
    (println "\nClerk vets a text with the supplied checks.\n")
-   (print-opts summary "USAGE:"))
+   (print-opts summary "USAGE:" config))
 
   ([opts message]
-   (let [{:keys [summary]} opts]
+   (let [{:keys [summary config]} opts]
      (println (str "\n" message "\n"))
-     (print-opts summary "USAGE:"))))
+     (print-opts summary "USAGE:" config))))
 
 (defn results-table
   "Takes results and prints them as a table."
@@ -142,11 +144,11 @@
 
 (defn print-checks
   "Prints a table of the enabled checks: names, kind, and description."
-  [c]
+  [config]
   (println "Enabled checks:")
-  (->> c
+  (->> config
        (conf/fetch-or-create!)
-       (checks/create)
+       ((partial checks/create (sys/check-dir config)))
        (map (fn [{:keys [name kind explanation]}]
               {:name (string/capitalize name)
                :kind (string/capitalize kind)
@@ -162,18 +164,6 @@
   [{:keys [name explanation]}]
   (let [heading (string/capitalize name)]
     (str "| **" heading "** | " (fmt/sentence-dress explanation) " |")))
-
-(defn generate-checks-readme
-  "Creates markdown table with checks and their descriptions."
-  [config]
-  (->> config
-       (conf/fetch!)
-       (conf/load-config)
-       (checks/create)
-       (sort-by :name)
-       (map print-explanation)
-       (string/join \newline)
-       (str "| **Check** | **Description** |" \newline "|-|-|" \newline)))
 
 ;;;; Main egress
 
