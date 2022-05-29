@@ -40,20 +40,20 @@
        text/handle-invalid-file
        (mapcat (partial text/fetch! code-blocks))))
 
-
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
   (let [{:keys [file config output code-blocks]} options
         c (conf/fetch-or-create! config)
-        cd (sys/check-dir config)]
+        cd (sys/check-dir config)
+        updated-options (assoc options :config c :check-dir cd)]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks file)
       :config c
-      :check-dir cd 
-      :checks (checks/create cd  c)
+      :check-dir cd
+      :checks (checks/create updated-options)
       :cached-result (store/inventory file)
       :output output})))
 

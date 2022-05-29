@@ -23,3 +23,10 @@
    (println exit-msg)
    (println (fmt/sentence-dress msg))
    (System/exit 0)))
+
+(defn inferior-input
+  "Handles input that Clerk has no time for."
+  [errors]
+  (message errors)
+  (exit))
+

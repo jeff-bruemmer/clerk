@@ -15,6 +15,11 @@
 
 (set! *warn-on-reflection* true)
 
+(defn time-elapsed
+  [{:keys [timer start-time]}]
+  (let [end-time (System/currentTimeMillis)]
+    (when timer (println "Completed in" (- end-time start-time) "ms."))))
+
 (defn prep
   "Prepares results for printing by merging line data with each issue."
   [{:keys [line-num issues]}]

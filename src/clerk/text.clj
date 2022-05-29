@@ -93,11 +93,9 @@
                         (:code? %)))))))
 
 (defn get-lines
-  "Reads line, in parallet if the number of files is greater.
-  May not want to use pmap here, but here we are."
+  "Read and decorate lines."
   [files code-blocks]
   (let [line-builder (partial fetch! code-blocks)]
-    (if (> 1 (count files))
-      (concat (pmap line-builder files))
-      (mapcat line-builder files))))
+    (mapcat line-builder files)))
+
 

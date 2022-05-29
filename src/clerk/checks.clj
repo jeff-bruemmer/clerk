@@ -54,10 +54,12 @@
              edn/read-string))))
 
 (defn create
-  "Takes a config, and loads all the specified checks."
-  [check-dir config]
-  (let [all-checks (mapcat (fn
+  "Takes an options ball, and loads all the specified checks."
+  [options]
+  (let [{:keys [config check-dir]} options
+        checks (:checks config)
+        all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) (:checks config))]
+                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) checks)]
     (map load-edn! all-checks)))
 

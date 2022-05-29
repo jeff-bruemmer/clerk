@@ -34,7 +34,7 @@
    ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
    ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
-   ["-t" "--time" "Print time elapsed." :default false]
+   ["-t" "--timer" "Print time elapsed." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk
@@ -52,29 +52,30 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version]} expanded-options]
     (if (seq errors)
-      (do (error/message errors)
-          (error/exit))
+      (error/inferior-input errors)
+      ;; Dispatch on command.
       (do (cond
             file (clerk expanded-options)
             checks (ship/print-checks config)
             help (ship/print-usage expanded-options)
             version (ship/print-version)
             :else (ship/print-usage expanded-options "You must supply an option."))
+          ;; Return options for any follow-up activity, like printing time elapsed.
           expanded-options))))
 
-(defn -main
+(defn run
+  "For development; same as main, except `run` doesn't shutdown agents."
   [& args]
   (let [start-time (System/currentTimeMillis)
-        options (reception args)]
+        options (assoc (reception args) :start-time start-time)]
+    (ship/time-elapsed options)))
+
+(defn -main
+  "Sends args to reception for dispatch, then shuts down agents and prints the time."
+  [& args]
+  (let [start-time (System/currentTimeMillis)
+        options (assoc (reception args) :start-time start-time)]
     (shutdown-agents)
-    (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
-
-;;;; For development; prevents Cider REPL from closing.
-
-;; (defn -main
-;;   [& args]
-;;   (let [start-time (System/currentTimeMillis)
-;;         options (reception args)]
-;;     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
+    (ship/time-elapsed options)))
 
 
