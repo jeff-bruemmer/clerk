@@ -8,6 +8,7 @@
     [checks :as checks]
     [config :as conf]
     [storage :as store]
+    [system :as sys]
     [text :as text]]
    [editors
     [re :as re]
@@ -39,16 +40,20 @@
        text/handle-invalid-file
        (mapcat (partial text/fetch! code-blocks))))
 
+
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
-  [{:keys [file config output code-blocks]}]
-  (let [c (conf/fetch-or-create! config)]
+  [options]
+  (let [{:keys [file config output code-blocks]} options
+        c (conf/fetch-or-create! config)
+        cd (sys/check-dir config)]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks file)
       :config c
-      :checks (checks/create c)
+      :check-dir cd 
+      :checks (checks/create cd  c)
       :cached-result (store/inventory file)
       :output output})))
 
@@ -74,7 +79,7 @@
   [checks lines]
   (->> lines
        (pmap #(reduce dispatch % checks))
-       (filter #(:issue? %))))
+       (filter :issue?)))
 
 (defn compute
   "Takes an input, and returns the results of
@@ -83,6 +88,7 @@
   (store/map->Result {:lines lines
                       :lines-hash (hash lines)
                       :file-hash (hash file)
+                      :config config
                       :config-hash (hash config)
                       :check-hash (hash checks)
                       :output output
@@ -147,6 +153,7 @@
      lines
      (hash lines)
      (hash file)
+     config
      (hash config)
      (hash checks)
      output
@@ -185,16 +192,18 @@
   "Returns computed or cached results of running checks on text."
   [options]
   (let [inputs (make-input options)
-        {:keys [cached-result output]} inputs]
-    (cond
-      (:no-cache options) (compute-and-store inputs)
+        {:keys [cached-result output]} inputs
+        results
+        (cond
+          (:no-cache inputs) (compute-and-store inputs)
       ;; If nothing has changed, return cached results
       ;; As well as the output format, which may have changed.
-      (valid-result? inputs) (assoc cached-result :output output)
+          (valid-result? inputs) (assoc cached-result :output output)
       ;; If checks and config are the same, we only need to reprocess
       ;; any lines that have changed.
-      (valid-checks? inputs) (let [result (compute-changed inputs)]
-                               (store/save! result)
-                               result)
+          (valid-checks? inputs) (let [result (compute-changed inputs)]
+                                   (store/save! result)
+                                   result)
       ;; Otherwise process texts and cache results.
-      :else (compute-and-store inputs))))
+          :else (compute-and-store inputs))]
+    (assoc inputs :results results)))

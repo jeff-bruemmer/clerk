@@ -14,3 +14,18 @@
   "Builds filepath using the home directory."
   ([& args]
    (str (string/join (java.io.File/separator) (concat [(home-dir)] args)))))
+
+(defn check-dir
+  "Infer the directory when supplied a config filepath.
+  The config file must be in the same directory as the check directories."
+  [config]
+  (let [dd (filepath ".clerk/")]
+    (if (nil? config)
+      (do (println "Using default directory: " dd)
+          dd)
+      (-> config
+          (string/split (re-pattern (java.io.File/separator)))
+          drop-last
+          (#(string/join "/" %))
+          (str (java.io.File/separator))))))
+

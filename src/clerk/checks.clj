@@ -1,8 +1,7 @@
 (ns clerk.checks
   (:gen-class)
   (:require [clerk
-             [error :as error]
-             [system :as sys]]
+             [error :as error]]
             [clojure
              [edn :as edn]
              [walk :as walk]]
@@ -23,10 +22,8 @@
 
 (defn path
   "Builds full path for `filename`."
-  [filename]
-  (->> filename
-       (sys/filepath ".clerk")
-       (#(str % ".edn"))))
+  [check-dir filename]
+  (str check-dir filename ".edn"))
 
 (defn valid-config?
   "Does the `filepath` exist?"
@@ -40,18 +37,27 @@
    Clerk will exit if it cannot load a check."
   [filename]
   (->> filename
-       (path)
        (valid-config?)
        (slurp)
        (edn/read-string)
        (walk/keywordize-keys)
        (make)))
 
+(defn load-ignore-set!
+  "Takes a checks directory and a file name for an edn file that
+  lists specimens to ignore."
+  [check-dir filename]
+  (if (nil? filename) #{}
+      (let [f (path check-dir filename)]
+        (->> f
+             slurp
+             edn/read-string))))
+
 (defn create
   "Takes a config, and loads all the specified checks."
-  [{:keys [checks]}]
+  [check-dir config]
   (let [all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (map #(str directory java.io.File/separator %) files)) checks)]
-    (pmap load-edn! all-checks)))
+                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) (:checks config))]
+    (map load-edn! all-checks)))
 

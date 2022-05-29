@@ -5,6 +5,7 @@
              [version :as ver]
              [fmt :as fmt]
              [checks :as checks]
+             [system :as sys]
              [config :as conf]]
             [clojure
              [pprint :as pp]
@@ -110,21 +111,22 @@
 
 (defn print-opts
   "Utiltiy for printing usage."
-  [summary title]
+  [summary title config]
   (println title)
   (print-options [:option :required :desc] summary)
-  (println "\nConfig file: " (:default (first (filter #(= "CONFIG" (:required %)) summary))) "\n"))
+  (println "\nConfig file: " config)
+  (print-version))
 
 (defn print-usage
   "Prints usage, optionally with a message."
-  ([{:keys [summary]}]
+  ([{:keys [summary config]}]
    (println "\nClerk vets a text with the supplied checks.\n")
-   (print-opts summary "USAGE:"))
+   (print-opts summary "USAGE:" config))
 
   ([opts message]
-   (let [{:keys [summary]} opts]
+   (let [{:keys [summary config]} opts]
      (println (str "\n" message "\n"))
-     (print-opts summary "USAGE:"))))
+     (print-opts summary "USAGE:" config))))
 
 (defn results-table
   "Takes results and prints them as a table."
@@ -142,11 +144,11 @@
 
 (defn print-checks
   "Prints a table of the enabled checks: names, kind, and description."
-  [c]
+  [config]
   (println "Enabled checks:")
-  (->> c
+  (->> config
        (conf/fetch-or-create!)
-       (checks/create)
+       ((partial checks/create (sys/check-dir config)))
        (map (fn [{:keys [name kind explanation]}]
               {:name (string/capitalize name)
                :kind (string/capitalize kind)
@@ -163,30 +165,29 @@
   (let [heading (string/capitalize name)]
     (str "| **" heading "** | " (fmt/sentence-dress explanation) " |")))
 
-(defn generate-checks-readme
-  "Creates markdown table with checks and their descriptions."
-  [config]
-  (->> config
-       (conf/fetch!)
-       (conf/make-config)
-       (checks/create)
-       (sort-by :name)
-       (map print-explanation)
-       (string/join \newline)
-       (str "| **Check** | **Description** |" \newline "|-|-|" \newline)))
-
 ;;;; Main egress
 
+(defn ignore?
+  "Is the specimen in the ignore file?"
+  [ignore-set issue]
+  (contains? ignore-set (:specimen issue)))
+
 (defn out
-  "Takes results, preps them, and prints them in the supplied output format."
-  [{:keys [results output]}]
-  (cond
-    (empty? results) nil
-    (some? results) (let [r (sort-by (juxt :file :line-num :col-num) (mapcat prep results))]
-                      (case (string/lower-case output)
-                        "edn" (pp/pprint r)
-                        "json" (json/write-value *out* r)
-                        "group" (group-results r)
-                        (results-table r)))
-    :else nil))
+  "Takes results, preps them, removes specimens to ignore, and
+  prints them in the supplied output format."
+  [payload]
+  (let [{:keys [results output check-dir config]} payload]
+    (cond
+      (empty? results) nil
+      (some? results) (let [ignore-set (set (checks/load-ignore-set! check-dir (:ignore config)))
+                            prepped-results (mapcat prep (:results results))
+                            results-minus-ignored (if (empty? ignore-set) prepped-results
+                                                      (remove (partial ignore? ignore-set) prepped-results))
+                            final-results (sort-by (juxt :file :line-num :col-num) results-minus-ignored)]
+                        (case (string/lower-case output)
+                          "edn" (pp/pprint final-results)
+                          "json" (json/write-value *out* final-results)
+                          "group" (group-results final-results)
+                          (results-table final-results)))
+      :else nil)))
 

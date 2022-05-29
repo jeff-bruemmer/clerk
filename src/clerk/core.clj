@@ -5,8 +5,7 @@
              [error :as error]
              [shipping :as ship]
              [text :as text]
-             [vet :as vet]
-             [system :as sys]]
+             [vet :as vet]]
             [clojure.tools.cli :as cli]))
 
 (set! *warn-on-reflection* true)
@@ -32,8 +31,10 @@
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-h" "--help" "Prints this help message."]
+   ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
    ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
+   ["-t" "--time" "Print time elapsed." :default false]
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk
@@ -43,40 +44,37 @@
        (vet/compute-or-cached)
        (ship/out)))
 
-(defn generate-config
-  [options]
-  (if (nil? (:config options))
-    (assoc options :config (sys/filepath ".clerk" "config.edn"))
-    options))
-
 (defn reception
   "Parses command line `args` and applies the relevant function."
   [args]
   (let [opts (cli/parse-opts args options :summary-fn format-summary)
         {:keys [options errors]} opts
-        options (generate-config options)
-        {:keys [file config help checks version]} options]
+        expanded-options (conf/default (merge opts options))
+        {:keys [file config help checks version]} expanded-options]
     (if (seq errors)
       (do (error/message errors)
           (error/exit))
-      (cond
-        file (clerk options)
-        checks (ship/print-checks config)
-        help (ship/print-usage opts)
-        version (ship/print-version)
-        :else (ship/print-usage opts "You must supply an option.")))))
+      (do (cond
+            file (clerk expanded-options)
+            checks (ship/print-checks config)
+            help (ship/print-usage expanded-options)
+            version (ship/print-version)
+            :else (ship/print-usage expanded-options "You must supply an option."))
+          expanded-options))))
 
 (defn -main
   [& args]
-  (let [start-time (System/currentTimeMillis)]
-    (reception args)
+  (let [start-time (System/currentTimeMillis)
+        options (reception args)]
     (shutdown-agents)
-    (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
+    (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
 
 ;;;; For development; prevents Cider REPL from closing.
 
 ;; (defn -main
 ;;   [& args]
-;;   (let [start-time (System/currentTimeMillis)]
-;;     (reception args)
-;;     (println "Completed in" (- (System/currentTimeMillis) start-time) "ms.")))
+;;   (let [start-time (System/currentTimeMillis)
+;;         options (reception args)]
+;;     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
+
+

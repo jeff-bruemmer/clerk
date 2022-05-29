@@ -15,11 +15,21 @@
 
 (def remote-address "https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip")
 
-(defrecord Config [checks])
+(defrecord Config [checks ignore])
 
-(defn make-config
+(defn load-config
   [file]
   (map->Config (edn/read-string file)))
+
+(defn default
+  "If current config isn't valid, use the default."
+  [options]
+  (let [cur-config (:config options)
+        new-config (sys/filepath ".clerk" "config.edn")]
+  (if (or (nil? cur-config)
+          (not (.exists (io/file cur-config))))
+    (assoc options :config new-config)
+    options)))
 
 (def invalid-msg "config must be an edn file.")
 
@@ -76,14 +86,17 @@
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure."
   [config-filepath]
-  (if (.exists (io/file config-filepath))
-    (make-config (fetch! config-filepath))
-    (do
+  (let [default-config (sys/filepath ".clerk" "config.edn")]
+  (cond 
+    (and (not (nil? config-filepath))
+         (.exists (io/file config-filepath))) (load-config (fetch! config-filepath))
+    (.exists (io/file default-config)) (load-config (fetch! default-config))
+    :else (do
       (println "Initializing Clerk...")
       (println "Downloading default checks from: " remote-address ".")
       (try
         (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
         (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
-      (println "Created Clerk directory: " (sys/filepath ".clerk"))
-      (println "You can store custom checks in: " (sys/filepath ".clerk" "custom"))
-      (make-config (fetch! config-filepath)))))
+      (println "Created Clerk directory: " (sys/filepath ".clerk/"))
+      (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
+      (load-config (fetch! default-config))))))
