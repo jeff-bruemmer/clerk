@@ -62,19 +62,19 @@
             :else (ship/print-usage expanded-options "You must supply an option."))
           expanded-options))))
 
-;; (defn -main
-;;   [& args]
-;;   (let [start-time (System/currentTimeMillis)
-;;         options (reception args)]
-;;     (shutdown-agents)
-;;     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
-
-;;;; For development; prevents Cider REPL from closing.
-
 (defn -main
   [& args]
   (let [start-time (System/currentTimeMillis)
         options (reception args)]
+    (shutdown-agents)
     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
+
+;;;; For development; prevents Cider REPL from closing.
+
+;; (defn -main
+;;   [& args]
+;;   (let [start-time (System/currentTimeMillis)
+;;         options (reception args)]
+;;     (when (:time options) (println "Completed in" (- (System/currentTimeMillis) start-time) "ms."))))
 
 

@@ -168,11 +168,13 @@
 ;;;; Main egress
 
 (defn ignore?
+  "Is the specimen in the ignore file?"
   [ignore-set issue]
   (contains? ignore-set (:specimen issue)))
 
 (defn out
-  "Takes results, preps them, and prints them in the supplied output format."
+  "Takes results, preps them, removes specimens to ignore, and
+  prints them in the supplied output format."
   [payload]
   (let [{:keys [results output check-dir config]} payload]
     (cond

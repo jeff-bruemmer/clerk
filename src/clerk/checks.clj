@@ -44,7 +44,8 @@
        (make)))
 
 (defn load-ignore-set!
-  "TODO"
+  "Takes a checks directory and a file name for an edn file that
+  lists specimens to ignore."
   [check-dir filename]
   (if (nil? filename) #{}
       (let [f (path check-dir filename)]
