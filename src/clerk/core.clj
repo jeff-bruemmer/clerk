@@ -22,18 +22,18 @@
 (def options
   "CLI option configuration. See:
   https://github.com/clojure/tools.cli"
-  [["-f" "--file FILE" "File or dir to proofread."
+  [["-b" "--code-blocks" "Include code blocks." :default false]
+   ["-C" "--checks" "List enabled checks."]
+   ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
+   ["-f" "--file FILE" "File or dir to proofread."
     :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
-   ["-o" "--output FORMAT" "Output type: group, edn, json, table."
-    :default "group"]
-   ["-C" "--checks" "List enabled checks."]
-   ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-h" "--help" "Prints this help message."]
    ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
-   ["-b" "--code-blocks" "Include code blocks." :default false]
    ["-n" "--no-cache" "Don't use cached results." :default false]
+   ["-o" "--output FORMAT" "Output type: group, edn, json, table."
+    :default "group"]
    ["-t" "--timer" "Print time elapsed." :default false]
    ["-v" "--version" "Prints version number."]])
 
