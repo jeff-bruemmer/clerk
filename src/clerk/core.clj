@@ -3,21 +3,13 @@
   (:require [clerk
              [config :as conf]
              [error :as error]
+             [fmt :as fmt]
              [shipping :as ship]
              [text :as text]
              [vet :as vet]]
             [clojure.tools.cli :as cli]))
 
 (set! *warn-on-reflection* true)
-
-(defn format-summary
-  "Function supplied to cli/parse-opts to format map of command line options.
-   Map produced sent to ship/print-options."
-  [summary]
-  (->> summary
-       ;; combine short and long option
-       (map (fn [m] (assoc m :option (str (:short-opt m) ", " (:long-opt m)))))
-       (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
 
 (def options
   "CLI option configuration. See:
@@ -38,7 +30,7 @@
    ["-v" "--version" "Prints version number."]])
 
 (defn clerk
-  "Clerk vets a text with the supplied checks."
+  "Clerk takes options and vets a text with the supplied checks."
   [options]
   (->> options
        (vet/compute-or-cached)
@@ -47,7 +39,7 @@
 (defn reception
   "Parses command line `args` and applies the relevant function."
   [args]
-  (let [opts (cli/parse-opts args options :summary-fn format-summary)
+  (let [opts (cli/parse-opts args options :summary-fn fmt/summary)
         {:keys [options errors]} opts
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version]} expanded-options]

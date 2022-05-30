@@ -2,6 +2,7 @@
   "Utilities for formatting text."
   (:gen-class)
   (:require [clojure.string :as string]))
+
 ;;;; Utitlies
 
 (defn ^:private capitalize-first-char
@@ -24,5 +25,14 @@
   "Make text look like a proper sentence."
   [text]
   ((comp capitalize-first-char
-        add-period) text))
+         add-period) text))
+
+(defn summary
+  "Function supplied to cli/parse-opts to format map of command line options.
+   Map produced sent to ship/print-options."
+  [summary]
+  (->> summary
+       ;; combine short and long options
+       (map #(assoc % :option (str (:short-opt %) ", " (:long-opt %))))
+       (map #(dissoc % :short-opt :long-opt :id :validate-fn :validate-msg))))
 

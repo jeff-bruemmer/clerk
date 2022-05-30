@@ -17,7 +17,7 @@
 
 (defrecord Config [checks ignore])
 
-(defn load-config
+(defn load
   [file]
   (map->Config (edn/read-string file)))
 
@@ -26,10 +26,10 @@
   [options]
   (let [cur-config (:config options)
         new-config (sys/filepath ".clerk" "config.edn")]
-  (if (or (nil? cur-config)
-          (not (.exists (io/file cur-config))))
-    (assoc options :config new-config)
-    options)))
+    (if (or (nil? cur-config)
+            (not (.exists (io/file cur-config))))
+      (assoc options :config new-config)
+      options)))
 
 (def invalid-msg "config must be an edn file.")
 
@@ -87,16 +87,16 @@
   "Fetches or creates config file. Will exit on failure."
   [config-filepath]
   (let [default-config (sys/filepath ".clerk" "config.edn")]
-  (cond 
-    (and (not (nil? config-filepath))
-         (.exists (io/file config-filepath))) (load-config (fetch! config-filepath))
-    (.exists (io/file default-config)) (load-config (fetch! default-config))
-    :else (do
-      (println "Initializing Clerk...")
-      (println "Downloading default checks from: " remote-address ".")
-      (try
-        (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
-        (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
-      (println "Created Clerk directory: " (sys/filepath ".clerk/"))
-      (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
-      (load-config (fetch! default-config))))))
+    (cond
+      (and (not (nil? config-filepath))
+           (.exists (io/file config-filepath))) (load (fetch! config-filepath))
+      (.exists (io/file default-config)) (load (fetch! default-config))
+      :else (do
+              (println "Initializing Clerk...")
+              (println "Downloading default checks from: " remote-address ".")
+              (try
+                (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
+                (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
+              (println "Created Clerk directory: " (sys/filepath ".clerk/"))
+              (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
+              (load (fetch! default-config))))))
