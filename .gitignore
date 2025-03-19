@@ -5,3 +5,6 @@ notes.md
 .DS_Store
 reports
 clerk.build_artifacts.txt
+.clj-kondo
+.lsp
+clerk

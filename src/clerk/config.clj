@@ -17,7 +17,7 @@
 
 (defrecord Config [checks ignore])
 
-(defn load
+(defn load-config
   [file]
   (map->Config (edn/read-string file)))
 
@@ -89,8 +89,8 @@
   (let [default-config (sys/filepath ".clerk" "config.edn")]
     (cond
       (and (not (nil? config-filepath))
-           (.exists (io/file config-filepath))) (load (fetch! config-filepath))
-      (.exists (io/file default-config)) (load (fetch! default-config))
+           (.exists (io/file config-filepath))) (load-config (fetch! config-filepath))
+      (.exists (io/file default-config)) (load-config (fetch! default-config))
       :else (do
               (println "Initializing Clerk...")
               (println "Downloading default checks from: " remote-address ".")
@@ -99,4 +99,4 @@
                 (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
               (println "Created Clerk directory: " (sys/filepath ".clerk/"))
               (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
-              (load (fetch! default-config))))))
+              (load-config (fetch! default-config))))))
