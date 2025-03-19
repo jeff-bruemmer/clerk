@@ -151,16 +151,16 @@
   "Prints a table of the enabled checks: names, kind, and description."
   [config]
   (println "Enabled checks:")
-  (->> config
-       (conf/fetch-or-create!)
-       ((partial checks/create (sys/check-dir config)))
-       (map (fn [{:keys [name kind explanation]}]
-              {:name (string/capitalize name)
-               :kind (string/capitalize kind)
-               :explanation (fmt/sentence-dress explanation)}))
-       (sort-by :name)
-       (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
-       (print-table)))
+  (let [config-data (conf/fetch-or-create! config)
+        check-dir (sys/check-dir config)]
+    (->> (checks/create {:config config-data :check-dir check-dir})
+         (map (fn [{:keys [name kind explanation]}]
+                {:name (string/capitalize name)
+                 :kind (string/capitalize kind)
+                 :explanation (fmt/sentence-dress explanation)}))
+         (sort-by :name)
+         (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
+         (print-table))))
 
 ;;;; Utilities for generating checks README
 
