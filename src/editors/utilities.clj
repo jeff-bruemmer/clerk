@@ -5,6 +5,7 @@
 
 ;; Cache for compiled regex patterns
 (def ^:private pattern-cache (atom {}))
+(def ^:private re-core-cache (atom {}))
 
 (defn make-pattern
   "Used to concat regex pattern to search for multiple specimens at once."
@@ -66,7 +67,11 @@
      {:keys [file kind specimens message name]}]
     (if (empty? specimens)
       line
-      (let [re-core (string/join "|" specimens)
+      (let [re-core (if-let [cached-core (get @re-core-cache specimens)]
+                      cached-core
+                      (let [new-core (string/join "|" specimens)]
+                        (swap! re-core-cache assoc specimens new-core)
+                        new-core))
             matches (seek (:text line) re-core case-sensitive?)]
         (if (empty? matches)
           line
