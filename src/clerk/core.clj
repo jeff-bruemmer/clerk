@@ -4,6 +4,7 @@
              [config :as conf]
              [error :as error]
              [fmt :as fmt]
+             [ignore :as ignore]
              [shipping :as ship]
              [text :as text]
              [vet :as vet]]
@@ -17,6 +18,7 @@
   [["-b" "--code-blocks" "Include code blocks." :default false]
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
+   ["-d" "--check-dialogue" "Include dialogue in checks." :default false]
    ["-f" "--file FILE" "File or dir to proofread."
     :default nil
     :validate [text/file-exists? text/file-error-msg
@@ -24,10 +26,15 @@
    ["-h" "--help" "Prints this help message."]
    ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
    ["-n" "--no-cache" "Don't use cached results." :default false]
-   ["-o" "--output FORMAT" "Output type: group, edn, json, table."
+   ["-o" "--output FORMAT" "Output type: group, edn, json, table, verbose."
     :default "group"]
    ["-t" "--timer" "Print time elapsed." :default false]
-   ["-v" "--version" "Prints version number."]])
+   ["-v" "--version" "Prints version number."]
+   ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list."]
+   ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
+   ["-L" "--list-ignored" "List all ignored specimens."]
+   ["-X" "--clear-ignored" "Clear all ignored specimens."]
+   ["-D" "--restore-defaults" "Restore default checks from GitHub."]])
 
 (defn clerk
   "Clerk takes options and vets a text with the supplied checks."
@@ -42,11 +49,36 @@
   (let [opts (cli/parse-opts args options :summary-fn fmt/summary)
         {:keys [options errors]} opts
         expanded-options (conf/default (merge opts options))
-        {:keys [file config help checks version]} expanded-options]
+        {:keys [file config help checks version
+                add-ignore remove-ignore list-ignored clear-ignored
+                restore-defaults]} expanded-options]
     (if (seq errors)
       (error/inferior-input errors)
       ;; Dispatch on command.
       (do (cond
+            ;; Ignore management commands
+            add-ignore (do
+                         (ignore/add-to-ignore! add-ignore)
+                         (println "Added to ignore list:" add-ignore)
+                         (println "Ignored specimens:" (count (ignore/read-ignore-file))))
+            remove-ignore (do
+                            (ignore/remove-from-ignore! remove-ignore)
+                            (println "Removed from ignore list:" remove-ignore)
+                            (println "Ignored specimens:" (count (ignore/read-ignore-file))))
+            list-ignored (let [ignored (ignore/list-ignored)]
+                           (if (empty? ignored)
+                             (println "No ignored specimens.")
+                             (do
+                               (println "Ignored specimens:")
+                               (doseq [specimen ignored]
+                                 (println "  " specimen)))))
+            clear-ignored (do
+                            (ignore/clear-ignore!)
+                            (println "Cleared all ignored specimens."))
+
+            restore-defaults (conf/restore-defaults!)
+
+            ;; Regular commands
             file (clerk expanded-options)
             checks (ship/print-checks config)
             help (ship/print-usage expanded-options)

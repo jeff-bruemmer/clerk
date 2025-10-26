@@ -46,7 +46,7 @@
   (testing "Dispatch works with registered editor"
     (reset-registry!)
     (registry/register-editor! "existence" mock-existence-editor)
-    (let [line (text/->Line "test.txt" "Test line" 1 false false [])
+    (let [line (text/->Line "test.txt" "Test line" 1 false false false [])
           check {:kind "existence" :name "test-check"}
           result (registry/dispatch line check)]
       (is (:issue? result)
@@ -58,7 +58,7 @@
   (testing "Dispatch works with custom editor"
     (reset-registry!)
     (registry/register-editor! "custom" mock-custom-editor)
-    (let [line (text/->Line "test.txt" "Test line" 1 false false [])
+    (let [line (text/->Line "test.txt" "Test line" 1 false false false [])
           check {:kind "custom" :name "my-custom-check"}
           result (registry/dispatch line check)]
       (is (:issue? result)
@@ -69,7 +69,7 @@
 (deftest test-dispatch-unknown-editor-throws
   (testing "Dispatch throws for unknown editor type"
     (reset-registry!)
-    (let [line (text/->Line "test.txt" "Test line" 1 false false [])
+    (let [line (text/->Line "test.txt" "Test line" 1 false false false [])
           check {:kind "nonexistent" :name "test"}]
       (is (thrown? clojure.lang.ExceptionInfo
                    (registry/dispatch line check))
@@ -80,7 +80,7 @@
     (reset-registry!)
     (registry/register-editor! "existence" mock-existence-editor)
     (registry/register-editor! "custom" mock-custom-editor)
-    (let [line (text/->Line "test.txt" "Test line" 1 false false [])
+    (let [line (text/->Line "test.txt" "Test line" 1 false false false [])
           check {:kind "nonexistent" :name "test"}]
       (try
         (registry/dispatch line check)

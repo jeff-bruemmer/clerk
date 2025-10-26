@@ -10,12 +10,14 @@
                  42
                  false
                  false
+                 false
                  []))
 
 (def error-line-double (text/->Line
                         "resources"
                         "This sentence is handsome and too handsome."
                         42
+                        false
                         false
                         false
                         []))
@@ -26,6 +28,7 @@
                     42
                     false
                     false
+                    false
                     []))
 
 (def decent-heading (text/->Line
@@ -34,12 +37,14 @@
                      42
                      false
                      false
+                     false
                      []))
 
 (def innocuous-line (text/->Line
                      "resources"
                      "This sentence looks innocuous."
                      42
+                     false
                      false
                      false
                      []))

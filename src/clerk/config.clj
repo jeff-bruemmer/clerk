@@ -21,7 +21,12 @@
 
 (defn load-config
   [file]
-  (map->Config (edn/read-string file)))
+  (let [parsed (edn/read-string file)
+        ;; Provide default value for :ignore if not present
+        with-defaults (if (contains? parsed :ignore)
+                        parsed
+                        (assoc parsed :ignore "ignore"))]
+    (map->Config with-defaults)))
 
 (defn default
   "If current config isn't valid, use the default."
@@ -138,6 +143,66 @@
     (when-let [version (get-remote-version)]
       (write-local-version! version))
     (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e))))))
+
+(defn ^:private backup-directory!
+  "Create a timestamped backup of a directory."
+  [dir-path backup-name]
+  (let [timestamp (.format (java.text.SimpleDateFormat. "yyyyMMdd-HHmmss")
+                           (java.util.Date.))
+        backup-dir (str (sys/home-dir) File/separator ".clerk-backup-" timestamp)]
+    (when (.exists (io/file dir-path))
+      (.mkdirs (io/file backup-dir))
+      (doseq [^java.io.File file (file-seq (io/file dir-path))]
+        (when (.isFile file)
+          (let [rel-path (subs (.getPath file) (count dir-path))
+                target (io/file (str backup-dir rel-path))]
+            (.mkdirs (.getParentFile target))
+            (io/copy file target))))
+      (println "Created backup at:" backup-dir)
+      backup-dir)))
+
+(defn restore-defaults!
+  "Restore default checks from GitHub, backing up existing checks first."
+  []
+  (println "\n=== Restoring Default Checks ===\n")
+  (let [clerk-dir (sys/filepath ".clerk")
+        default-dir (sys/filepath ".clerk" "default")
+        config-file (sys/filepath ".clerk" "config.edn")
+        ignore-file (sys/filepath ".clerk" "ignore.edn")]
+
+    ;; Check if .clerk directory exists
+    (if-not (.exists (io/file clerk-dir))
+      (do
+        (println "No .clerk directory found. Creating fresh installation...")
+        (download-checks!)
+        (println "\n✓ Default checks installed."))
+      ;; Otherwise, backup and restore
+      (do
+        ;; Backup existing checks
+        (println "Backing up existing checks...")
+        (backup-directory! default-dir "default")
+
+        ;; Preserve config and ignore files
+        (let [config-backup (when (.exists (io/file config-file))
+                              (slurp config-file))
+              ignore-backup (when (.exists (io/file ignore-file))
+                              (slurp ignore-file))]
+
+          ;; Download fresh checks
+          (println "\nDownloading fresh default checks...")
+          (download-checks!)
+
+          ;; Restore preserved files if they existed
+          (when config-backup
+            (spit config-file config-backup)
+            (println "Preserved your config.edn"))
+
+          (when ignore-backup
+            (spit ignore-file ignore-backup)
+            (println "Preserved your ignore.edn"))
+
+          (println "\n✓ Default checks restored successfully.")
+          (println "\nYour custom checks in ~/.clerk/custom/ were not modified."))))))
 
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.

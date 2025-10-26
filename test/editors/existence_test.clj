@@ -11,6 +11,7 @@
                  42
                  false
                  false
+                 false
                  []))
 
 (def error-line-double (text/->Line
@@ -19,12 +20,14 @@
                         42
                         false
                         false
+                        false
                         []))
 
 (def handsome-line (text/->Line
                     "resources"
                     "This sentence looks handsome."
                     42
+                    false
                     false
                     false
                     []))

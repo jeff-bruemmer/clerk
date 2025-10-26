@@ -11,6 +11,7 @@
              [pprint :as pp]
              [set :refer [rename-keys]]
              [string :as string]]
+            [clojure.java.io :as io]
             [jsonista.core :as json]))
 
 (set! *warn-on-reflection* true)
@@ -24,13 +25,14 @@
   "Prepares results for printing by merging line data with each issue."
   [{:keys [line-num issues]}]
   (reduce (fn [l issue]
-            (let [{:keys [file name specimen col-num message]} issue]
+            (let [{:keys [file name specimen col-num message kind]} issue]
               (conj l {:file file
                        :line-num line-num
                        :col-num col-num
                        :specimen (string/trim specimen)
                        :name (string/capitalize (string/replace name "-" " "))
-                       :message (fmt/sentence-dress message)})))
+                       :message (fmt/sentence-dress message)
+                       :kind kind})))
           []
           issues))
 
@@ -145,6 +147,61 @@
                                :message "Message"}))
        (print-table)))
 
+;;;; Verbose output
+
+(def check-kind-guidance
+  "Generic guidance for each check type to help users understand how to fix issues."
+  {"existence" "Remove or rephrase."
+   "case" "Remove or rephrase (case-sensitive)."
+   "recommender" "Replace with the preferred alternative."
+   "case-recommender" "Replace with the preferred alternative (case-sensitive)."
+   "repetition" "Remove the duplicate word."
+   "regex" "Follow the guidance in the message."})
+
+(defn format-verbose-issue
+  "Formats a single issue as markdown for verbose output."
+  [issue-num {:keys [file line-num col-num specimen name message kind]}]
+  (let [kind-lower (string/lower-case kind)
+        guidance (get check-kind-guidance kind-lower "Follow the guidance in the message.")
+        ;; Convert to absolute path
+        abs-file (-> file
+                     (string/replace "~" (System/getProperty "user.home"))
+                     io/file
+                     .getAbsolutePath)]
+    (str "### " issue-num ". " name " (" kind-lower ")\n\n"
+         "`" abs-file ":" line-num ":" col-num "`\n\n"
+         "**Problem:** `" specimen "`"
+         (when (and (or (= kind-lower "recommender")
+                       (= kind-lower "case-recommender"))
+                   (string/starts-with? message "Prefer:"))
+           (str " → `" (string/trim (subs message 7)) "`"))
+         " - " message "\n\n"
+         "**How to fix:** " guidance "\n")))
+
+(defn verbose-results
+  "Formats results as verbose markdown output."
+  [results]
+  (let [file-count (count (distinct (map :file results)))
+        issue-count (count results)
+        by-kind (group-by :kind results)
+        by-file (group-by :file results)]
+    (println "# Clerk Analysis Results\n")
+    (println (str "**Files analyzed:** " file-count))
+    (println (str "**Issues found:** " issue-count "\n"))
+    (println "---\n")
+    (println "## Issues\n")
+    (doseq [[idx issue] (map-indexed vector results)]
+      (println (format-verbose-issue (inc idx) issue))
+      (println "---\n"))
+    (println "## Summary\n")
+    (println (str "- **Total issues:** " issue-count))
+    (println "- **By type:**")
+    (doseq [[kind issues] (sort-by first by-kind)]
+      (println (str "  - " (string/lower-case kind) ": " (count issues))))
+    (println "- **By file:**")
+    (doseq [[file issues] (sort-by first by-file)]
+      (println (str "  - `" file "`: " (count issues) " issue" (when (not= 1 (count issues)) "s"))))))
+
 ;;;; Print checks
 
 (defn print-checks
@@ -193,6 +250,7 @@
                           "edn" (pp/pprint final-results)
                           "json" (json/write-value *out* final-results)
                           "group" (group-results final-results)
+                          "verbose" (verbose-results final-results)
                           (results-table final-results)))
       :else nil)))
 

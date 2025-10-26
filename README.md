@@ -59,16 +59,22 @@ $ clerk -f /path/to/thing-to-lint
 CLI options:
 
 ```
--f, --file          FILE        File or dir to proofread.
--o, --output        FORMAT      Output type: group, edn, json, table.
--C, --checks                    List enabled checks.
--c, --config        CONFIG      Set temporary configuration file.
--h, --help                      Prints this help message.
--i, --ignore        IGNORE      EDN file listing specimens to ignore.
--b, --code-blocks               Include code blocks.
--n, --no-cache                  Don't use cached results.
--t, --timer                     Print time elapsed.
--v, --version                   Prints version number.
+-b, --code-blocks                  Include code blocks.
+-C, --checks                       List enabled checks.
+-c, --config           CONFIG      Set temporary configuration file.
+-d, --check-dialogue               Include dialogue in checks.
+-f, --file             FILE        File or dir to proofread.
+-h, --help                         Prints this help message.
+-i, --ignore           IGNORE      EDN file listing specimens to ignore.
+-n, --no-cache                     Don't use cached results.
+-o, --output           FORMAT      Output type: group, edn, json, table, verbose.
+-t, --timer                        Print time elapsed.
+-v, --version                      Prints version number.
+-A, --add-ignore       SPECIMEN    Add specimen to ignore list.
+-R, --remove-ignore    SPECIMEN    Remove specimen from ignore list.
+-L, --list-ignored                 List all ignored specimens.
+-X, --clear-ignored                Clear all ignored specimens.
+-D, --restore-defaults             Restore default checks from GitHub.
 ```
 
 Here's an example command to export results to EDN:
@@ -79,7 +85,119 @@ $ clerk --file /path/to/drivel.md --output edn
 
 Clerk accepts txt, md, org, and tex files.
 
-## Custom Editors
+### Output formats
+
+Clerk supports several output formats via the `--output` flag:
+
+- **group** (default): Groups issues by file in a concise format
+- **table**: Displays results in a formatted table
+- **edn**: Outputs results as EDN data
+- **json**: Outputs results as JSON
+- **verbose**: Detailed markdown format with numbered issues, guidance, and ignore commands
+
+The verbose format is particularly useful for understanding issues in detail:
+
+```bash
+$ clerk -f document.md --output verbose
+```
+
+This will show:
+- Numbered list of all issues
+- File path with line and column numbers
+- The problematic text
+- For recommender checks, shows what to replace it with
+- Detailed guidance on how to fix each type of issue
+- Summary statistics
+- Ready-to-run commands to ignore specific issues
+
+### Managing ignored specimens
+
+Clerk allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices.
+
+```bash
+# Add a specimen to the ignore list
+$ clerk --add-ignore "hopefully"
+Added to ignore list: hopefully
+Ignored specimens: 1
+
+# List all ignored specimens
+$ clerk --list-ignored
+Ignored specimens:
+   hopefully
+
+# Remove a specimen from the ignore list
+$ clerk --remove-ignore "hopefully"
+Removed from ignore list: hopefully
+Ignored specimens: 0
+
+# Clear all ignored specimens
+$ clerk --clear-ignored
+Cleared all ignored specimens.
+```
+
+The ignore list is stored in `~/.clerk/ignore.edn`. You can also edit this file directly:
+
+```clojure
+;; ~/.clerk/ignore.edn
+#{"hopefully"
+  "FIX THIS"
+  "my-custom-term"}
+```
+
+### Dialogue handling
+
+By default, Clerk ignores text within quotation marks (dialogue) when checking prose.
+
+To include dialogue in your checks, use the `-d` or `--check-dialogue` flag:
+
+```bash
+$ clerk -f document.md --check-dialogue
+```
+
+**Example:**
+
+Given this text:
+```markdown
+She said "hopefully we'll arrive soon."
+Hopefully this will be checked.
+```
+
+Default behavior (dialogue ignored):
+- "hopefully" in the first line is ignored (it's in dialogue)
+- "hopefully" in the second line is flagged (it's narrative)
+
+With `--check-dialogue`:
+- Both instances of "hopefully" are flagged
+
+### Restoring default checks
+
+If you've modified your default checks and want to restore them to their original state, use the `--restore-defaults` flag:
+
+```bash
+$ clerk --restore-defaults
+
+=== Restoring Default Checks ===
+
+Backing up existing checks...
+Created backup at: /home/user/.clerk-backup-20251026-110441
+
+Downloading fresh default checks...
+Downloading default checks from:  https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip .
+Preserved your config.edn
+Preserved your ignore.edn
+
+✓ Default checks restored successfully.
+
+Your custom checks in ~/.clerk/custom/ were not modified.
+```
+
+This command:
+- Creates a timestamped backup of your current default checks in `~/.clerk-backup-TIMESTAMP/`
+- Downloads fresh default checks from GitHub
+- Preserves your `config.edn` and `ignore.edn` files
+- Leaves your custom checks in `~/.clerk/custom/` untouched
+
+## Custom editors
 
 Clerk supports custom editor types through a dynamic registry system. This allows you to extend Clerk with your own check types without modifying the core codebase.
 

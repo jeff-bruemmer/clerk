@@ -41,26 +41,26 @@
             output])
 
 (defn get-lines-from-all-files
-  [code-blocks file]
+  [code-blocks check-dialogue file]
   (->> file
        io/file
        file-seq
        (map str)
        (filter text/supported-file-type?)
        text/handle-invalid-file
-       (mapcat (partial text/fetch! code-blocks))))
+       (mapcat #(text/fetch! code-blocks % check-dialogue))))
 
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks]} options
+  (let [{:keys [file config output code-blocks check-dialogue]} options
         c (conf/fetch-or-create! config)
         cd (sys/check-dir config)
         updated-options (assoc options :config c :check-dir cd)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files code-blocks file)
+      :lines (get-lines-from-all-files code-blocks check-dialogue file)
       :config c
       :check-dir cd
       :checks (checks/create updated-options)

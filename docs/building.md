@@ -12,6 +12,7 @@ This guide covers building Clerk's native binary from source using GraalVM.
 ### GraalVM Installation
 
 #### Option 1: Download from Oracle (Recommended)
+
 ```bash
 # Download GraalVM 21 for your platform
 cd ~
@@ -30,6 +31,7 @@ native-image --version
 ```
 
 #### Option 2: SDKMAN (Linux/macOS)
+
 ```bash
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
@@ -48,6 +50,7 @@ Build time: 30-60 seconds
 Binary size: ~60MB
 
 ### What the build script does:
+
 1. Checks for clojure and native-image
 2. Cleans previous build artifacts
 3. Compiles Clojure code with GraalVM native-image
@@ -67,11 +70,13 @@ After building, install clerk to your system:
 The install script offers three choices:
 
 **1) System-wide installation** (`/usr/local/bin`)
+
 - Requires sudo
 - Available to all users
 - Automatically in PATH
 
 **2) User-only installation** (`~/.local/bin`)
+
 - No sudo required
 - Only available to your user
 - May need to add to PATH:
@@ -81,6 +86,7 @@ The install script offers three choices:
   ```
 
 **3) Cancel**
+
 - Binary remains in project directory
 - Can run as `./clerk` from project root
 
@@ -97,25 +103,30 @@ This is slower on startup but doesn't require GraalVM.
 ## Troubleshooting
 
 ### "native-image command not found"
+
 - Ensure GraalVM is installed
 - Check that `JAVA_HOME` points to GraalVM installation
 - Verify `$JAVA_HOME/bin` is in your `PATH`
 - Run `which native-image` to confirm it's accessible
 
 ### "clojure command not found"
+
 - Install Clojure CLI tools: https://clojure.org/guides/install_clojure
 - On Linux: `curl -O https://download.clojure.org/install/linux-install-1.11.1.1189.sh && chmod +x linux-install-1.11.1.1189.sh && sudo ./linux-install-1.11.1.1189.sh`
 
 ### Build fails with "Unable to resolve symbol"
+
 - Clear build cache: `rm -rf classes .cpcache`
 - Update dependencies: `clojure -P`
 - Try again
 
 ### "Permission denied" when installing
+
 - For system install: Ensure sudo is available
 - Alternative: Choose user install option (2) which doesn't require sudo
 
 ### Binary works in project but not after install
+
 - Check PATH: `echo $PATH`
 - For ~/.local/bin install: Add to PATH as shown above
 - Verify installation: `which clerk`
