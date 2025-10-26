@@ -13,17 +13,23 @@ Clerk uses GraalVM's Native Image utility to compile to a binary executable.
 
 ### Build from source
 
-If you've installed [GraalVM](https://www.graalvm.org/) and [Native Image](https://www.graalvm.org/reference-manual/native-image/), you can build the binary yourself:
+Build and install clerk from source:
 
-```
-clj -M:build
-```
+```bash
+# Clone the repository
+git clone https://github.com/jeff-bruemmer/clerk.git
+cd clerk
 
-Or install it with:
-
-```
+# Build and install (interactive)
 ./tools/install.sh
 ```
+
+The install script will:
+1. Check for required dependencies (Clojure, GraalVM)
+2. Build the native binary (~60 seconds)
+3. Offer installation options (system-wide or user-only)
+
+For detailed instructions, prerequisites, and troubleshooting, see [Building from Source](building.md).
 
 ### Clojure CLI tools
 
