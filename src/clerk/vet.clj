@@ -16,9 +16,19 @@
     [case-recommender :as cr]
     [existence :as existence]
     [recommender :as recommender]
-    [repetition :as repetition]]))
+    [repetition :as repetition]
+    [registry :as registry]]))
 
 (set! *warn-on-reflection* true)
+
+;;;; Register all standard editors
+
+(registry/register-editor! "existence" existence/proofread)
+(registry/register-editor! "recommender" recommender/proofread)
+(registry/register-editor! "repetition" repetition/proofread)
+(registry/register-editor! "case" c/proofread)
+(registry/register-editor! "case-recommender" cr/proofread)
+(registry/register-editor! "regex" re/proofread)
 
 ;;;; Combine user input and the relevant cached results
 
@@ -61,25 +71,26 @@
 
 (defn dispatch
   "Takes a `line` and a `check` returns result of relevant editor.
-  If no matching check, `dispatch` throws an exception."
+  Uses dynamic registry for extensibility."
   [line check]
-  (let [{:keys [kind]} check]
-    (case kind
-      "existence" (existence/proofread line check)
-      "recommender" (recommender/proofread line check)
-      "repetition" (repetition/proofread line check)
-      "case" (c/proofread line check)
-      "case-recommender" (cr/proofread line check)
-      "regex" (re/proofread line check)
-      (throw (Exception. (str "Not a valid check: " kind))))))
+  (registry/dispatch line check))
 
 (defn process
   "Takes `checks` and `lines` and runs each check on each line,
-  return lines with any issues found."
+  return lines with any issues found.
+  Uses chunked parallel processing to reduce thread overhead."
   [checks lines]
-  (->> lines
-       (pmap #(reduce dispatch % checks))
-       (filter :issue?)))
+  (if (empty? lines)
+    []
+    (let [num-cores (.availableProcessors (Runtime/getRuntime))
+          chunk-size (max 1 (quot (count lines) num-cores))]
+      (->> lines
+           (partition-all chunk-size)
+           (pmap (fn [chunk]
+                   (->> chunk
+                        (map #(reduce dispatch % checks))
+                        (filter :issue?))))
+           (apply concat)))))
 
 (defn compute
   "Takes an input, and returns the results of

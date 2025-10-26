@@ -8,12 +8,14 @@
             [clojure
              [edn :as edn]
              [string :as string]]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [jsonista.core :as json])
   (:import java.io.File))
 
 (set! *warn-on-reflection* true)
 
 (def remote-address "https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip")
+(def remote-api "https://api.github.com/repos/jeff-bruemmer/clerk-default-checks/commits/main")
 
 (defrecord Config [checks ignore])
 
@@ -83,20 +85,98 @@
             (copy! stream save-path out-file))
           (recur (.getNextEntry stream)))))))
 
-(defn fetch-or-create!
-  "Fetches or creates config file. Will exit on failure."
-  [config-filepath]
-  (let [default-config (sys/filepath ".clerk" "config.edn")]
+(defn ^:private get-remote-version
+  "Get the latest commit SHA from GitHub API.
+   Returns nil if unable to fetch (offline, rate limit, etc)."
+  []
+  (try
+    (let [resp (client/get remote-api {:socket-timeout 3000
+                                       :connection-timeout 3000
+                                       :throw-exceptions false})]
+      (when (= 200 (:status resp))
+        (let [body (json/read-value (:body resp) json/keyword-keys-object-mapper)]
+          (:sha body))))
+    (catch Exception _ nil)))
+
+(defn ^:private read-local-version
+  "Read the local version file if it exists."
+  []
+  (let [version-file (sys/filepath ".clerk" ".version")]
+    (when (.exists (io/file version-file))
+      (try
+        (string/trim (slurp version-file))
+        (catch Exception _ nil)))))
+
+(defn ^:private write-local-version!
+  "Write the current version SHA to local version file."
+  [sha]
+  (when sha
+    (let [version-file (sys/filepath ".clerk" ".version")]
+      (spit version-file sha))))
+
+(defn ^:private checks-stale?
+  "Check if local checks are outdated compared to remote.
+   Returns true if checks should be updated."
+  []
+  (let [local-version (read-local-version)
+        remote-version (get-remote-version)]
     (cond
-      (and (not (nil? config-filepath))
-           (.exists (io/file config-filepath))) (load-config (fetch! config-filepath))
-      (.exists (io/file default-config)) (load-config (fetch! default-config))
-      :else (do
-              (println "Initializing Clerk...")
-              (println "Downloading default checks from: " remote-address ".")
-              (try
-                (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
-                (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e)))))
-              (println "Created Clerk directory: " (sys/filepath ".clerk/"))
-              (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
-              (load-config (fetch! default-config))))))
+      ;; No version file exists, checks need download
+      (nil? local-version) true
+      ;; Couldn't reach GitHub, assume checks are current
+      (nil? remote-version) false
+      ;; Compare versions
+      :else (not= local-version remote-version))))
+
+(defn ^:private download-checks!
+  "Download and extract default checks from GitHub."
+  []
+  (println "Downloading default checks from: " remote-address ".")
+  (try
+    (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
+    ;; Save the version after successful download
+    (when-let [version (get-remote-version)]
+      (write-local-version! version))
+    (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e))))))
+
+(defn fetch-or-create!
+  "Fetches or creates config file. Will exit on failure.
+   Automatically checks for updates to default checks."
+  [config-filepath]
+  (let [default-config (sys/filepath ".clerk" "config.edn")
+        using-default? (or (nil? config-filepath)
+                           (= config-filepath default-config))
+        config-exists? (.exists (io/file default-config))
+        local-version (read-local-version)
+        version-exists? (not (nil? local-version))]
+    (cond
+      ;; Use custom (non-default) config if provided
+      (and (not using-default?)
+           (.exists (io/file config-filepath)))
+      (load-config (fetch! config-filepath))
+
+      ;; If using default config and checks are stale, update them
+      (and using-default? config-exists? (checks-stale?))
+      (do
+        (println "Updating default checks...")
+        (download-checks!)
+        (println "Checks updated.")
+        (load-config (fetch! default-config)))
+
+      ;; Config exists and is current
+      config-exists?
+      (do
+        ;; Backfill version file for existing installations
+        (when-not version-exists?
+          (when-let [version (get-remote-version)]
+            (write-local-version! version)))
+        (load-config (fetch! default-config)))
+
+      ;; First time setup
+      :else
+      (do
+        (println "Initializing Clerk...")
+        (download-checks!)
+        (println "Created Clerk directory: " (sys/filepath ".clerk/"))
+        (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
+        (load-config (fetch! default-config))))))
