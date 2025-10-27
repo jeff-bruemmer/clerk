@@ -208,6 +208,9 @@
   "Fetches or creates config file. Will exit on failure.
    Automatically checks for updates to default checks."
   [config-filepath]
+  (when (and config-filepath (not (string? config-filepath)))
+    (throw (ex-info (str "fetch-or-create! expects a string filepath, got: " (type config-filepath))
+                    {:config-filepath config-filepath})))
   (let [default-config (sys/filepath ".clerk" "config.edn")
         using-default? (or (nil? config-filepath)
                            (= config-filepath default-config))

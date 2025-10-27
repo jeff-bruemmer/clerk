@@ -29,6 +29,8 @@
    ["-n" "--no-cache" "Don't use cached results." :default false]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table, verbose."
     :default "group"]
+   ["-p" "--[no-]parallel-files" "Process multiple files in parallel (default: enabled)."
+    :default true]
    ["-t" "--timer" "Print time elapsed." :default false]
    ["-v" "--version" "Prints version number."]
    ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list."]

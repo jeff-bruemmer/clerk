@@ -1,5 +1,5 @@
 {:deps
- {org.clojure/clojure #:mvn{:version "1.10.2-alpha4"},
+ {org.clojure/clojure #:mvn{:version "1.12.0"},
   org.clojure/tools.cli #:mvn{:version "0.4.1"},
   org.clojure/core.specs.alpha #:mvn{:version "0.2.44"},
   org.clojure/spec.alpha #:mvn{:version "0.2.187"},
@@ -41,4 +41,8 @@
     com.cognitect/test-runner
     {:git/url "https://github.com/cognitect-labs/test-runner.git",
      :sha "209b64504cb3bd3b99ecfec7937b358a879f55c1"}},
-   :main-opts ["-m" "cognitect.test-runner"]}}}
+   :main-opts ["-m" "cognitect.test-runner"]}
+  :benchmark
+  {:main-opts ["-m" "clerk.benchmark-runner"]}
+  :parallel-bench
+  {:main-opts ["-m" "clerk.parallel-benchmark"]}}}

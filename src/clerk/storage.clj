@@ -1,5 +1,5 @@
 (ns clerk.storage
-  "Functions used for storing and retreiving cached results."
+  "Functions used for storing and retrieving cached results."
   (:gen-class)
   (:require [clerk
              [checks :as checks]
