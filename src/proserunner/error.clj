@@ -1,12 +1,12 @@
-(ns clerk.error
+(ns proserunner.error
   "Utilities for error messages"
   (:gen-class)
-  (:require [clerk.fmt :as fmt]
+  (:require [proserunner.fmt :as fmt]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
 
-(def exit-msg "Clerk needs to go lie down for a bit.\n")
+(def exit-msg "Proserunner needs to go lie down for a bit.\n")
 
 (defn message
   "Prints `errors`. Used to print command line option errors."
@@ -25,7 +25,7 @@
    (System/exit 0)))
 
 (defn inferior-input
-  "Handles input that Clerk has no time for."
+  "Handles input that Proserunner has no time for."
   [errors]
   (message errors)
   (exit))

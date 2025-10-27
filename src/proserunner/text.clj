@@ -1,8 +1,8 @@
-(ns clerk.text
+(ns proserunner.text
   "Functions for slurping and processing the text files."
   (:gen-class)
   (:require [clojure.java.io :as io]
-            [clerk.error :as error]
+            [proserunner.error :as error]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
@@ -34,7 +34,7 @@
    (peek (string/split filepath #"\."))))
 
 (defn handle-invalid-file
-  "If clerk has no files to vet, it pours out its beer."
+  "If proserunner has no files to vet, it pours out its beer."
   [files]
   (if (empty? files) (error/exit file-type-msg)
       files))

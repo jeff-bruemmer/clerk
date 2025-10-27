@@ -28,7 +28,7 @@ if ! command -v native-image &> /dev/null; then
     echo "  export JAVA_HOME=/path/to/graalvm"
     echo "  export PATH=\$JAVA_HOME/bin:\$PATH"
     echo ""
-    echo "Alternatively, run 'clojure -M:run' to use Clerk without building a native binary."
+    echo "Alternatively, run 'clojure -M:run' to use Proserunner without building a native binary."
     exit 1
 fi
 
@@ -36,7 +36,7 @@ echo "✓ Prerequisites found"
 echo "  Java: $(java -version 2>&1 | head -1)"
 echo "  Clojure: $(clojure --version 2>&1)"
 
-## Remove existing classes directory and clerk binary
+## Remove existing classes directory and proserunner binary
 
 echo "Cleaning build artifacts..."
 rm -rf classes .cpcache
@@ -48,15 +48,15 @@ echo ""
 clojure -M:build
 
 # Verify the binary was created
-if [ ! -f "clerk" ]; then
-    echo "ERROR: Build failed - clerk binary not found"
+if [ ! -f "proserunner" ]; then
+    echo "ERROR: Build failed - proserunner binary not found"
     echo "Check the output above for errors."
     exit 1
 fi
 
 echo ""
-echo "Making the clerk image executable..."
-chmod +x clerk
+echo "Making the proserunner image executable..."
+chmod +x proserunner
 
 echo "Cleaning up build artifacts..."
 rm -rf classes .cpcache
@@ -65,10 +65,10 @@ echo ""
 echo "✓ Build successful!"
 echo ""
 echo "Testing binary..."
-./clerk -h
+./proserunner -h
 
 echo ""
-echo "Binary location: $(pwd)/clerk"
-echo "Binary size: $(du -h clerk | cut -f1)"
+echo "Binary location: $(pwd)/proserunner"
+echo "Binary size: $(du -h proserunner | cut -f1)"
 
 

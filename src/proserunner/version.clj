@@ -1,4 +1,4 @@
-(ns clerk.version
+(ns proserunner.version
   "Puny namespace used just to get a somewhat meaningless number."
   (:require [clojure.string :as string]
             [clojure.java.io :as io])
@@ -6,5 +6,5 @@
 
 (def number
   (string/trim
-   (slurp (io/resource "CLERK_VERSION"))))
+   (slurp (io/resource "PROSERUNNER_VERSION"))))
 

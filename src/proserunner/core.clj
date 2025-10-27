@@ -1,6 +1,6 @@
-(ns clerk.core
+(ns proserunner.core
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [config :as conf]
              [error :as error]
              [fmt :as fmt]
@@ -39,8 +39,8 @@
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
    ["-D" "--restore-defaults" "Restore default checks from GitHub."]])
 
-(defn clerk
-  "Clerk takes options and vets a text with the supplied checks."
+(defn proserunner
+  "Proserunner takes options and vets a text with the supplied checks."
   [options]
   (->> options
        (vet/compute-or-cached)
@@ -82,7 +82,7 @@
             restore-defaults (conf/restore-defaults!)
 
             ;; Regular commands
-            file (clerk expanded-options)
+            file (proserunner expanded-options)
             checks (ship/print-checks config)
             help (ship/print-usage expanded-options)
             version (ship/print-version)

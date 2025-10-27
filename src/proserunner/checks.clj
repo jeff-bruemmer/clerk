@@ -1,6 +1,6 @@
-(ns clerk.checks
+(ns proserunner.checks
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [error :as error]]
             [clojure
              [edn :as edn]
@@ -75,11 +75,11 @@
   [filepath]
   (if (.exists (io/file filepath))
     filepath
-    (error/exit (str "Clerk couldn't find " filepath))))
+    (error/exit (str "Proserunner couldn't find " filepath))))
 
 (defn load-edn!
   "Loads an EDN-formatted check file.
-   Clerk will exit if it cannot load a check."
+   Proserunner will exit if it cannot load a check."
   [filename]
   (->> filename
        (valid-config?)

@@ -1,8 +1,8 @@
-(ns clerk.vet-test
-  (:require [clerk.vet :as vet]
+(ns proserunner.vet-test
+  (:require [proserunner.vet :as vet]
             [clojure.test :as t :refer [deftest is]]))
 
-(def config-path (str (System/getProperty "user.home") (java.io.File/separator) ".clerk" (java.io.File/separator) "config.edn"))
+(def config-path (str (System/getProperty "user.home") (java.io.File/separator) ".proserunner" (java.io.File/separator) "config.edn"))
 
 (def input (vet/make-input {:file "resources"
                             :config config-path

@@ -1,6 +1,6 @@
-# Building Clerk from Source
+# Building Proserunner from Source
 
-This guide covers building Clerk's native binary from source using GraalVM.
+This guide covers building Proserunner's native binary from source using GraalVM.
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ Binary size: ~60MB
 
 ## Installing
 
-After building, install clerk to your system:
+After building, install proserunner to your system:
 
 ```bash
 ./tools/install.sh
@@ -88,11 +88,11 @@ The install script offers three choices:
 **3) Cancel**
 
 - Binary remains in project directory
-- Can run as `./clerk` from project root
+- Can run as `./proserunner` from project root
 
 ## Running without Building
 
-If you don't want to build a native binary, you can run Clerk with the Clojure CLI:
+If you don't want to build a native binary, you can run Proserunner with the Clojure CLI:
 
 ```bash
 clojure -M:run -f /path/to/file.md
@@ -129,7 +129,7 @@ This is slower on startup but doesn't require GraalVM.
 
 - Check PATH: `echo $PATH`
 - For ~/.local/bin install: Add to PATH as shown above
-- Verify installation: `which clerk`
+- Verify installation: `which proserunner`
 
 ## Development Workflow
 

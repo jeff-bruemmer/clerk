@@ -1,7 +1,7 @@
-(ns clerk.shipping
+(ns proserunner.shipping
   "Shipping contains resources for printing results."
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [version :as ver]
              [fmt :as fmt]
              [checks :as checks]
@@ -56,7 +56,7 @@
 (defn print-version
   "Prints version number."
   []
-  (println "Clerk version: " ver/number))
+  (println "Proserunner version: " ver/number))
 
 ;;;; Printing results as a table
 
@@ -127,7 +127,7 @@
 (defn print-usage
   "Prints usage, optionally with a message."
   ([{:keys [summary config]}]
-   (println "\nClerk vets a text with the supplied checks.\n")
+   (println "\nProserunner vets a text with the supplied checks.\n")
    (print-opts summary "USAGE:" config))
 
   ([opts message]
@@ -185,7 +185,7 @@
         issue-count (count results)
         by-kind (group-by :kind results)
         by-file (group-by :file results)]
-    (println "# Clerk Analysis Results\n")
+    (println "# Proserunner Analysis Results\n")
     (println (str "**Files analyzed:** " file-count))
     (println (str "**Issues found:** " issue-count "\n"))
     (println "---\n")

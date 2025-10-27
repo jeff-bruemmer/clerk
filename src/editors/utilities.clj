@@ -1,5 +1,5 @@
 (ns editors.utilities
-  (:require [clerk.text :as text]
+  (:require [proserunner.text :as text]
             [clojure.string :as string])
   (:gen-class))
 

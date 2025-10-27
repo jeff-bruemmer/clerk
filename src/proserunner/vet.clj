@@ -1,10 +1,10 @@
-(ns clerk.vet
+(ns proserunner.vet
   "Computes results of running all the checks on each file,
    using cached results where possible."
   (:gen-class)
   (:require
    [clojure.java.io :as io]
-   [clerk
+   [proserunner
     [checks :as checks]
     [config :as conf]
     [path-ignore :as path-ignore]

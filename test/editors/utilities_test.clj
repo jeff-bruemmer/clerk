@@ -1,7 +1,7 @@
 (ns editors.utilities-test
   "Tests for editor utilities including LRU cache."
   (:require [editors.utilities :as util]
-            [clerk.text :as text]
+            [proserunner.text :as text]
             [clojure.test :as t :refer [deftest is testing]]))
 
 (deftest test-make-pattern

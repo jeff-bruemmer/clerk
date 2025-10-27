@@ -4,21 +4,21 @@
 
 ### Download
 
-Clerk uses GraalVM's Native Image utility to compile to a binary executable.
+Proserunner uses GraalVM's Native Image utility to compile to a binary executable.
 
-1. Download the [latest binary](https://github.com/jeff-bruemmer/clerk/releases) for your system. Linux and Mac OS (Darwin) binaries are available. Windows users can run Clerk on Windows Subsystem for Linux.
-2. `cd` into your Downloads directory and rename download to `clerk`.
-3. `chmod +x clerk`.
-4. Add Clerk to your \$PATH, e.g., `sudo cp clerk /usr/local/bin`.
+1. Download the [latest binary](https://github.com/jeff-bruemmer/proserunner/releases) for your system. Linux and Mac OS (Darwin) binaries are available. Windows users can run Proserunner on Windows Subsystem for Linux.
+2. `cd` into your Downloads directory and rename download to `proserunner`.
+3. `chmod +x proserunner`.
+4. Add Proserunner to your \$PATH, e.g., `sudo cp proserunner /usr/local/bin`.
 
 ### Build from source
 
-Build and install clerk from source:
+Build and install proserunner from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jeff-bruemmer/clerk.git
-cd clerk
+git clone https://github.com/jeff-bruemmer/proserunner.git
+cd proserunner
 
 # Build and install (interactive)
 ./tools/install.sh

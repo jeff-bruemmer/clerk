@@ -1,7 +1,7 @@
-(ns clerk.storage
+(ns proserunner.storage
   "Functions used for storing and retrieving cached results."
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [checks :as checks]
              [error :as error]
              [config :as conf]
@@ -33,7 +33,7 @@
     (if (.exists p)
       p
       (do (try (.mkdirs p)
-               (catch Exception e (error/exit (str "Clerk couldn't create cache directory:\n" (.getMessage e)))))
+               (catch Exception e (error/exit (str "Proserunner couldn't create cache directory:\n" (.getMessage e)))))
           p))))
 
 (defn ^:private filepath
@@ -45,7 +45,7 @@
   "Creates a storage directory in the OS's temp directory (if it hasn't already,
   and writes the result to that storage directory."
   [result]
-  (let [dir (mk-tmp-dir! "clerk-storage")
+  (let [dir (mk-tmp-dir! "proserunner-storage")
         storage-file (io/file (filepath dir result))]
     (if (.exists (io/file dir))
       (spit storage-file (pr-str result))
@@ -53,19 +53,19 @@
 
 (def ^:private edn-readers
   {:readers (merge default-data-readers
-                   {'clerk.storage.Result map->Result
-                    'clerk.text.Line text/map->Line
-                    'clerk.text.Issue text/map->Issue
-                    'clerk.checks.Check checks/map->Check
-                    'clerk.config.Config conf/map->Config
-                    'clerk.checks.Recommendation checks/map->Recommendation
-                    'clerk.checks.Expression checks/map->Expression})})
+                   {'proserunner.storage.Result map->Result
+                    'proserunner.text.Line text/map->Line
+                    'proserunner.text.Issue text/map->Issue
+                    'proserunner.checks.Check checks/map->Check
+                    'proserunner.config.Config conf/map->Config
+                    'proserunner.checks.Recommendation checks/map->Recommendation
+                    'proserunner.checks.Expression checks/map->Expression})})
 
 (defn inventory
   "Checks the storage directory for revelant cached results"
   [file]
   (let [fp (str (string/join (java.io.File/separator)
-                             [(System/getProperty "java.io.tmpdir") "clerk-storage" "file"])
+                             [(System/getProperty "java.io.tmpdir") "proserunner-storage" "file"])
                 (hash file) ".edn")
         use-cache? (.exists (io/file fp))]
     (if use-cache?
