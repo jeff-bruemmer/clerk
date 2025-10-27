@@ -63,6 +63,7 @@ CLI options:
 -C, --checks                       List enabled checks.
 -c, --config           CONFIG      Set temporary configuration file.
 -d, --check-dialogue               Include dialogue in checks.
+-e, --exclude          PATTERN     Exclude files/dirs matching pattern (glob).
 -f, --file             FILE        File or dir to proofread.
 -h, --help                         Prints this help message.
 -i, --ignore           IGNORE      EDN file listing specimens to ignore.
@@ -84,6 +85,41 @@ $ clerk --file /path/to/drivel.md --output edn
 ```
 
 Clerk accepts txt, md, org, and tex files.
+
+### Excluding files and directories
+
+When running Clerk on a directory, you can exclude specific files or directories from being checked:
+
+**Using .clerkignore file:**
+
+Create a `.clerkignore` file in the directory you're checking:
+
+```
+# Ignore draft files and directories
+drafts/
+*.draft.md
+temp.md
+
+# Ignore build outputs
+build/
+dist/
+```
+
+**Using --exclude flag:**
+
+```bash
+$ clerk -f documents/ --exclude "drafts/*"
+```
+
+**Pattern syntax:**
+- `*` matches any characters except `/`
+- `**` matches any characters including `/`
+- `filename.md` matches that specific file
+- `*.draft.md` matches any file ending in `.draft.md`
+- `drafts/` matches the drafts directory and all its contents
+- `**/temp/*` matches temp directories at any level
+
+Lines starting with `#` are comments and blank lines are ignored.
 
 ### Output formats
 

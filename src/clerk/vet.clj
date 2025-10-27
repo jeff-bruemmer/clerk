@@ -7,6 +7,7 @@
    [clerk
     [checks :as checks]
     [config :as conf]
+    [path-ignore :as path-ignore]
     [storage :as store]
     [system :as sys]
     [text :as text]]
@@ -41,26 +42,34 @@
             output])
 
 (defn get-lines-from-all-files
-  [code-blocks check-dialogue file]
-  (->> file
-       io/file
-       file-seq
-       (map str)
-       (filter text/supported-file-type?)
-       text/handle-invalid-file
-       (mapcat #(text/fetch! code-blocks % check-dialogue))))
+  [code-blocks check-dialogue file exclude-patterns]
+  (let [base-dir (-> file io/file .getAbsolutePath)
+        ;; Read .clerkignore if it exists
+        clerkignore-patterns (path-ignore/read-clerkignore base-dir)
+        ;; Combine CLI exclude patterns with .clerkignore
+        all-patterns (concat exclude-patterns clerkignore-patterns)]
+    (->> file
+         io/file
+         file-seq
+         (map str)
+         (filter text/supported-file-type?)
+         ;; Filter out ignored paths
+         (remove #(path-ignore/should-ignore? % base-dir all-patterns))
+         text/handle-invalid-file
+         (mapcat #(text/fetch! code-blocks % check-dialogue)))))
 
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue]} options
+  (let [{:keys [file config output code-blocks check-dialogue exclude]} options
+        exclude-patterns (if exclude (vector exclude) [])
         c (conf/fetch-or-create! config)
         cd (sys/check-dir config)
         updated-options (assoc options :config c :check-dir cd)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files code-blocks check-dialogue file)
+      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns)
       :config c
       :check-dir cd
       :checks (checks/create updated-options)
