@@ -5,6 +5,7 @@
              [error :as error]
              [fmt :as fmt]
              [ignore :as ignore]
+             [metrics :as metrics]
              [shipping :as ship]
              [text :as text]
              [vet :as vet]]
@@ -29,9 +30,12 @@
    ["-n" "--no-cache" "Don't use cached results." :default false]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table, verbose."
     :default "group"]
-   ["-p" "--[no-]parallel-files" "Process multiple files in parallel (default: enabled)."
-    :default true]
+   ["-p" "--parallel-files" "Process multiple files in parallel."
+    :default false]
+   ["-S" "--sequential-lines" "Process lines sequentially."
+    :default false]
    ["-t" "--timer" "Print time elapsed." :default false]
+   ["-m" "--metrics" "Show performance metrics." :default false]
    ["-v" "--version" "Prints version number."]
    ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list."]
    ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
@@ -42,9 +46,20 @@
 (defn proserunner
   "Proserunner takes options and vets a text with the supplied checks."
   [options]
-  (->> options
-       (vet/compute-or-cached)
-       (ship/out)))
+  (let [opts (if (:metrics options)
+               (do
+                 (metrics/reset-metrics!)
+                 (metrics/start-timing!)
+                 ;; Force no-cache when metrics enabled
+                 (assoc options :no-cache true))
+               options)
+        result (->> opts
+                    (vet/compute-or-cached)
+                    (ship/out))]
+    (when (:metrics options)
+      (metrics/end-timing!)
+      (metrics/print-metrics))
+    result))
 
 (defn reception
   "Parses command line `args` and applies the relevant function."
@@ -54,9 +69,14 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version
                 add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults]} expanded-options]
-    (if (seq errors)
-      (error/inferior-input errors)
+                restore-defaults parallel-files sequential-lines]} expanded-options
+        ;; Validate that both parallel modes are not enabled
+        validation-errors (cond
+                            (and parallel-files (not sequential-lines))
+                            ["Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files."]
+                            :else nil)]
+    (if (or (seq errors) (seq validation-errors))
+      (error/inferior-input (concat errors validation-errors))
       ;; Dispatch on command.
       (do (cond
             ;; Ignore management commands
@@ -86,7 +106,7 @@
             checks (ship/print-checks config)
             help (ship/print-usage expanded-options)
             version (ship/print-version)
-            :else (ship/print-usage expanded-options "You must supply an option."))
+            :else (ship/print-usage expanded-options "P R O S E R U N N E R"))
           ;; Return options for any follow-up activity, like printing time elapsed.
           expanded-options))))
 

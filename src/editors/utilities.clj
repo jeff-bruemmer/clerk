@@ -3,60 +3,21 @@
             [clojure.string :as string])
   (:gen-class))
 
-;; LRU cache configuration
-(def ^:private max-cache-size 1000)
-
-;; Cache for compiled regex patterns with LRU eviction
-(def ^:private pattern-cache (atom {:entries {} :access-order []}))
-(def ^:private re-core-cache (atom {:entries {} :access-order []}))
-
-(defn- lru-get
-  "Get value from LRU cache and update access order."
-  [cache-atom key]
-  (let [cache @cache-atom
-        value (get-in cache [:entries key])]
-    (when value
-      ;; Update access order - move key to end
-      (swap! cache-atom update :access-order
-             (fn [order]
-               (conj (vec (remove #{key} order)) key))))
-    value))
-
-(defn- lru-put
-  "Put value in LRU cache with eviction if needed."
-  [cache-atom key value]
-  (swap! cache-atom
-         (fn [cache]
-           (let [entries (:entries cache)
-                 access-order (:access-order cache)
-                 new-entries (if (>= (count entries) max-cache-size)
-                               ;; Evict least recently used
-                               (dissoc entries (first access-order))
-                               entries)
-                 new-order (if (>= (count entries) max-cache-size)
-                             (vec (rest access-order))
-                             access-order)]
-             {:entries (assoc new-entries key value)
-              :access-order (conj new-order key)}))))
+;; Pattern compilation without caching for optimal parallel performance.
+;; Cache overhead (atom contention) exceeds benefits under parallel workloads.
 
 (defn make-pattern
   "Used to concat regex pattern to search for multiple specimens at once."
   [re-payload case-sensitive?]
-  (let [cache-key [re-payload case-sensitive?]]
-    (if-let [cached-pattern (lru-get pattern-cache cache-key)]
-      cached-pattern
-      (let [ignore-chars "[^\\[\\#-_]"
-            boundary "\\b("
-            leftb (if case-sensitive?
-                    ;; Ignore matches in markdown/org links
-                    (str ignore-chars boundary)
-                    (str "(?i)" ignore-chars boundary))
-            pattern (->> re-payload
-                        (#(str leftb % ")\\b"))
-                        (re-pattern))]
-        ;; Cache the compiled pattern with LRU eviction
-        (lru-put pattern-cache cache-key pattern)
-        pattern))))
+  (let [ignore-chars "[^\\[\\#-_]"
+        boundary "\\b("
+        leftb (if case-sensitive?
+                ;; Ignore matches in markdown/org links
+                (str ignore-chars boundary)
+                (str "(?i)" ignore-chars boundary))]
+    (->> re-payload
+         (#(str leftb % ")\\b"))
+         (re-pattern))))
 
 (defn seek
   "Given a text, regex, and case sensitivity, returns a vector of regex matches."
@@ -99,11 +60,7 @@
      {:keys [file kind specimens message name]}]
     (if (empty? specimens)
       line
-      (let [re-core (if-let [cached-core (lru-get re-core-cache specimens)]
-                      cached-core
-                      (let [new-core (string/join "|" specimens)]
-                        (lru-put re-core-cache specimens new-core)
-                        new-core))
+      (let [re-core (string/join "|" specimens)
             matches (seek (:text line) re-core case-sensitive?)]
         (if (empty? matches)
           line

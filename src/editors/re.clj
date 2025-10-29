@@ -3,6 +3,9 @@
    [editors.utilities :as util])
   (:gen-class))
 
+;; Pattern compilation without caching for optimal parallel performance.
+;; Direct re-pattern compilation is faster than cache overhead under parallel load.
+
 (defn handle-specimen
   "Re-seq may return either a string or a vector of string matches."
   [specimen]
@@ -17,7 +20,8 @@
       line
       (reduce (fn [line {:keys [re message]}]
                 (let [{:keys [file text]} line
-                      matches (re-seq (re-pattern re) text)]
+                      pattern (re-pattern re)
+                      matches (re-seq pattern text)]
                   (if (empty? matches)
                     line
                     (reduce (fn [l m]

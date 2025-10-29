@@ -41,8 +41,13 @@
     com.cognitect/test-runner
     {:git/url "https://github.com/cognitect-labs/test-runner.git",
      :sha "209b64504cb3bd3b99ecfec7937b358a879f55c1"}},
-   :main-opts ["-m" "cognitect.test-runner"]}
+   :main-opts ["-m" "cognitect.test-runner"]},
   :benchmark
-  {:main-opts ["-m" "proserunner.benchmark-runner"]}
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.runner"]},
   :parallel-bench
-  {:main-opts ["-m" "proserunner.parallel-benchmark"]}}}
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.parallel"]},
+  :scaling-bench
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.scaling"]}}}

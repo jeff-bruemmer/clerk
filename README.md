@@ -1,4 +1,4 @@
-# Proserunner
+# P R O S E R U N N E R
 
 Proserunner is a customizable prose linter.
 
@@ -30,7 +30,7 @@ $ proserunner -f resources
 
 You can edit what Proserunner checks for, and create your own checks for Proserunner to run. You can use Proserunner to vet documents against your style guide, or simply guard against your writing tics.
 
-[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md)
+[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md) | [Testing](docs/testing.md) | [Benchmarks](docs/benchmarks.md)
 
 ## Rationale
 

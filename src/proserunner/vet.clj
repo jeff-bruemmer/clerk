@@ -7,6 +7,7 @@
    [proserunner
     [checks :as checks]
     [config :as conf]
+    [metrics :as metrics]
     [path-ignore :as path-ignore]
     [storage :as store]
     [system :as sys]
@@ -68,17 +69,19 @@
             config
             checks
             cached-result
-            output])
+            output
+            no-cache
+            parallel-lines])
 
 (defn get-lines-from-all-files
   "Get lines from all files, optionally processing files in parallel.
    When parallel? is true, files are processed concurrently using pmap."
   [code-blocks check-dialogue file exclude-patterns parallel?]
   (let [base-dir (-> file io/file .getAbsolutePath)
-        ;; Read .clerkignore if it exists
-        clerkignore-patterns (path-ignore/read-clerkignore base-dir)
-        ;; Combine CLI exclude patterns with .clerkignore
-        all-patterns (concat exclude-patterns clerkignore-patterns)
+        ;; Read .proserunnerignore if it exists
+        ignore-patterns (path-ignore/read-proserunnerignore base-dir)
+        ;; Combine CLI exclude patterns with .proserunnerignore
+        all-patterns (concat exclude-patterns ignore-patterns)
         files (->> file
                    io/file
                    file-seq
@@ -87,17 +90,21 @@
                    ;; Filter out ignored paths
                    (remove #(path-ignore/should-ignore? % base-dir all-patterns))
                    text/handle-invalid-file)
+        num-files (count files)
         fetch-fn #(text/fetch! code-blocks % check-dialogue)]
+    ;; Track file count for metrics
+    (dotimes [_ num-files]
+      (metrics/record-file!))
     (if parallel?
       ;; Parallel file processing
-      (let [num-files (count files)]
-        (if (> num-files 1)
-          ;; Use pmap for multiple files
-          (->> files
-               (pmap fetch-fn)
-               (apply concat))
-          ;; Single file, no need for parallelism
-          (mapcat fetch-fn files)))
+      (if (> num-files 1)
+        ;; Use pmap for multiple files, ensure eager evaluation
+        (->> files
+             (pmap (comp doall fetch-fn))
+             doall
+             (apply concat))
+        ;; Single file, no need for parallelism
+        (mapcat fetch-fn files))
       ;; Sequential file processing (original behavior)
       (mapcat fetch-fn files))))
 
@@ -105,10 +112,12 @@
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue exclude parallel-files]} options
+  (let [{:keys [file config output code-blocks check-dialogue exclude parallel-files sequential-lines no-cache]} options
         exclude-patterns (if exclude (vector exclude) [])
-        ;; Default to parallel file processing (true if not specified)
-        parallel? (if (nil? parallel-files) true parallel-files)
+        ;; Default to sequential file processing (false if not specified)
+        parallel-files? (if (nil? parallel-files) false parallel-files)
+        ;; Default to parallel line processing (true unless sequential-lines is set)
+        parallel-lines? (if sequential-lines false true)
         ;; Save original config filepath before loading
         config-filepath config
         c (conf/fetch-or-create! config-filepath)
@@ -116,12 +125,14 @@
         updated-options (assoc options :config c :check-dir cd)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel?)
+      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel-files?)
       :config c
       :check-dir cd
       :checks (checks/create updated-options)
       :cached-result (store/inventory file)
-      :output output})))
+      :output output
+      :no-cache no-cache
+      :parallel-lines parallel-lines?})))
 
 ;;;; Core functions for vetting a lines of text with each check.
 
@@ -134,24 +145,18 @@
 (defn process
   "Takes `checks` and `lines` and runs each check on each line,
   return lines with any issues found.
-  Uses chunked parallel processing to reduce thread overhead."
-  [checks lines]
-  (if (empty? lines)
-    []
-    (let [num-cores (.availableProcessors (Runtime/getRuntime))
-          chunk-size (max 1 (quot (count lines) num-cores))]
-      (->> lines
-           (partition-all chunk-size)
-           (pmap (fn [chunk]
-                   (->> chunk
-                        (map #(reduce dispatch % checks))
-                        (filter :issue?))))
-           (apply concat)))))
+  Uses pmap for parallel processing of lines when parallel? is true."
+  [checks lines parallel?]
+  (let [map-fn (if parallel? pmap map)]
+    (->> lines
+         (map-fn #(reduce dispatch % checks))
+         (filter :issue?))))
 
 (defn compute
   "Takes an input, and returns the results of
   running the configured checks on each line of text in the file."
-  [{:keys [file lines config checks output]}]
+  [{:keys [file lines config checks output parallel-lines]}]
+  (metrics/record-lines! (count lines))
   (store/map->Result {:lines lines
                       :lines-hash (hash lines)
                       :file-hash (hash file)
@@ -159,7 +164,7 @@
                       :config-hash (hash config)
                       :check-hash (hash checks)
                       :output output
-                      :results (process checks lines)}))
+                      :results (process checks lines parallel-lines)}))
 
 ;;;; Determine which lines have changed, and only process those changes.
 
@@ -205,7 +210,7 @@
   "Only process lines that have changed since the last vetting. If line numbers
   have shifted, update the results so they map to the correct line number."
   [input]
-  (let [{:keys [file lines config checks cached-result output]} input
+  (let [{:keys [file lines config checks cached-result output parallel-lines]} input
         ;; build a map of previous lines
         ;; to determine which lines we need to reprocess.
         cached-line-map (->> cached-result
@@ -228,7 +233,7 @@
           ;; what lines have changed?
           (changed cached-line-map)
           ;; Process only changed lines
-          (process checks)
+          (process checks parallel-lines)
           ;; Combine new results with cached results
           (combine updated-results)))))
 

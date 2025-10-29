@@ -6,10 +6,10 @@
 
 (set! *warn-on-reflection* true)
 
-(defn read-clerkignore
-  "Reads .clerkignore file from the base directory and returns patterns."
+(defn read-proserunnerignore
+  "Reads .proserunnerignore file from the base directory and returns patterns."
   [base-dir]
-  (let [ignore-file (io/file base-dir ".clerkignore")]
+  (let [ignore-file (io/file base-dir ".proserunnerignore")]
     (if (.exists ignore-file)
       (try
         (->> (slurp ignore-file)
