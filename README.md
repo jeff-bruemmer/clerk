@@ -30,7 +30,7 @@ $ proserunner -f resources
 
 You can edit what Proserunner checks for, and create your own checks for Proserunner to run. You can use Proserunner to vet documents against your style guide, or simply guard against your writing tics.
 
-[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md) | [Testing](docs/testing.md) | [Benchmarks](docs/benchmarks.md)
+[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md) | [Benchmarks](docs/benchmarks.md) | [Building](docs/building.md)
 
 ## Rationale
 
@@ -38,13 +38,13 @@ Proserunner was inspired by [Proselint](https://github.com/amperser/proselint), 
 
 ### Advantages
 
-- **Extendable.** Proserunner separates code and data. [Checks](#checks) are formatted as EDN, so you can toggle checks on or off, add new specimens of awkward prose to existing checks, or create custom checks to cover your own writing tics or issues specific to your domain or style guide. The dynamic editor registry allows you to add entirely new check types without modifying Proserunner's source code.
-- **Fast.** Proserunner analyzes multiple lines of text in parallel using optimized chunked processing (up to 4.85x faster on typical documents). Proserunner caches results and only checks lines of text that have changed since the last proofreading. Version-based check caching eliminates redundant downloads.
-- **Flexible.** Proserunner outputs results as a text table, but it can also format results as EDN or JSON.
+- **Extendable.** Proserunner separates code and data. [Checks](docs/checks.md) are formatted as EDN, so you can toggle checks on or off, add new specimens of awkward prose to existing checks, or create custom checks to cover your own writing tics or issues specific to your domain or style guide. The dynamic editor registry allows you to add entirely new check types without modifying Proserunner's source code.
+- **Fast.** Proserunner analyzes multiple lines of text in parallel using optimized chunked processing (up to 4.85x faster on typical documents). Proserunner caches results and only checks lines of text that have changed since the last proofreading. Version-based check caching eliminates redundant downloads. See [docs/benchmarks.md](docs/benchmarks.md) for performance details.
+- **Flexible.** Proserunner outputs results as a text table, but it can also format results as EDN or JSON. See [output formats](#output-formats) for details.
 
 ### Tradeoffs
 
-- **Mammoth binary**. Compiling the native image with Graal improves startup time and memory usage, but the binary is larger than the typical command-line tool.
+- **Mammoth binary**. Compiling the native image with Graal improves startup time and memory usage, but the binary is larger than the typical command-line tool. See [docs/building.md](docs/building.md) for build details.
 
 Proserunner includes many of Proselint's default checks, but Proserunner pruned some checks that were either too noisy, or unlikely to ever get hits. Proserunner also includes checks from other sources (and hard experience).
 
@@ -84,7 +84,7 @@ Here's an example command to export results to EDN:
 $ proserunner --file /path/to/drivel.md --output edn
 ```
 
-Proserunner accepts txt, md, org, and tex files.
+Proserunner accepts txt, md, org, and tex files. For installation instructions, see [docs/installation.md](docs/installation.md). To build from source, see [docs/building.md](docs/building.md).
 
 ### Excluding files and directories
 
@@ -150,7 +150,7 @@ This will show:
 
 ### Managing ignored specimens
 
-Proserunner allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices.
+Proserunner allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices. These are stored in `~/.proserunner/ignore.edn`.
 
 ```bash
 # Add a specimen to the ignore list
@@ -212,7 +212,7 @@ With `--check-dialogue`:
 
 ### Restoring default checks
 
-If you've modified your default checks and want to restore them to their original state, use the `--restore-defaults` flag:
+If you've modified your default checks and want to restore them to their original state, use the `--restore-defaults` flag. For more information about managing baselines, see [docs/baseline-management.md](docs/baseline-management.md).
 
 ```bash
 $ proserunner --restore-defaults
@@ -241,7 +241,7 @@ This command:
 
 ## Adding custom checks
 
-You can easily import custom checks from a local directory or GitHub repository using the `--add-checks` command.
+You can easily import custom checks from a local directory or GitHub repository using the `--add-checks` command. For complete details on creating checks, see [docs/checks.md](docs/checks.md).
 
 ### Import from local directory
 
@@ -284,7 +284,7 @@ Custom check files must be in EDN format. See [docs/checks.md](docs/checks.md) f
 
 ## Custom editors
 
-Proserunner supports custom editor types through a dynamic registry system. This allows you to extend Proserunner with your own check types without modifying the core codebase.
+Proserunner supports custom editor types through a dynamic registry system. This allows you to extend Proserunner with your own check types without modifying the core codebase. For detailed information on all available editor types, see [docs/checks.md](docs/checks.md).
 
 To create a custom editor, add a Clojure file to `~/.proserunner/custom/` that registers your editor function:
 
