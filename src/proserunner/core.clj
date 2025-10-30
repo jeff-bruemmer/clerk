@@ -2,6 +2,7 @@
   (:gen-class)
   (:require [proserunner
              [config :as conf]
+             [custom-checks :as custom]
              [error :as error]
              [fmt :as fmt]
              [ignore :as ignore]
@@ -41,25 +42,43 @@
    ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
    ["-L" "--list-ignored" "List all ignored specimens."]
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
-   ["-D" "--restore-defaults" "Restore default checks from GitHub."]])
+   ["-D" "--restore-defaults" "Restore default checks from GitHub."]
+   ["-a" "--add-checks SOURCE" "Import checks from directory or git URL."]
+   ["-N" "--name NAME" "Custom name for imported checks directory."]])
 
 (defn proserunner
   "Proserunner takes options and vets a text with the supplied checks."
   [options]
-  (let [opts (if (:metrics options)
-               (do
-                 (metrics/reset-metrics!)
-                 (metrics/start-timing!)
-                 ;; Force no-cache when metrics enabled
-                 (assoc options :no-cache true))
-               options)
-        result (->> opts
-                    (vet/compute-or-cached)
-                    (ship/out))]
-    (when (:metrics options)
-      (metrics/end-timing!)
-      (metrics/print-metrics))
-    result))
+  (try
+    (let [opts (if (:metrics options)
+                 (do
+                   (metrics/reset-metrics!)
+                   (metrics/start-timing!)
+                   ;; Force no-cache when metrics enabled
+                   (assoc options :no-cache true))
+                 options)
+          result (->> opts
+                      (vet/compute-or-cached)
+                      (ship/out))]
+      (when (:metrics options)
+        (metrics/end-timing!)
+        (metrics/print-metrics))
+      result)
+    (catch java.util.regex.PatternSyntaxException e
+      (println "Error: Invalid regex pattern in check definition.")
+      (println "Details:" (.getMessage e))
+      (System/exit 1))
+    (catch java.io.IOException e
+      (println "Error: File I/O operation failed.")
+      (println "Details:" (.getMessage e))
+      (System/exit 1))
+    (catch Exception e
+      (println "Error: An unexpected error occurred during processing.")
+      (println "Details:" (.getMessage e))
+      (when (System/getenv "PROSERUNNER_DEBUG")
+        (println "\nStack trace:")
+        (.printStackTrace e))
+      (System/exit 1))))
 
 (defn reception
   "Parses command line `args` and applies the relevant function."
@@ -69,7 +88,7 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version
                 add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults parallel-files sequential-lines]} expanded-options
+                restore-defaults add-checks name parallel-files sequential-lines]} expanded-options
         ;; Validate that both parallel modes are not enabled
         validation-errors (cond
                             (and parallel-files (not sequential-lines))
@@ -100,6 +119,13 @@
                             (println "Cleared all ignored specimens."))
 
             restore-defaults (conf/restore-defaults!)
+
+            ;; Custom checks management
+            add-checks (try
+                        (custom/add-checks add-checks {:name name})
+                        (catch Exception e
+                          (println "Error adding checks:" (.getMessage e))
+                          (System/exit 1)))
 
             ;; Regular commands
             file (proserunner expanded-options)

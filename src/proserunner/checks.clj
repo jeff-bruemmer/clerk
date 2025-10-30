@@ -55,12 +55,15 @@
       {:valid? false :errors errors})))
 
 (defn make
-  "Returns a `Check` after validation."
+  "Returns a `Check` after validation. Throws exception with details if invalid."
   [{:keys [name specimens message kind recommendations explanation expressions] :as check-def}]
   (let [validation (validate-check check-def)]
     (when-not (:valid? validation)
-      (error/exit (str "Invalid check definition for '" name "':\n"
-                      (clojure.string/join "\n" (map #(str "  - " %) (:errors validation))))))
+      (throw (ex-info (str "Invalid check definition for '" name "'")
+                      {:check-name name
+                       :errors (:errors validation)
+                       :message (str "Invalid check definition for '" name "':\n"
+                                    (clojure.string/join "\n" (map #(str "  - " %) (:errors validation))))})))
     (->Check name specimens message kind explanation
              (map map->Recommendation recommendations)
              (map map->Expression expressions))))
@@ -70,23 +73,23 @@
   [check-dir filename]
   (str check-dir filename ".edn"))
 
-(defn valid-config?
-  "Does the `filepath` exist?"
-  [filepath]
-  (if (.exists (io/file filepath))
-    filepath
-    (error/exit (str "Proserunner couldn't find " filepath))))
-
 (defn load-edn!
   "Loads an EDN-formatted check file.
-   Proserunner will exit if it cannot load a check."
+   Prints warning and returns nil if file cannot be loaded."
   [filename]
-  (->> filename
-       (valid-config?)
-       (slurp)
-       (edn/read-string)
-       (walk/keywordize-keys)
-       (make)))
+  (try
+    (if-not (.exists (io/file filename))
+      (do
+        (println (str "Error: Check file not found: " filename))
+        nil)
+      (->> filename
+           (slurp)
+           (edn/read-string)
+           (walk/keywordize-keys)
+           (make)))
+    (catch Exception e
+      (println (str "Error: Failed to load check file '" filename "': " (.getMessage e)))
+      nil)))
 
 (defn load-ignore-set!
   "Takes a checks directory and a file name for an edn file that
@@ -99,12 +102,19 @@
              edn/read-string))))
 
 (defn create
-  "Takes an options ball, and loads all the specified checks."
+  "Takes an options ball, and loads all the specified checks.
+   Filters out any checks that failed to load."
   [options]
   (let [{:keys [config check-dir]} options
         checks (:checks config)
         all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) checks)]
-    (map load-edn! all-checks)))
+                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) checks)
+        loaded-checks (keep load-edn! all-checks)
+        failed-count (- (count all-checks) (count loaded-checks))]
+    (when (pos? failed-count)
+      (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped.")))
+    (when (empty? loaded-checks)
+      (error/exit "No valid checks could be loaded. Please check your configuration."))
+    loaded-checks))
 

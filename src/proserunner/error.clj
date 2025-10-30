@@ -6,7 +6,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def exit-msg "Proserunner needs to go lie down for a bit.\n")
+(def exit-msg "Proserunner encountered an error.\n")
 
 (defn message
   "Prints `errors`. Used to print command line option errors."
@@ -14,15 +14,15 @@
   (println \newline (string/join \newline errors) \newline))
 
 (defn exit
-  "Prints an optional `msg` and exists with status 0."
+  "Prints an optional `msg` and exits with status 1."
   ([]
    (println exit-msg)
-   (System/exit 0))
+   (System/exit 1))
 
   ([msg]
    (println exit-msg)
    (println (fmt/sentence-dress msg))
-   (System/exit 0)))
+   (System/exit 1)))
 
 (defn inferior-input
   "Handles input that Proserunner has no time for."

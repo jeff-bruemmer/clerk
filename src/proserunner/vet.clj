@@ -136,11 +136,25 @@
 
 ;;;; Core functions for vetting a lines of text with each check.
 
+(defn safe-dispatch
+  "Safely dispatch to an editor, catching and logging any errors.
+   Returns the line unchanged if an error occurs."
+  [line check]
+  (try
+    (registry/dispatch line check)
+    (catch Exception e
+      (let [{:keys [name kind]} check
+            {:keys [file line-num]} line]
+        (println (str "Warning: Check '" name "' (" kind ") failed on "
+                     file ":" line-num ": " (.getMessage e))))
+      ;; Return line unchanged if check fails
+      line)))
+
 (defn dispatch
   "Takes a `line` and a `check` returns result of relevant editor.
   Uses dynamic registry for extensibility."
   [line check]
-  (registry/dispatch line check))
+  (safe-dispatch line check))
 
 (defn process
   "Takes `checks` and `lines` and runs each check on each line,

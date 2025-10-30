@@ -6,27 +6,40 @@
 ;; Pattern compilation without caching for optimal parallel performance.
 ;; Cache overhead (atom contention) exceeds benefits under parallel workloads.
 
+(defn safe-make-pattern
+  "Safely compile regex pattern to search for multiple specimens at once.
+   Returns nil if pattern is invalid."
+  [re-payload case-sensitive?]
+  (try
+    (let [ignore-chars "[^\\[\\#-_]"
+          boundary "\\b("
+          leftb (if case-sensitive?
+                  ;; Ignore matches in markdown/org links
+                  (str ignore-chars boundary)
+                  (str "(?i)" ignore-chars boundary))]
+      (->> re-payload
+           (#(str leftb % ")\\b"))
+           (re-pattern)))
+    (catch java.util.regex.PatternSyntaxException e
+      (println (str "Warning: Invalid regex pattern '" re-payload "': " (.getMessage e)))
+      nil)))
+
 (defn make-pattern
   "Used to concat regex pattern to search for multiple specimens at once."
   [re-payload case-sensitive?]
-  (let [ignore-chars "[^\\[\\#-_]"
-        boundary "\\b("
-        leftb (if case-sensitive?
-                ;; Ignore matches in markdown/org links
-                (str ignore-chars boundary)
-                (str "(?i)" ignore-chars boundary))]
-    (->> re-payload
-         (#(str leftb % ")\\b"))
-         (re-pattern))))
+  (safe-make-pattern re-payload case-sensitive?))
 
 (defn seek
-  "Given a text, regex, and case sensitivity, returns a vector of regex matches."
+  "Given a text, regex, and case sensitivity, returns a vector of regex matches.
+   Returns empty vector if pattern is invalid."
   [text re-payload case-sensitive?]
-  (let [p (make-pattern re-payload case-sensitive?)
-        matches (re-seq p text)]
-    (if matches
-      (into [] (map first matches))
-      [])))
+  (let [p (make-pattern re-payload case-sensitive?)]
+    (if (nil? p)
+      []
+      (let [matches (re-seq p text)]
+        (if matches
+          (into [] (map first matches))
+          [])))))
 
 (defn add-issue
   "Adds an issue to a text/Line's issues."

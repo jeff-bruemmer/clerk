@@ -81,10 +81,12 @@ Hopefully this will be checked.
 ```
 
 **Default behavior** (`proserunner -f document.md`):
+
 - First line: "hopefully" ignored (it's in dialogue)
 - Second line: "hopefully" flagged (it's narrative)
 
 **With dialogue checking** (`proserunner -f document.md --check-dialogue`):
+
 - Both lines: "hopefully" flagged in both dialogue and narrative
 
 ## Default checks
@@ -117,12 +119,14 @@ $ proserunner --restore-defaults
 ```
 
 This command will:
+
 1. Create a timestamped backup of your current default checks (e.g., `~/.proserunner-backup-20251026-110441/`)
 2. Download fresh default checks from the [default checks repository](https://github.com/jeff-bruemmer/proserunner-default-checks)
 3. Preserve your `config.edn` and `ignore.edn` files
 4. Leave your custom checks in `~/.proserunner/custom/` untouched
 
 This is useful if:
+
 - You've accidentally modified a default check and want to reset it
 - You want to get the latest updates to the default checks
 - Your checks directory has become corrupted
@@ -226,7 +230,32 @@ This allows you to progressively tune Proserunner to your writing domain without
 
 ## Adding checks
 
-Add custom checks in the `custom` directory . If your check fits the API of one of Proserunner's [editors](#editors), you can create custom checks to vet for your own personal (or organizational) tics.
+You can add custom checks in two ways:
+
+### Quick import with `--add-checks`
+
+The easiest way to add custom checks is using the `--add-checks` command:
+
+```bash
+# Import from local directory
+proserunner --add-checks ~/my-checks
+
+# Import from GitHub repository
+proserunner --add-checks https://github.com/company/style-guide
+
+# Specify custom directory name
+proserunner --add-checks ./checks --name company-style
+```
+
+This automatically:
+
+- Copies all `.edn` check files to `~/.proserunner/custom/`
+- Updates your `config.edn` to enable the checks
+- Shows you which checks were added
+
+### Manual creation
+
+You can also manually create check files in the `~/.proserunner/custom/` directory. If your check fits the API of one of Proserunner's [editors](#editors), you can create custom checks to vet for your own personal (or organizational) tics.
 
 [Existence](#existence-checks) | [Case](#case-checks) | [Recommender](#recommender-checks) | [Regex](#regex-checks)
 
@@ -269,4 +298,3 @@ If you want to use raw regular expressions to do more sophisticated checks, use 
   {:re "(##+.*\\.(\\s)*(?!.))" :message "Headings shouldn't end with period."}
   ]}
 ```
-

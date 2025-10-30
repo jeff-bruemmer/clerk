@@ -20,13 +20,18 @@
 (defrecord Config [checks ignore])
 
 (defn load-config
+  "Parse config EDN string and return Config record."
   [file]
-  (let [parsed (edn/read-string file)
-        ;; Provide default value for :ignore if not present
-        with-defaults (if (contains? parsed :ignore)
-                        parsed
-                        (assoc parsed :ignore "ignore"))]
-    (map->Config with-defaults)))
+  (try
+    (let [parsed (edn/read-string file)
+          ;; Provide default value for :ignore if not present
+          with-defaults (if (contains? parsed :ignore)
+                          parsed
+                          (assoc parsed :ignore "ignore"))]
+      (map->Config with-defaults))
+    (catch Exception e
+      (throw (ex-info "Failed to parse config file"
+                      {:error (.getMessage e)})))))
 
 (defn default
   "If current config isn't valid, use the default."
@@ -54,7 +59,19 @@
   (try
     (slurp config-filepath)
     (catch Exception e (error/exit
-                        (str "Proserunner could not load config:\n\n" (.getMessage e) "\n")))))
+                        (str "Proserunner could not load config file '" config-filepath "':\n" (.getMessage e) "\n")))))
+
+(defn safe-load-config
+  "Safely load and parse config file, with proper error reporting."
+  [config-filepath]
+  (try
+    (load-config (fetch! config-filepath))
+    (catch clojure.lang.ExceptionInfo e
+      (error/exit (str "Proserunner could not parse config file '" config-filepath "':\n"
+                      (get (ex-data e) :error "Invalid EDN format") "\n")))
+    (catch Exception e
+      (error/exit (str "Proserunner encountered an error loading config file '" config-filepath "':\n"
+                      (.getMessage e) "\n")))))
 
 (defn ^:private get-remote-zip!
   "Retrieves default checks, or times out after 5 seconds."
@@ -221,7 +238,7 @@
       ;; Use custom (non-default) config if provided
       (and (not using-default?)
            (.exists (io/file config-filepath)))
-      (load-config (fetch! config-filepath))
+      (safe-load-config config-filepath)
 
       ;; If using default config and checks are stale, update them
       (and using-default? config-exists? (checks-stale?))
@@ -229,7 +246,7 @@
         (println "Updating default checks...")
         (download-checks!)
         (println "Checks updated.")
-        (load-config (fetch! default-config)))
+        (safe-load-config default-config))
 
       ;; Config exists and is current
       config-exists?
@@ -238,7 +255,7 @@
         (when-not version-exists?
           (when-let [version (get-remote-version)]
             (write-local-version! version)))
-        (load-config (fetch! default-config)))
+        (safe-load-config default-config))
 
       ;; First time setup
       :else
@@ -247,4 +264,4 @@
         (download-checks!)
         (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
         (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
-        (load-config (fetch! default-config))))))
+        (safe-load-config default-config)))))

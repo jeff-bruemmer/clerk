@@ -23,6 +23,4 @@ annotations: FIX THIS.
 
 Fix this.
 
-You're a prophet in this reality. 
-
-
+You're a prophet in this reality.

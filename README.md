@@ -112,6 +112,7 @@ $ proserunner -f documents/ --exclude "drafts/*"
 ```
 
 **Pattern syntax:**
+
 - `*` matches any characters except `/`
 - `**` matches any characters including `/`
 - `filename.md` matches that specific file
@@ -138,6 +139,7 @@ $ proserunner -f document.md --output verbose
 ```
 
 This will show:
+
 - Numbered list of all issues
 - File path with line and column numbers
 - The problematic text
@@ -193,16 +195,19 @@ $ proserunner -f document.md --check-dialogue
 **Example:**
 
 Given this text:
+
 ```markdown
 She said "hopefully we'll arrive soon."
 Hopefully this will be checked.
 ```
 
 Default behavior (dialogue ignored):
+
 - "hopefully" in the first line is ignored (it's in dialogue)
 - "hopefully" in the second line is flagged (it's narrative)
 
 With `--check-dialogue`:
+
 - Both instances of "hopefully" are flagged
 
 ### Restoring default checks
@@ -228,10 +233,54 @@ Your custom checks in ~/.proserunner/custom/ were not modified.
 ```
 
 This command:
+
 - Creates a timestamped backup of your current default checks in `~/.proserunner-backup-TIMESTAMP/`
 - Downloads fresh default checks from GitHub
 - Preserves your `config.edn` and `ignore.edn` files
 - Leaves your custom checks in `~/.proserunner/custom/` untouched
+
+## Adding custom checks
+
+You can easily import custom checks from a local directory or GitHub repository using the `--add-checks` command.
+
+### Import from local directory
+
+```bash
+proserunner --add-checks ~/my-project/style-checks
+```
+
+This will:
+
+- Copy all `.edn` check files from the source directory to `~/.proserunner/custom/style-checks/`
+- Automatically update `~/.proserunner/config.edn` to enable the new checks
+- Display which checks were added
+
+### Import from GitHub
+
+```bash
+proserunner --add-checks https://github.com/company/writing-style
+```
+
+This will:
+
+- Clone the repository
+- Extract all `.edn` check files
+- Copy them to `~/.proserunner/custom/writing-style/`
+- Update your config automatically
+
+### Custom directory name
+
+Use the `--name` flag to specify a custom directory name:
+
+```bash
+proserunner --add-checks ./checks --name my-company
+```
+
+The checks will be installed to `~/.proserunner/custom/my-company/` instead of using the source directory name.
+
+### Check file format
+
+Custom check files must be in EDN format. See [docs/checks.md](docs/checks.md) for details on available check types and formats.
 
 ## Custom editors
 
@@ -276,9 +325,9 @@ Then create a check file in `~/.proserunner/default/` or `~/.proserunner/custom/
 ```
 
 Editor functions must have the signature `[line check] -> line`, where:
+
 - `line` is a `Line` record from `proserunner.text`
 - `check` is a `Check` record from `proserunner.checks`
 - Return the line unchanged if no issue, or with `:issue?` set to `true` and updated `:issues` vector
 
 Proserunner includes 6 built-in editor types: `existence`, `case`, `recommender`, `case-recommender`, `repetition`, and `regex`. See [docs/checks.md](docs/checks.md) for details on these types.
-

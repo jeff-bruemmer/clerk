@@ -25,6 +25,7 @@ cd proserunner
 ```
 
 The install script will:
+
 1. Check for required dependencies (Clojure, GraalVM)
 2. Build the native binary (~60 seconds)
 3. Offer installation options (system-wide or user-only)

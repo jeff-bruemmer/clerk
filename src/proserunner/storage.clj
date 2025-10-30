@@ -45,11 +45,14 @@
   "Creates a storage directory in the OS's temp directory (if it hasn't already,
   and writes the result to that storage directory."
   [result]
-  (let [dir (mk-tmp-dir! "proserunner-storage")
-        storage-file (io/file (filepath dir result))]
-    (if (.exists (io/file dir))
-      (spit storage-file (pr-str result))
-      (println "Unable to cache results."))))
+  (try
+    (let [dir (mk-tmp-dir! "proserunner-storage")
+          storage-file (io/file (filepath dir result))]
+      (if (.exists (io/file dir))
+        (spit storage-file (pr-str result))
+        (println "Warning: Unable to cache results - storage directory doesn't exist.")))
+    (catch Exception e
+      (println (str "Warning: Failed to save cache: " (.getMessage e))))))
 
 (def ^:private edn-readers
   {:readers (merge default-data-readers
@@ -62,14 +65,27 @@
                     'proserunner.checks.Expression checks/map->Expression})})
 
 (defn inventory
-  "Checks the storage directory for revelant cached results"
+  "Checks the storage directory for revelant cached results.
+   Returns false if cache doesn't exist or is corrupted."
   [file]
   (let [fp (str (string/join (java.io.File/separator)
                              [(System/getProperty "java.io.tmpdir") "proserunner-storage" "file"])
                 (hash file) ".edn")
-        use-cache? (.exists (io/file fp))]
+        cache-file (io/file fp)
+        use-cache? (.exists cache-file)]
     (if use-cache?
-      (edn/read-string edn-readers (slurp fp))
+      (try
+        (edn/read-string edn-readers (slurp fp))
+        (catch Exception e
+          (println (str "Warning: Corrupted cache detected for file '" file "': " (.getMessage e)))
+          (println "Clearing corrupted cache and recomputing...")
+          ;; Delete corrupted cache file
+          (try
+            (.delete cache-file)
+            (catch Exception del-e
+              ;; Silently ignore deletion errors
+              nil))
+          false))
       false)))
 
 ;;;; Predicate functions for validating cached results by comparing hashes.
