@@ -23,32 +23,46 @@
   (registry/register-editor! "case-recommender" case-recommender/proofread)
   (registry/register-editor! "regex" re/proofread))
 
+(defn- make-benchmark-input
+  "Create a vet input map with standard benchmark settings.
+   Disables caching and parallel processing to isolate file-level parallelism."
+  [file config-path]
+  (vet/make-input {:file file
+                   :config config-path
+                   :output "table"
+                   :code-blocks false
+                   :no-cache true
+                   :parallel-files false
+                   :parallel-lines false}))
+
+(defn- process-file
+  "Process a single file with vet/compute."
+  [file config-path]
+  (vet/compute (make-benchmark-input file config-path)))
+
+(defn- count-lines
+  "Count total lines across multiple files."
+  [files]
+  (reduce + (map (fn [f]
+                   (with-open [rdr (io/reader f)]
+                     (count (line-seq rdr))))
+                 files)))
+
 (defn benchmark-parallel-processing
   "Benchmark processing multiple files in parallel."
   [config-path]
   (let [files ["resources/benchmark-data/small.md"
-               "resources/benchmark-data/medium.md"]  ; Use only small files for testing
+               "resources/benchmark-data/medium.md"]
         existing-files (filter #(.exists (io/file %)) files)
-        total-lines (reduce + (map (fn [f]
-                                    (with-open [rdr (io/reader f)]
-                                      (count (line-seq rdr))))
-                                  existing-files))]
+        total-lines (count-lines existing-files)]
 
     (when (seq existing-files)
       (bench/run-benchmark
        "Parallel File Processing"
        (format "Processing %d files in parallel (%d total lines)"
                (count existing-files) total-lines)
-       #(doall (pmap (fn [file]
-                      (let [input (vet/make-input {:file file
-                                                   :config config-path
-                                                   :output "table"
-                                                   :code-blocks false
-                                                   :no-cache true
-                                                   :parallel-files false
-                                                   :parallel-lines false})]
-                        (vet/compute input)))
-                    existing-files))
+       #(doall (pmap (fn [file] (process-file file config-path))
+                     existing-files))
        {:iterations 10
         :warmup 3
         :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
@@ -58,54 +72,32 @@
   "Compare sequential vs parallel processing performance."
   [config-path]
   (let [files ["resources/benchmark-data/small.md"
-               "resources/benchmark-data/medium.md"]  ; Use smaller files for testing
-        existing-files (filter #(.exists (io/file %)) files)]
+               "resources/benchmark-data/medium.md"]
+        existing-files (filter #(.exists (io/file %)) files)
+        total-lines (count-lines existing-files)
+        benchmark-opts {:iterations 10
+                        :warmup 3
+                        :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
+                        :throughput-unit "lines/sec"}]
 
     (when (seq existing-files)
-      (let [total-lines (reduce + (map (fn [f]
-                                        (with-open [rdr (io/reader f)]
-                                          (count (line-seq rdr))))
-                                      existing-files))]
+      ;; Sequential benchmark
+      (let [seq-result (bench/run-benchmark
+                        "Sequential Processing"
+                        (format "%d files sequentially" (count existing-files))
+                        #(doall (map (fn [file] (process-file file config-path))
+                                     existing-files))
+                        benchmark-opts)
 
-        ;; Sequential benchmark
-        (let [seq-result (bench/run-benchmark
-                          "Sequential Processing"
-                          (format "%d files sequentially" (count existing-files))
-                          #(doall (map (fn [file]
-                                        (let [input (vet/make-input {:file file
-                                                                                     :config config-path
-                                                                                     :output "table"
-                                                                                     :code-blocks false
-                                                                                     :no-cache true
-                                                                                     :parallel-files false
-                                                                                     :parallel-lines false})]
-                                          (vet/compute input)))
+            ;; Parallel benchmark
+            par-result (bench/run-benchmark
+                        "Parallel Processing"
+                        (format "%d files in parallel" (count existing-files))
+                        #(doall (pmap (fn [file] (process-file file config-path))
                                       existing-files))
-                          {:iterations 10
-                           :warmup 3
-                           :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
-                           :throughput-unit "lines/sec"})]
+                        benchmark-opts)]
 
-          ;; Parallel benchmark
-          (let [par-result (bench/run-benchmark
-                            "Parallel Processing"
-                            (format "%d files in parallel" (count existing-files))
-                            #(doall (pmap (fn [file]
-                                           (let [input (vet/make-input {:file file
-                                                                                        :config config-path
-                                                                                        :output "table"
-                                                                                        :code-blocks false
-                                                                                        :no-cache true
-                                                                                        :parallel-files false
-                                                                                        :parallel-lines false})]
-                                             (vet/compute input)))
-                                         existing-files))
-                            {:iterations 10
-                             :warmup 3
-                             :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
-                             :throughput-unit "lines/sec"})]
-
-            [seq-result par-result]))))))
+        [seq-result par-result]))))
 
 (defn -main
   "Main entry point for parallel benchmark runner."

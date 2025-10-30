@@ -106,10 +106,10 @@
           source-dir (str @test-home File/separator "empty-dir")
           _ (.mkdirs (io/file source-dir))]
 
-      ;; Should throw exception
+      ;; Should throw exception with improved error message
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           #"No .edn files found"
+           #"No .edn check files found"
            (custom/add-checks source-dir {}))))))
 
 (deftest add-checks-updates-existing-entry

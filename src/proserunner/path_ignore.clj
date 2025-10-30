@@ -21,12 +21,19 @@
       [])))
 
 (defn glob-to-regex
-  "Converts a glob pattern to a regex pattern."
+  "Converts a glob pattern to a regex pattern.
+   Supports:
+   - `*` matches any characters except `/`
+   - `**` matches any characters including `/` (recursive)
+   - `?` matches a single character
+   - `.` is escaped to match literal dots"
   [pattern]
   (-> pattern
-      (string/replace "." "\\.")
-      (string/replace "*" ".*")
-      (string/replace "?" ".")
+      (string/replace "." "\\.")     ; Escape dots first
+      (string/replace "**" "§§")     ; Temporarily replace ** to protect it
+      (string/replace "*" "[^/]*")   ; * matches any char except /
+      (string/replace "§§" ".*")     ; ** matches any char including /
+      (string/replace "?" ".")       ; ? matches single char
       (re-pattern)))
 
 (defn should-ignore?

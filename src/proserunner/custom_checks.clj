@@ -50,8 +50,11 @@
         edn-files (find-edn-files source-dir)]
 
     (when (empty? edn-files)
-      (throw (ex-info (str "No .edn files found in " source-dir)
-                      {:source source-dir})))
+      (throw (ex-info (str "No .edn check files found in directory: " source-dir
+                          "\n\nExpected: Files ending with .edn containing check definitions"
+                          "\nSee: docs/checks.md for check file format")
+                      {:source source-dir
+                       :type :no-checks-found})))
 
     ;; Create target directory
     (.mkdirs (io/file target-dir))
@@ -82,16 +85,32 @@
     ;; Wait for clone to complete (timeout after 60 seconds)
     (when-not (.waitFor process 60 java.util.concurrent.TimeUnit/SECONDS)
       (.destroy process)
-      (throw (ex-info "Git clone timed out after 60 seconds"
-                      {:url git-url})))
+      (throw (ex-info (str "Git clone timed out after 60 seconds\n"
+                          "Repository: " git-url "\n\n"
+                          "Possible causes:\n"
+                          "  - Repository is very large\n"
+                          "  - Network connection is slow\n"
+                          "  - Repository URL is incorrect")
+                      {:url git-url
+                       :type :clone-timeout})))
 
     ;; Check exit code
     (let [exit-code (.exitValue process)]
       (when-not (zero? exit-code)
         (let [error-output (slurp (.getInputStream process))]
-          (throw (ex-info (str "Git clone failed: " error-output)
+          (throw (ex-info (str "Git clone failed\n"
+                              "Repository: " git-url "\n"
+                              "Exit code: " exit-code "\n\n"
+                              "Git error:\n" error-output "\n\n"
+                              "Possible causes:\n"
+                              "  - Repository doesn't exist or is private\n"
+                              "  - Git is not installed\n"
+                              "  - No network connection\n"
+                              "  - Invalid repository URL")
                           {:url git-url
-                           :exit-code exit-code})))))
+                           :exit-code exit-code
+                           :error-output error-output
+                           :type :clone-failed})))))
 
     temp-dir))
 
@@ -156,7 +175,7 @@
 
    Options:
    - :name - Custom name for the check directory (optional, defaults to source basename)"
-  [source {:keys [name] :as opts}]
+  [source {:keys [name]}]
   (let [target-name (or name (extract-name-from-source source))
         result (if (git-url? source)
                  (do
