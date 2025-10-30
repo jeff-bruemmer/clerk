@@ -1,11 +1,11 @@
-# Clerk
+# P R O S E R U N N E R
 
-Clerk is a customizable prose linter.
+Proserunner is a customizable prose linter.
 
 ```
-$ clerk -f resources
+$ proserunner -f resources
 
- ~/clerk/resources/drivel.md
+ ~/proserunner/resources/drivel.md
 3:13	"quick as lightning" -> A tired phrase.
 7:15	"software program" -> Pleonastic phrase.
 11:49	"hopefully" -> Skunked term: consider rephrasing.
@@ -13,7 +13,7 @@ $ clerk -f resources
 17:13	"FIX THIS" -> Draft litter.
 
 
- ~/clerk/resources/more/words.md
+ ~/proserunner/resources/more/words.md
 3:9	"I would argue" -> Omit this phrase.
 3:55	", so to speak" -> Omit this phrase.
 5:11	"Squelch" -> Prefer: quell.
@@ -28,32 +28,32 @@ $ clerk -f resources
 19:36	"no brainer" -> Avoid corporate-speak.
 ```
 
-You can edit what Clerk checks for, and create your own checks for Clerk to run. You can use Clerk to vet documents against your style guide, or simply guard against your writing tics.
+You can edit what Proserunner checks for, and create your own checks for Proserunner to run. You can use Proserunner to vet documents against your style guide, or simply guard against your writing tics.
 
-[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md)
+[Rationale](#rationale) | [Usage](#usage) | [Checks](docs/checks.md) | [Installation](docs/installation.md) | [Testing](docs/testing.md) | [Benchmarks](docs/benchmarks.md)
 
 ## Rationale
 
-Clerk was inspired by [Proselint](https://github.com/amperser/proselint), an excellent command line tool. The bulk of Proselint's value lies in the research the developers conducted to curate a set of checks that would yield a useful signal for editing. Clerk builds on that work to make a faster, more customizable linter.
+Proserunner was inspired by [Proselint](https://github.com/amperser/proselint), an excellent command line tool. The bulk of Proselint's value lies in the research the developers conducted to curate a set of checks that would yield a useful signal for editing. Proserunner builds on that work to make a faster, more customizable linter.
 
 ### Advantages
 
-- **Extendable.** Clerk separates code and data. [Checks](#checks) are formatted as EDN, so you can toggle checks on or off, add new specimens of awkward prose to existing checks, or create custom checks to cover your own writing tics or issues specific to your domain or style guide. The dynamic editor registry allows you to add entirely new check types without modifying Clerk's source code.
-- **Fast.** Clerk analyzes multiple lines of text in parallel using optimized chunked processing (up to 4.85x faster on typical documents). Clerk caches results and only checks lines of text that have changed since the last proofreading. Version-based check caching eliminates redundant downloads.
-- **Flexible.** Clerk outputs results as a text table, but it can also format results as EDN or JSON.
+- **Extendable.** Proserunner separates code and data. [Checks](#checks) are formatted as EDN, so you can toggle checks on or off, add new specimens of awkward prose to existing checks, or create custom checks to cover your own writing tics or issues specific to your domain or style guide. The dynamic editor registry allows you to add entirely new check types without modifying Proserunner's source code.
+- **Fast.** Proserunner analyzes multiple lines of text in parallel using optimized chunked processing (up to 4.85x faster on typical documents). Proserunner caches results and only checks lines of text that have changed since the last proofreading. Version-based check caching eliminates redundant downloads.
+- **Flexible.** Proserunner outputs results as a text table, but it can also format results as EDN or JSON.
 
 ### Tradeoffs
 
 - **Mammoth binary**. Compiling the native image with Graal improves startup time and memory usage, but the binary is larger than the typical command-line tool.
 
-Clerk includes many of Proselint's default checks, but Clerk pruned some checks that were either too noisy, or unlikely to ever get hits. Clerk also includes checks from other sources (and hard experience).
+Proserunner includes many of Proselint's default checks, but Proserunner pruned some checks that were either too noisy, or unlikely to ever get hits. Proserunner also includes checks from other sources (and hard experience).
 
 ## Usage
 
-Clerk outputs a table of issues with the prose. Clerk does not alter text. To proofread a document or directory:
+Proserunner outputs a table of issues with the prose. Proserunner does not alter text. To proofread a document or directory:
 
 ```
-$ clerk -f /path/to/thing-to-lint
+$ proserunner -f /path/to/thing-to-lint
 ```
 
 CLI options:
@@ -81,18 +81,18 @@ CLI options:
 Here's an example command to export results to EDN:
 
 ```
-$ clerk --file /path/to/drivel.md --output edn
+$ proserunner --file /path/to/drivel.md --output edn
 ```
 
-Clerk accepts txt, md, org, and tex files.
+Proserunner accepts txt, md, org, and tex files.
 
 ### Excluding files and directories
 
-When running Clerk on a directory, you can exclude specific files or directories from being checked:
+When running Proserunner on a directory, you can exclude specific files or directories from being checked:
 
-**Using .clerkignore file:**
+**Using .proserunnerignore file:**
 
-Create a `.clerkignore` file in the directory you're checking:
+Create a `.proserunnerignore` file in the directory you're checking:
 
 ```
 # Ignore draft files and directories
@@ -108,10 +108,11 @@ dist/
 **Using --exclude flag:**
 
 ```bash
-$ clerk -f documents/ --exclude "drafts/*"
+$ proserunner -f documents/ --exclude "drafts/*"
 ```
 
 **Pattern syntax:**
+
 - `*` matches any characters except `/`
 - `**` matches any characters including `/`
 - `filename.md` matches that specific file
@@ -123,7 +124,7 @@ Lines starting with `#` are comments and blank lines are ignored.
 
 ### Output formats
 
-Clerk supports several output formats via the `--output` flag:
+Proserunner supports several output formats via the `--output` flag:
 
 - **group** (default): Groups issues by file in a concise format
 - **table**: Displays results in a formatted table
@@ -134,10 +135,11 @@ Clerk supports several output formats via the `--output` flag:
 The verbose format is particularly useful for understanding issues in detail:
 
 ```bash
-$ clerk -f document.md --output verbose
+$ proserunner -f document.md --output verbose
 ```
 
 This will show:
+
 - Numbered list of all issues
 - File path with line and column numbers
 - The problematic text
@@ -148,33 +150,33 @@ This will show:
 
 ### Managing ignored specimens
 
-Clerk allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices.
+Proserunner allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices.
 
 ```bash
 # Add a specimen to the ignore list
-$ clerk --add-ignore "hopefully"
+$ proserunner --add-ignore "hopefully"
 Added to ignore list: hopefully
 Ignored specimens: 1
 
 # List all ignored specimens
-$ clerk --list-ignored
+$ proserunner --list-ignored
 Ignored specimens:
    hopefully
 
 # Remove a specimen from the ignore list
-$ clerk --remove-ignore "hopefully"
+$ proserunner --remove-ignore "hopefully"
 Removed from ignore list: hopefully
 Ignored specimens: 0
 
 # Clear all ignored specimens
-$ clerk --clear-ignored
+$ proserunner --clear-ignored
 Cleared all ignored specimens.
 ```
 
-The ignore list is stored in `~/.clerk/ignore.edn`. You can also edit this file directly:
+The ignore list is stored in `~/.proserunner/ignore.edn`. You can also edit this file directly:
 
 ```clojure
-;; ~/.clerk/ignore.edn
+;; ~/.proserunner/ignore.edn
 #{"hopefully"
   "FIX THIS"
   "my-custom-term"}
@@ -182,27 +184,30 @@ The ignore list is stored in `~/.clerk/ignore.edn`. You can also edit this file 
 
 ### Dialogue handling
 
-By default, Clerk ignores text within quotation marks (dialogue) when checking prose.
+By default, Proserunner ignores text within quotation marks (dialogue) when checking prose.
 
 To include dialogue in your checks, use the `-d` or `--check-dialogue` flag:
 
 ```bash
-$ clerk -f document.md --check-dialogue
+$ proserunner -f document.md --check-dialogue
 ```
 
 **Example:**
 
 Given this text:
+
 ```markdown
 She said "hopefully we'll arrive soon."
 Hopefully this will be checked.
 ```
 
 Default behavior (dialogue ignored):
+
 - "hopefully" in the first line is ignored (it's in dialogue)
 - "hopefully" in the second line is flagged (it's narrative)
 
 With `--check-dialogue`:
+
 - Both instances of "hopefully" are flagged
 
 ### Restoring default checks
@@ -210,40 +215,84 @@ With `--check-dialogue`:
 If you've modified your default checks and want to restore them to their original state, use the `--restore-defaults` flag:
 
 ```bash
-$ clerk --restore-defaults
+$ proserunner --restore-defaults
 
 === Restoring Default Checks ===
 
 Backing up existing checks...
-Created backup at: /home/user/.clerk-backup-20251026-110441
+Created backup at: /home/user/.proserunner-backup-20251026-110441
 
 Downloading fresh default checks...
-Downloading default checks from:  https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip .
+Downloading default checks from:  https://github.com/jeff-bruemmer/proserunner-default-checks/archive/main.zip .
 Preserved your config.edn
 Preserved your ignore.edn
 
 ✓ Default checks restored successfully.
 
-Your custom checks in ~/.clerk/custom/ were not modified.
+Your custom checks in ~/.proserunner/custom/ were not modified.
 ```
 
 This command:
-- Creates a timestamped backup of your current default checks in `~/.clerk-backup-TIMESTAMP/`
+
+- Creates a timestamped backup of your current default checks in `~/.proserunner-backup-TIMESTAMP/`
 - Downloads fresh default checks from GitHub
 - Preserves your `config.edn` and `ignore.edn` files
-- Leaves your custom checks in `~/.clerk/custom/` untouched
+- Leaves your custom checks in `~/.proserunner/custom/` untouched
+
+## Adding custom checks
+
+You can easily import custom checks from a local directory or GitHub repository using the `--add-checks` command.
+
+### Import from local directory
+
+```bash
+proserunner --add-checks ~/my-project/style-checks
+```
+
+This will:
+
+- Copy all `.edn` check files from the source directory to `~/.proserunner/custom/style-checks/`
+- Automatically update `~/.proserunner/config.edn` to enable the new checks
+- Display which checks were added
+
+### Import from GitHub
+
+```bash
+proserunner --add-checks https://github.com/company/writing-style
+```
+
+This will:
+
+- Clone the repository
+- Extract all `.edn` check files
+- Copy them to `~/.proserunner/custom/writing-style/`
+- Update your config automatically
+
+### Custom directory name
+
+Use the `--name` flag to specify a custom directory name:
+
+```bash
+proserunner --add-checks ./checks --name my-company
+```
+
+The checks will be installed to `~/.proserunner/custom/my-company/` instead of using the source directory name.
+
+### Check file format
+
+Custom check files must be in EDN format. See [docs/checks.md](docs/checks.md) for details on available check types and formats.
 
 ## Custom editors
 
-Clerk supports custom editor types through a dynamic registry system. This allows you to extend Clerk with your own check types without modifying the core codebase.
+Proserunner supports custom editor types through a dynamic registry system. This allows you to extend Proserunner with your own check types without modifying the core codebase.
 
-To create a custom editor, add a Clojure file to `~/.clerk/custom/` that registers your editor function:
+To create a custom editor, add a Clojure file to `~/.proserunner/custom/` that registers your editor function:
 
 ```clojure
-;; ~/.clerk/custom/my-editor.clj
+;; ~/.proserunner/custom/my-editor.clj
 (ns my-editor
   (:require [editors.registry :as registry]
-            [clerk.text :as text]))
+            [proserunner.text :as text]))
 
 (defn my-proofread
   "Custom editor function. Takes a line and check, returns updated line."
@@ -265,10 +314,10 @@ To create a custom editor, add a Clojure file to `~/.clerk/custom/` that registe
 (registry/register-editor! "my-check-type" my-proofread)
 ```
 
-Then create a check file in `~/.clerk/default/` or `~/.clerk/custom/` that uses your custom editor:
+Then create a check file in `~/.proserunner/default/` or `~/.proserunner/custom/` that uses your custom editor:
 
 ```clojure
-;; ~/.clerk/custom/my-check.edn
+;; ~/.proserunner/custom/my-check.edn
 {:name "My Custom Check"
  :kind "my-check-type"
  :message "Custom issue found."
@@ -276,9 +325,9 @@ Then create a check file in `~/.clerk/default/` or `~/.clerk/custom/` that uses 
 ```
 
 Editor functions must have the signature `[line check] -> line`, where:
-- `line` is a `Line` record from `clerk.text`
-- `check` is a `Check` record from `clerk.checks`
+
+- `line` is a `Line` record from `proserunner.text`
+- `check` is a `Check` record from `proserunner.checks`
 - Return the line unchanged if no issue, or with `:issue?` set to `true` and updated `:issues` vector
 
-Clerk includes 6 built-in editor types: `existence`, `case`, `recommender`, `case-recommender`, `repetition`, and `regex`. See [docs/checks.md](docs/checks.md) for details on these types.
-
+Proserunner includes 6 built-in editor types: `existence`, `case`, `recommender`, `case-recommender`, `repetition`, and `regex`. See [docs/checks.md](docs/checks.md) for details on these types.

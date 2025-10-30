@@ -1,5 +1,5 @@
 {:deps
- {org.clojure/clojure #:mvn{:version "1.10.2-alpha4"},
+ {org.clojure/clojure #:mvn{:version "1.12.0"},
   org.clojure/tools.cli #:mvn{:version "0.4.1"},
   org.clojure/core.specs.alpha #:mvn{:version "0.2.44"},
   org.clojure/spec.alpha #:mvn{:version "0.2.187"},
@@ -11,12 +11,12 @@
  :paths ["src" "classes" "resources"],
  :aliases
  {:run
-  {:main-opts ["-m" "clerk.core"]}
+  {:main-opts ["-m" "proserunner.core"]}
   :build
   {:main-opts
-   ["-m" "clj.native-image" "clerk.core"
+   ["-m" "clj.native-image" "proserunner.core"
     "--initialize-at-build-time"
-    "-H:Name=clerk"
+    "-H:Name=proserunner"
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
     "-H:EnableURLProtocols=http,https"
@@ -41,4 +41,13 @@
     com.cognitect/test-runner
     {:git/url "https://github.com/cognitect-labs/test-runner.git",
      :sha "209b64504cb3bd3b99ecfec7937b358a879f55c1"}},
-   :main-opts ["-m" "cognitect.test-runner"]}}}
+   :main-opts ["-m" "cognitect.test-runner"]},
+  :benchmark
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.runner"]},
+  :parallel-bench
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.parallel"]},
+  :scaling-bench
+  {:extra-paths ["."]
+   :main-opts ["-m" "benchmarks.scaling"]}}}

@@ -2,10 +2,10 @@
 
 [Editors](#editors) | [Dialogue handling](#dialogue-handling) | [Default checks](#default-checks) | [Modifying checks](#modifying-checks) | [Ignoring specimens](#ignoring-specimens) | [Adding checks](#adding-checks)
 
-Checks are stored as data in EDN format. Clerk's default set of checks are in the [default checks repository](https://github.com/jeff-bruemmer/clerk-default-checks). You can list enabled checks with the `--checks` flag:
+Checks are stored as data in EDN format. Proserunner's default set of checks are in the [default checks repository](https://github.com/jeff-bruemmer/proserunner-default-checks). You can list enabled checks with the `--checks` flag:
 
 ```
-$ clerk --checks
+$ proserunner --checks
 
 Enabled checks:
 
@@ -33,7 +33,7 @@ You can enable, modify, or disable any check by commenting out entire checks or 
 
 ## Editors
 
-Clerk has different editors, each for a different type of check. You can disable any check, and can extend Existence, Case, and Recommender checks.
+Proserunner has different editors, each for a different type of check. You can disable any check, and can extend Existence, Case, and Recommender checks.
 
 | **Editor**       | **Description**                          | **Customizable?** |
 | :--------------- | :--------------------------------------- | :---------------- |
@@ -46,7 +46,7 @@ Clerk has different editors, each for a different type of check. You can disable
 
 ## Dialogue handling
 
-By default, Clerk **ignores text within quotation marks** (dialogue) when checking prose. This prevents false positives from:
+By default, Proserunner **ignores text within quotation marks** (dialogue) when checking prose. This prevents false positives from:
 
 - Intentionally informal language in dialogue
 - Character-appropriate grammar choices
@@ -56,20 +56,15 @@ You can control this behavior with the `--check-dialogue` flag:
 
 ```bash
 # Default: ignore dialogue
-$ clerk -f document.md
+$ proserunner -f document.md
 
 # Check dialogue too
-$ clerk -f document.md --check-dialogue
+$ proserunner -f document.md --check-dialogue
 ```
 
 ### How dialogue detection works
 
-- **Double quotes**: `"Hello," she said` - detected as dialogue
-- **Single quotes**: `He said 'goodbye'` - detected as dialogue
-- **Apostrophes**: `It's a beautiful day` - NOT treated as dialogue
-- **Possessives**: `The dog's bone` - NOT treated as dialogue
-
-Clerk distinguishes apostrophes from single-quote dialogue by looking at surrounding context (spaces and punctuation).
+Proserunner detects text within single or double quotes as dialogue. Apostrophes and possessives are not treated as dialogue.
 
 ### Example
 
@@ -80,16 +75,18 @@ She said "hopefully we'll arrive soon."
 Hopefully this will be checked.
 ```
 
-**Default behavior** (`clerk -f document.md`):
+**Default behavior** (`proserunner -f document.md`):
+
 - First line: "hopefully" ignored (it's in dialogue)
 - Second line: "hopefully" flagged (it's narrative)
 
-**With dialogue checking** (`clerk -f document.md --check-dialogue`):
+**With dialogue checking** (`proserunner -f document.md --check-dialogue`):
+
 - Both lines: "hopefully" flagged in both dialogue and narrative
 
 ## Default checks
 
-When Clerk first runs, it will download the [default checks](https://github.com/jeff-bruemmer/clerk-default-checks), and store them in the `.clerk` directory in your home directory:
+When Proserunner first runs, it will download the [default checks](https://github.com/jeff-bruemmer/proserunner-default-checks), and store them in the `.proserunner` directory in your home directory:
 
 ```
 ├── README.md
@@ -106,30 +103,32 @@ When Clerk first runs, it will download the [default checks](https://github.com/
     ... and more checks
 ```
 
-Once Clerk has downloaded the default checks, consider versioning your `.clerk` directory.
+Once Proserunner has downloaded the default checks, consider versioning your `.proserunner` directory.
 
 ### Restoring default checks
 
 If you've modified the default checks and want to restore them to their original state:
 
 ```bash
-$ clerk --restore-defaults
+$ proserunner --restore-defaults
 ```
 
 This command will:
-1. Create a timestamped backup of your current default checks (e.g., `~/.clerk-backup-20251026-110441/`)
-2. Download fresh default checks from the [default checks repository](https://github.com/jeff-bruemmer/clerk-default-checks)
+
+1. Create a timestamped backup of your current default checks (e.g., `~/.proserunner-backup-20251026-110441/`)
+2. Download fresh default checks from the [default checks repository](https://github.com/jeff-bruemmer/proserunner-default-checks)
 3. Preserve your `config.edn` and `ignore.edn` files
-4. Leave your custom checks in `~/.clerk/custom/` untouched
+4. Leave your custom checks in `~/.proserunner/custom/` untouched
 
 This is useful if:
+
 - You've accidentally modified a default check and want to reset it
 - You want to get the latest updates to the default checks
 - Your checks directory has become corrupted
 
 ## Modifying checks
 
-You can disable entire checks by commenting out lines in the `:files` vector in `~/.clerk/config.edn`. Here we've disabled the `jargon` and `oxymorons` checks.
+You can disable entire checks by commenting out lines in the `:files` vector in `~/.proserunner/config.edn`. Here we've disabled the `jargon` and `oxymorons` checks.
 
 ```edn
 ;; Comment out a check to disable it.
@@ -162,7 +161,7 @@ You can disable entire checks by commenting out lines in the `:files` vector in 
    :files ["example"]}]}
 ```
 
-You can add new specimens to existing checks, or disable individual checks by commenting out lines within the checks, e.g., if you only want to disable some oxymorons. For Existence and Case checks, you can add examples of text for Clerk to search for to a check's specimens vector. See `~/.clerk/custom/example.edn` for an example Existence check.
+You can add new specimens to existing checks, or disable individual checks by commenting out lines within the checks, e.g., if you only want to disable some oxymorons. For Existence and Case checks, you can add examples of text for Proserunner to search for to a check's specimens vector. See `~/.proserunner/custom/example.edn` for an example Existence check.
 
 ## Ignoring specimens
 
@@ -174,33 +173,33 @@ The easiest way to manage ignored specimens is through the command line:
 
 ```bash
 # Add a specimen to the ignore list
-$ clerk --add-ignore "hopefully"
+$ proserunner --add-ignore "hopefully"
 Added to ignore list: hopefully
 Ignored specimens: 1
 
 # View all ignored specimens
-$ clerk --list-ignored
+$ proserunner --list-ignored
 Ignored specimens:
    FIX THIS
    hopefully
    my-custom-term
 
 # Remove a specimen from the ignore list
-$ clerk --remove-ignore "hopefully"
+$ proserunner --remove-ignore "hopefully"
 Removed from ignore list: hopefully
 Ignored specimens: 2
 
 # Clear all ignored specimens
-$ clerk --clear-ignored
+$ proserunner --clear-ignored
 Cleared all ignored specimens.
 ```
 
 ### Manual editing
 
-The ignore list is stored in `~/.clerk/ignore.edn` as a set of strings. You can also edit this file directly:
+The ignore list is stored in `~/.proserunner/ignore.edn` as a set of strings. You can also edit this file directly:
 
 ```clojure
-;; Put specimens for Clerk to ignore between the braces.
+;; Put specimens for Proserunner to ignore between the braces.
 ;; Use semicolons to comment out lines.
 #{"hopefully"
   "FIX THIS"
@@ -211,22 +210,38 @@ The ignore list is stored in `~/.clerk/ignore.edn` as a set of strings. You can 
 
 - Ignored specimens are matched **exactly** (case-sensitive)
 - Ignoring applies to **all checks** across your entire document
-- Ignored specimens are stored in `~/.clerk/ignore.edn`
-- The ignore list persists across Clerk runs
-- You can use the `-i` flag to specify a different ignore file: `clerk -f document.md -i my-ignore-file`
-
-### Typical workflow
-
-1. Run Clerk on your document: `clerk -f my-doc.md`
-2. Review the output and identify false positives
-3. Add them to the ignore list: `clerk --add-ignore "technical-term"`
-4. Run Clerk again to see updated results
-
-This allows you to progressively tune Clerk to your writing domain without modifying check definitions.
+- Ignored specimens are stored in `~/.proserunner/ignore.edn`
+- The ignore list persists across Proserunner runs
+- You can use the `-i` flag to specify a different ignore file: `proserunner -f document.md -i my-ignore-file`
 
 ## Adding checks
 
-Add custom checks in the `custom` directory . If your check fits the API of one of Clerk's [editors](#editors), you can create custom checks to vet for your own personal (or organizational) tics.
+You can add custom checks in two ways:
+
+### Quick import with `--add-checks`
+
+The easiest way to add custom checks is using the `--add-checks` command:
+
+```bash
+# Import from local directory
+proserunner --add-checks ~/my-checks
+
+# Import from GitHub repository
+proserunner --add-checks https://github.com/company/style-guide
+
+# Specify custom directory name
+proserunner --add-checks ./checks --name company-style
+```
+
+This automatically:
+
+- Copies all `.edn` check files to `~/.proserunner/custom/`
+- Updates your `config.edn` to enable the checks
+- Shows you which checks were added
+
+### Manual creation
+
+You can also manually create check files in the `~/.proserunner/custom/` directory. If your check fits the API of one of Proserunner's [editors](#editors), you can create custom checks to vet for your own personal (or organizational) tics.
 
 [Existence](#existence-checks) | [Case](#case-checks) | [Recommender](#recommender-checks) | [Regex](#regex-checks)
 
@@ -238,7 +253,7 @@ Add custom checks in the `custom` directory . If your check fits the API of one 
  :message "Stop using this phrase already."
  :specimens ["Phrases that"
              "I want"
-             "Clerk to check for"]}
+             "Proserunner to check for"]}
 ```
 
 ### Case checks
@@ -269,4 +284,3 @@ If you want to use raw regular expressions to do more sophisticated checks, use 
   {:re "(##+.*\\.(\\s)*(?!.))" :message "Headings shouldn't end with period."}
   ]}
 ```
-

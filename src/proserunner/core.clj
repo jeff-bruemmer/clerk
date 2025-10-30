@@ -1,10 +1,12 @@
-(ns clerk.core
+(ns proserunner.core
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [config :as conf]
+             [custom-checks :as custom]
              [error :as error]
              [fmt :as fmt]
              [ignore :as ignore]
+             [metrics :as metrics]
              [shipping :as ship]
              [text :as text]
              [vet :as vet]]
@@ -29,20 +31,54 @@
    ["-n" "--no-cache" "Don't use cached results." :default false]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table, verbose."
     :default "group"]
+   ["-p" "--parallel-files" "Process multiple files in parallel."
+    :default false]
+   ["-S" "--sequential-lines" "Process lines sequentially."
+    :default false]
    ["-t" "--timer" "Print time elapsed." :default false]
+   ["-m" "--metrics" "Show performance metrics." :default false]
    ["-v" "--version" "Prints version number."]
    ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list."]
    ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
    ["-L" "--list-ignored" "List all ignored specimens."]
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
-   ["-D" "--restore-defaults" "Restore default checks from GitHub."]])
+   ["-D" "--restore-defaults" "Restore default checks from GitHub."]
+   ["-a" "--add-checks SOURCE" "Import checks from directory or git URL."]
+   ["-N" "--name NAME" "Custom name for imported checks directory."]])
 
-(defn clerk
-  "Clerk takes options and vets a text with the supplied checks."
+(defn proserunner
+  "Proserunner takes options and vets a text with the supplied checks."
   [options]
-  (->> options
-       (vet/compute-or-cached)
-       (ship/out)))
+  (try
+    (let [opts (if (:metrics options)
+                 (do
+                   (metrics/reset-metrics!)
+                   (metrics/start-timing!)
+                   ;; Force no-cache when metrics enabled
+                   (assoc options :no-cache true))
+                 options)
+          result (->> opts
+                      (vet/compute-or-cached)
+                      (ship/out))]
+      (when (:metrics options)
+        (metrics/end-timing!)
+        (metrics/print-metrics))
+      result)
+    (catch java.util.regex.PatternSyntaxException e
+      (println "Error: Invalid regex pattern in check definition.")
+      (println "Details:" (.getMessage e))
+      (System/exit 1))
+    (catch java.io.IOException e
+      (println "Error: File I/O operation failed.")
+      (println "Details:" (.getMessage e))
+      (System/exit 1))
+    (catch Exception e
+      (println "Error: An unexpected error occurred during processing.")
+      (println "Details:" (.getMessage e))
+      (when (System/getenv "PROSERUNNER_DEBUG")
+        (println "\nStack trace:")
+        (.printStackTrace e))
+      (System/exit 1))))
 
 (defn reception
   "Parses command line `args` and applies the relevant function."
@@ -52,9 +88,14 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version
                 add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults]} expanded-options]
-    (if (seq errors)
-      (error/inferior-input errors)
+                restore-defaults add-checks name parallel-files sequential-lines]} expanded-options
+        ;; Validate that both parallel modes are not enabled
+        validation-errors (cond
+                            (and parallel-files (not sequential-lines))
+                            ["Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files."]
+                            :else nil)]
+    (if (or (seq errors) (seq validation-errors))
+      (error/inferior-input (concat errors validation-errors))
       ;; Dispatch on command.
       (do (cond
             ;; Ignore management commands
@@ -79,12 +120,19 @@
 
             restore-defaults (conf/restore-defaults!)
 
+            ;; Custom checks management
+            add-checks (try
+                        (custom/add-checks add-checks {:name name})
+                        (catch Exception e
+                          (println "Error adding checks:" (.getMessage e))
+                          (System/exit 1)))
+
             ;; Regular commands
-            file (clerk expanded-options)
+            file (proserunner expanded-options)
             checks (ship/print-checks config)
             help (ship/print-usage expanded-options)
             version (ship/print-version)
-            :else (ship/print-usage expanded-options "You must supply an option."))
+            :else (ship/print-usage expanded-options "P R O S E R U N N E R"))
           ;; Return options for any follow-up activity, like printing time elapsed.
           expanded-options))))
 

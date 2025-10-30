@@ -1,63 +1,76 @@
 (ns editors.utilities
-  (:require [clerk.text :as text]
+  (:require [proserunner.text :as text]
             [clojure.string :as string])
   (:gen-class))
 
-;; Cache for compiled regex patterns
-(def ^:private pattern-cache (atom {}))
-(def ^:private re-core-cache (atom {}))
+;; Pattern compilation without caching for optimal parallel performance.
+;; Cache overhead (atom contention) exceeds benefits under parallel workloads.
+
+(defn safe-make-pattern
+  "Safely compile regex pattern to search for multiple specimens at once.
+   Returns nil if pattern is invalid."
+  [re-payload case-sensitive?]
+  (try
+    (let [ignore-chars "[^\\[\\#-_]"
+          boundary "\\b("
+          leftb (if case-sensitive?
+                  ;; Ignore matches in markdown/org links
+                  (str ignore-chars boundary)
+                  (str "(?i)" ignore-chars boundary))]
+      (->> re-payload
+           (#(str leftb % ")\\b"))
+           (re-pattern)))
+    (catch java.util.regex.PatternSyntaxException e
+      (println (str "Warning: Invalid regex pattern '" re-payload "': " (.getMessage e)))
+      nil)))
 
 (defn make-pattern
   "Used to concat regex pattern to search for multiple specimens at once."
   [re-payload case-sensitive?]
-  (let [cache-key [re-payload case-sensitive?]]
-    (if-let [cached-pattern (get @pattern-cache cache-key)]
-      cached-pattern
-      (let [ignore-chars "[^\\[\\#-_]"
-            boundary "\\b("
-            leftb (if case-sensitive?
-                    ;; Ignore matches in markdown/org links
-                    (str ignore-chars boundary)
-                    (str "(?i)" ignore-chars boundary))
-            pattern (->> re-payload
-                        (#(str leftb % ")\\b"))
-                        (re-pattern))]
-        ;; Cache the compiled pattern
-        (swap! pattern-cache assoc cache-key pattern)
-        pattern))))
+  (safe-make-pattern re-payload case-sensitive?))
 
 (defn seek
-  "Given a text, regex, and case sensitivity, returns a vector of regex matches."
+  "Given a text, regex, and case sensitivity, returns a vector of regex matches.
+   Returns empty vector if pattern is invalid."
   [text re-payload case-sensitive?]
-  (let [p (make-pattern re-payload case-sensitive?)
-        matches (re-seq p text)]
-    (if matches
-      (into [] (map first matches))
-      [])))
+  (let [p (make-pattern re-payload case-sensitive?)]
+    (if (nil? p)
+      []
+      (let [matches (re-seq p text)]
+        (if matches
+          (into [] (map first matches))
+          [])))))
+
+(defn find-column-position
+  "Locates specimen in text, trying case-sensitive match first, then case-insensitive.
+   Guards against false positives from legitimate repetition."
+  [text specimen]
+  (or (when (string/includes? text specimen)
+        (string/index-of text specimen))
+      (when-let [idx (string/index-of (string/lower-case text)
+                                     (string/lower-case specimen))]
+        idx)))
+
+(defn create-issue-record
+  "Builds an Issue record with normalized file path for consistent reporting."
+  [file name kind specimen col message]
+  (text/->Issue (text/home-path file) name kind specimen col message))
+
+(defn add-issue-to-line
+  "Marks line as having issues and appends the issue to its collection."
+  [line issue]
+  (-> line
+      (assoc :issue? true)
+      (update :issues conj issue)))
 
 (defn add-issue
   "Adds an issue to a text/Line's issues."
   [{:keys [line specimen name kind message]}]
   (let [{:keys [file text]} line
-        ;; Only convert to lowercase if needed
-        col (if (string/includes? text specimen)
-              (string/index-of text specimen)
-              (when-let [idx (string/index-of (string/lower-case text) 
-                                            (string/lower-case specimen))]
-                idx))]
-    ;; If the string is not in the line, there is no issue.
-    ;; Guards against legitimate repetition hits, hits that are valid.
+        col (find-column-position text specimen)]
     (if (nil? col)
       line
-      (-> line
-          (assoc :issue? true)
-          (update :issues conj (text/->Issue
-                               (text/home-path file)
-                               name
-                               kind
-                               specimen
-                               col
-                               message))))))
+      (add-issue-to-line line (create-issue-record file name kind specimen col message)))))
 
 (defn create-issue-collector
   "Samples lines for each specimen in check, and adds any issues to the line."
@@ -67,11 +80,7 @@
      {:keys [file kind specimens message name]}]
     (if (empty? specimens)
       line
-      (let [re-core (if-let [cached-core (get @re-core-cache specimens)]
-                      cached-core
-                      (let [new-core (string/join "|" specimens)]
-                        (swap! re-core-cache assoc specimens new-core)
-                        new-core))
+      (let [re-core (string/join "|" specimens)
             matches (seek (:text line) re-core case-sensitive?)]
         (if (empty? matches)
           line

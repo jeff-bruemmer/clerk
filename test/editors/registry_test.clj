@@ -1,7 +1,7 @@
 (ns editors.registry-test
   "Tests for dynamic editor registry system."
   (:require [clojure.test :as t :refer [deftest is testing]]
-            [clerk.text :as text]
+            [proserunner.text :as text]
             [editors.registry :as registry]))
 
 ;; Test setup/teardown helpers

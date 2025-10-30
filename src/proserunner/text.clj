@@ -1,8 +1,8 @@
-(ns clerk.text
+(ns proserunner.text
   "Functions for slurping and processing the text files."
   (:gen-class)
   (:require [clojure.java.io :as io]
-            [clerk.error :as error]
+            [proserunner.error :as error]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
@@ -34,7 +34,7 @@
    (peek (string/split filepath #"\."))))
 
 (defn handle-invalid-file
-  "If clerk has no files to vet, it pours out its beer."
+  "If proserunner has no files to vet, it pours out its beer."
   [files]
   (if (empty? files) (error/exit file-type-msg)
       files))
@@ -110,29 +110,39 @@
   ([code-blocks filepath]
    (fetch! code-blocks filepath false))
   ([code-blocks filepath check-dialogue]
-   (let [homepath (home-path filepath)
-         code (atom false) ;; Are we in a code block?
-         boundary "```" ;; assumes code blocks are delimited by triple backticks.
-         ;; If we see a boundry, we're either entering or exiting a code block.
-         code-fn (fn [line] (if (string/starts-with? (:text line) boundary)
-                              (assoc line :code? (swap! code not))
-                              (assoc line :code? @code)))]
-     (->> filepath
-          slurp
-          string/split-lines
-          (map-indexed number-lines)
-          (remove #(string/blank? (:text %)))
-          (map (comp
-                map->Line
-                #(assoc % :file homepath)
-                code-fn))
-          (map mark-dialogue)
-          (remove #(or
-                    (= boundary (:text %))
-                    (and (not code-blocks)
-                         (:code? %))
-                    (and (not check-dialogue)
-                         (:dialogue? %))))))))
+   (try
+     (let [homepath (home-path filepath)
+           code (atom false) ;; Are we in a code block?
+           boundary "```" ;; assumes code blocks are delimited by triple backticks.
+           ;; If we see a boundry, we're either entering or exiting a code block.
+           code-fn (fn [line] (if (string/starts-with? (:text line) boundary)
+                                (assoc line :code? (swap! code not))
+                                (assoc line :code? @code)))]
+       (->> filepath
+            slurp
+            string/split-lines
+            (map-indexed number-lines)
+            (remove #(string/blank? (:text %)))
+            (map (comp
+                  map->Line
+                  #(assoc % :file homepath)
+                  code-fn))
+            (map mark-dialogue)
+            (remove #(or
+                      (= boundary (:text %))
+                      (and (not code-blocks)
+                           (:code? %))
+                      (and (not check-dialogue)
+                           (:dialogue? %))))))
+     (catch java.io.FileNotFoundException e
+       (println (str "Error: File not found: " filepath))
+       [])
+     (catch java.io.IOException e
+       (println (str "Error: Could not read file '" filepath "': " (.getMessage e)))
+       [])
+     (catch Exception e
+       (println (str "Error: Unexpected error reading file '" filepath "': " (.getMessage e)))
+       []))))
 
 (defn get-lines
   "Read and decorate lines."

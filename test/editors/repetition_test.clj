@@ -1,5 +1,5 @@
 (ns editors.repetition-test
-  (:require [clerk
+  (:require [proserunner
              [checks :as checks]
              [text :as text]]
             [clojure.test :as t :refer [deftest is]]

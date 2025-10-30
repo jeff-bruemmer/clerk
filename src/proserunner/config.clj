@@ -1,7 +1,7 @@
-(ns clerk.config
+(ns proserunner.config
   "Functions for creating a configuration directory."
   (:gen-class)
-  (:require [clerk
+  (:require [proserunner
              [error :as error]
              [system :as sys]]
             [clj-http.lite.client :as client]
@@ -14,25 +14,30 @@
 
 (set! *warn-on-reflection* true)
 
-(def remote-address "https://github.com/jeff-bruemmer/clerk-default-checks/archive/main.zip")
-(def remote-api "https://api.github.com/repos/jeff-bruemmer/clerk-default-checks/commits/main")
+(def remote-address "https://github.com/jeff-bruemmer/proserunner-default-checks/archive/main.zip")
+(def remote-api "https://api.github.com/repos/jeff-bruemmer/proserunner-default-checks/commits/main")
 
 (defrecord Config [checks ignore])
 
 (defn load-config
+  "Parse config EDN string and return Config record."
   [file]
-  (let [parsed (edn/read-string file)
-        ;; Provide default value for :ignore if not present
-        with-defaults (if (contains? parsed :ignore)
-                        parsed
-                        (assoc parsed :ignore "ignore"))]
-    (map->Config with-defaults)))
+  (try
+    (let [parsed (edn/read-string file)
+          ;; Provide default value for :ignore if not present
+          with-defaults (if (contains? parsed :ignore)
+                          parsed
+                          (assoc parsed :ignore "ignore"))]
+      (map->Config with-defaults))
+    (catch Exception e
+      (throw (ex-info "Failed to parse config file"
+                      {:error (.getMessage e)})))))
 
 (defn default
   "If current config isn't valid, use the default."
   [options]
   (let [cur-config (:config options)
-        new-config (sys/filepath ".clerk" "config.edn")]
+        new-config (sys/filepath ".proserunner" "config.edn")]
     (if (or (nil? cur-config)
             (not (.exists (io/file cur-config))))
       (assoc options :config new-config)
@@ -49,12 +54,24 @@
 
 (defn fetch!
   "Takes a file path and returns a Config record.
-   Clerk will exit if it cannot load the config."
+   Proserunner will exit if it cannot load the config."
   [config-filepath]
   (try
     (slurp config-filepath)
     (catch Exception e (error/exit
-                        (str "Clerk could not load config:\n\n" (.getMessage e) "\n")))))
+                        (str "Proserunner could not load config file '" config-filepath "':\n" (.getMessage e) "\n")))))
+
+(defn safe-load-config
+  "Safely load and parse config file, with proper error reporting."
+  [config-filepath]
+  (try
+    (load-config (fetch! config-filepath))
+    (catch clojure.lang.ExceptionInfo e
+      (error/exit (str "Proserunner could not parse config file '" config-filepath "':\n"
+                      (get (ex-data e) :error "Invalid EDN format") "\n")))
+    (catch Exception e
+      (error/exit (str "Proserunner encountered an error loading config file '" config-filepath "':\n"
+                      (.getMessage e) "\n")))))
 
 (defn ^:private get-remote-zip!
   "Retrieves default checks, or times out after 5 seconds."
@@ -63,7 +80,7 @@
                                        :socket-timeout 5000
                                        :connection-timeout 5000
                                        :throw-exceptions false})
-                  (catch Exception e (error/exit (str "Clerk couldn't reach: " (.getMessage e)
+                  (catch Exception e (error/exit (str "Proserunner couldn't reach: " (.getMessage e)
                                                       "\nAre you connected to the Internet?\n"))))]
     (:body resp)))
 
@@ -106,7 +123,7 @@
 (defn ^:private read-local-version
   "Read the local version file if it exists."
   []
-  (let [version-file (sys/filepath ".clerk" ".version")]
+  (let [version-file (sys/filepath ".proserunner" ".version")]
     (when (.exists (io/file version-file))
       (try
         (string/trim (slurp version-file))
@@ -116,7 +133,7 @@
   "Write the current version SHA to local version file."
   [sha]
   (when sha
-    (let [version-file (sys/filepath ".clerk" ".version")]
+    (let [version-file (sys/filepath ".proserunner" ".version")]
       (spit version-file sha))))
 
 (defn ^:private checks-stale?
@@ -138,7 +155,7 @@
   []
   (println "Downloading default checks from: " remote-address ".")
   (try
-    (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "clerk-default-checks-main" ".clerk")
+    (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "proserunner-default-checks-main" ".proserunner")
     ;; Save the version after successful download
     (when-let [version (get-remote-version)]
       (write-local-version! version))
@@ -149,7 +166,7 @@
   [dir-path backup-name]
   (let [timestamp (.format (java.text.SimpleDateFormat. "yyyyMMdd-HHmmss")
                            (java.util.Date.))
-        backup-dir (str (sys/home-dir) File/separator ".clerk-backup-" timestamp)]
+        backup-dir (str (sys/home-dir) File/separator ".proserunner-backup-" timestamp)]
     (when (.exists (io/file dir-path))
       (.mkdirs (io/file backup-dir))
       (doseq [^java.io.File file (file-seq (io/file dir-path))]
@@ -165,15 +182,15 @@
   "Restore default checks from GitHub, backing up existing checks first."
   []
   (println "\n=== Restoring Default Checks ===\n")
-  (let [clerk-dir (sys/filepath ".clerk")
-        default-dir (sys/filepath ".clerk" "default")
-        config-file (sys/filepath ".clerk" "config.edn")
-        ignore-file (sys/filepath ".clerk" "ignore.edn")]
+  (let [proserunner-dir (sys/filepath ".proserunner")
+        default-dir (sys/filepath ".proserunner" "default")
+        config-file (sys/filepath ".proserunner" "config.edn")
+        ignore-file (sys/filepath ".proserunner" "ignore.edn")]
 
-    ;; Check if .clerk directory exists
-    (if-not (.exists (io/file clerk-dir))
+    ;; Check if .proserunner directory exists
+    (if-not (.exists (io/file proserunner-dir))
       (do
-        (println "No .clerk directory found. Creating fresh installation...")
+        (println "No .proserunner directory found. Creating fresh installation...")
         (download-checks!)
         (println "\n✓ Default checks installed."))
       ;; Otherwise, backup and restore
@@ -202,46 +219,59 @@
             (println "Preserved your ignore.edn"))
 
           (println "\n✓ Default checks restored successfully.")
-          (println "\nYour custom checks in ~/.clerk/custom/ were not modified."))))))
+          (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))))
+
+(defn using-default-config?
+  "Determines if automatic check updates should be performed."
+  [config-filepath default-config]
+  (or (nil? config-filepath)
+      (= config-filepath default-config)))
+
+(defn backfill-version-if-needed
+  "Supports upgrades from older Proserunner versions that lacked version tracking."
+  [version-exists?]
+  (when-not version-exists?
+    (when-let [version (get-remote-version)]
+      (write-local-version! version))))
+
+(defn initialize-proserunner
+  "Sets up ~/.proserunner directory and downloads default checks for first-time users."
+  [default-config]
+  (println "Initializing Proserunner...")
+  (download-checks!)
+  (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
+  (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
+  (safe-load-config default-config))
+
+(defn update-default-checks
+  "Refreshes default checks when remote version is newer than local cache."
+  [default-config]
+  (println "Updating default checks...")
+  (download-checks!)
+  (println "Checks updated.")
+  (safe-load-config default-config))
 
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
    Automatically checks for updates to default checks."
   [config-filepath]
-  (let [default-config (sys/filepath ".clerk" "config.edn")
-        using-default? (or (nil? config-filepath)
-                           (= config-filepath default-config))
+  (when (and config-filepath (not (string? config-filepath)))
+    (throw (ex-info (str "fetch-or-create! expects a string filepath, got: " (type config-filepath))
+                    {:config-filepath config-filepath})))
+  (let [default-config (sys/filepath ".proserunner" "config.edn")
+        using-default? (using-default-config? config-filepath default-config)
         config-exists? (.exists (io/file default-config))
-        local-version (read-local-version)
-        version-exists? (not (nil? local-version))]
+        version-exists? (not (nil? (read-local-version)))]
     (cond
-      ;; Use custom (non-default) config if provided
-      (and (not using-default?)
-           (.exists (io/file config-filepath)))
-      (load-config (fetch! config-filepath))
+      (and (not using-default?) (.exists (io/file config-filepath)))
+      (safe-load-config config-filepath)
 
-      ;; If using default config and checks are stale, update them
       (and using-default? config-exists? (checks-stale?))
-      (do
-        (println "Updating default checks...")
-        (download-checks!)
-        (println "Checks updated.")
-        (load-config (fetch! default-config)))
+      (update-default-checks default-config)
 
-      ;; Config exists and is current
       config-exists?
-      (do
-        ;; Backfill version file for existing installations
-        (when-not version-exists?
-          (when-let [version (get-remote-version)]
-            (write-local-version! version)))
-        (load-config (fetch! default-config)))
+      (do (backfill-version-if-needed version-exists?)
+          (safe-load-config default-config))
 
-      ;; First time setup
       :else
-      (do
-        (println "Initializing Clerk...")
-        (download-checks!)
-        (println "Created Clerk directory: " (sys/filepath ".clerk/"))
-        (println "You can store custom checks in: " (sys/filepath ".clerk" "custom/"))
-        (load-config (fetch! default-config))))))
+      (initialize-proserunner default-config))))

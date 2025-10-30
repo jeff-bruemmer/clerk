@@ -2,23 +2,23 @@
 ## Exit if any command fails.
 set -e
 
-echo "=== Clerk Installation ==="
+echo "=== Proserunner Installation ==="
 echo ""
 
 # Build the binary
-echo "Building clerk binary..."
+echo "Building proserunner binary..."
 ./tools/build.sh
 
 # Verify build succeeded
-if [ ! -f "clerk" ]; then
-    echo "ERROR: Build failed - clerk binary not found"
+if [ ! -f "proserunner" ]; then
+    echo "ERROR: Build failed - proserunner binary not found"
     exit 1
 fi
 
 echo ""
 echo "=== Installation Options ==="
 echo ""
-echo "Where would you like to install clerk?"
+echo "Where would you like to install proserunner?"
 echo "  1) /usr/local/bin (system-wide, requires sudo)"
 echo "  2) ~/.local/bin (user only, no sudo required)"
 echo "  3) Cancel installation"
@@ -31,8 +31,8 @@ case $choice in
         echo "Installing to /usr/local/bin (requires sudo)..."
 
         # Check if target already exists
-        if [ -f "/usr/local/bin/clerk" ]; then
-            echo "Warning: /usr/local/bin/clerk already exists"
+        if [ -f "/usr/local/bin/proserunner" ]; then
+            echo "Warning: /usr/local/bin/proserunner already exists"
             read -p "Overwrite? [y/N]: " overwrite
             if [[ ! $overwrite =~ ^[Yy]$ ]]; then
                 echo "Installation cancelled."
@@ -40,8 +40,8 @@ case $choice in
             fi
         fi
 
-        sudo mv clerk /usr/local/bin/clerk
-        echo "✓ Installed to /usr/local/bin/clerk"
+        sudo mv proserunner /usr/local/bin/proserunner
+        echo "✓ Installed to /usr/local/bin/proserunner"
         ;;
 
     2)
@@ -52,8 +52,8 @@ case $choice in
         mkdir -p ~/.local/bin
 
         # Check if target already exists
-        if [ -f "$HOME/.local/bin/clerk" ]; then
-            echo "Warning: ~/.local/bin/clerk already exists"
+        if [ -f "$HOME/.local/bin/proserunner" ]; then
+            echo "Warning: ~/.local/bin/proserunner already exists"
             read -p "Overwrite? [y/N]: " overwrite
             if [[ ! $overwrite =~ ^[Yy]$ ]]; then
                 echo "Installation cancelled."
@@ -61,8 +61,8 @@ case $choice in
             fi
         fi
 
-        mv clerk ~/.local/bin/clerk
-        echo "✓ Installed to ~/.local/bin/clerk"
+        mv proserunner ~/.local/bin/proserunner
+        echo "✓ Installed to ~/.local/bin/proserunner"
 
         # Check if ~/.local/bin is in PATH
         if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
@@ -77,13 +77,13 @@ case $choice in
 
     3)
         echo "Installation cancelled."
-        echo "Binary remains at: $(pwd)/clerk"
+        echo "Binary remains at: $(pwd)/proserunner"
         exit 0
         ;;
 
     *)
         echo "Invalid choice. Installation cancelled."
-        echo "Binary remains at: $(pwd)/clerk"
+        echo "Binary remains at: $(pwd)/proserunner"
         exit 1
         ;;
 esac
@@ -92,8 +92,8 @@ echo ""
 echo "=== Installation Complete ==="
 echo ""
 echo "Verify installation:"
-echo "  clerk --version"
+echo "  proserunner --version"
 echo ""
 echo "Get help:"
-echo "  clerk --help"
+echo "  proserunner --help"
 echo ""

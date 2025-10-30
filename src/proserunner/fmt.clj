@@ -1,4 +1,4 @@
-(ns clerk.fmt
+(ns proserunner.fmt
   "Utilities for formatting text."
   (:gen-class)
   (:require [clojure.string :as string]))

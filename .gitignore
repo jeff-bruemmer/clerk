@@ -4,7 +4,10 @@ classes
 notes.md
 .DS_Store
 reports
-clerk.build_artifacts.txt
+proserunner.build_artifacts.txt
 .clj-kondo
 .lsp
-clerk
+/proserunner
+
+# Benchmark baseline backup files
+benchmark-baseline*.edn.bak

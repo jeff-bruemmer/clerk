@@ -1,12 +1,13 @@
-(ns clerk.vet
+(ns proserunner.vet
   "Computes results of running all the checks on each file,
    using cached results where possible."
   (:gen-class)
   (:require
    [clojure.java.io :as io]
-   [clerk
+   [proserunner
     [checks :as checks]
     [config :as conf]
+    [metrics :as metrics]
     [path-ignore :as path-ignore]
     [storage :as store]
     [system :as sys]
@@ -21,6 +22,35 @@
     [registry :as registry]]))
 
 (set! *warn-on-reflection* true)
+
+;;;; Cache performance tracking
+
+(def ^:private cache-stats (atom {:hits 0 :misses 0 :partial-hits 0}))
+
+(defn reset-cache-stats!
+  "Reset cache statistics."
+  []
+  (reset! cache-stats {:hits 0 :misses 0 :partial-hits 0}))
+
+(defn get-cache-stats
+  "Get current cache statistics."
+  []
+  @cache-stats)
+
+(defn- record-cache-hit!
+  "Record a full cache hit."
+  []
+  (swap! cache-stats update :hits inc))
+
+(defn- record-cache-miss!
+  "Record a cache miss (full recompute)."
+  []
+  (swap! cache-stats update :misses inc))
+
+(defn- record-partial-cache-hit!
+  "Record a partial cache hit (only some lines recomputed)."
+  []
+  (swap! cache-stats update :partial-hits inc))
 
 ;;;; Register all standard editors
 
@@ -39,72 +69,114 @@
             config
             checks
             cached-result
-            output])
+            output
+            no-cache
+            parallel-lines])
+
+(defn build-ignore-patterns
+  "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
+  [file exclude-patterns]
+  (let [base-dir (-> file io/file .getAbsolutePath)
+        ignore-patterns (path-ignore/read-proserunnerignore base-dir)]
+    {:base-dir base-dir
+     :patterns (concat exclude-patterns ignore-patterns)}))
+
+(defn filter-valid-files
+  "Discovers files to check, respecting ignore patterns and supported file types."
+  [file {:keys [base-dir patterns]}]
+  (->> file
+       io/file
+       file-seq
+       (map str)
+       (filter text/supported-file-type?)
+       (remove #(path-ignore/should-ignore? % base-dir patterns))
+       text/handle-invalid-file))
+
+(defn process-files
+  "Dispatches to parallel or sequential file processing based on configuration and file count."
+  [files fetch-fn parallel?]
+  (let [num-files (count files)]
+    (if (and parallel? (> num-files 1))
+      (->> files
+           (pmap (comp doall fetch-fn))
+           doall
+           (apply concat))
+      (mapcat fetch-fn files))))
 
 (defn get-lines-from-all-files
-  [code-blocks check-dialogue file exclude-patterns]
-  (let [base-dir (-> file io/file .getAbsolutePath)
-        ;; Read .clerkignore if it exists
-        clerkignore-patterns (path-ignore/read-clerkignore base-dir)
-        ;; Combine CLI exclude patterns with .clerkignore
-        all-patterns (concat exclude-patterns clerkignore-patterns)]
-    (->> file
-         io/file
-         file-seq
-         (map str)
-         (filter text/supported-file-type?)
-         ;; Filter out ignored paths
-         (remove #(path-ignore/should-ignore? % base-dir all-patterns))
-         text/handle-invalid-file
-         (mapcat #(text/fetch! code-blocks % check-dialogue)))))
+  "Get lines from all files, optionally processing files in parallel.
+   When parallel? is true, files are processed concurrently using pmap."
+  [code-blocks check-dialogue file exclude-patterns parallel?]
+  (let [ignore-info (build-ignore-patterns file exclude-patterns)
+        files (filter-valid-files file ignore-info)
+        fetch-fn #(text/fetch! code-blocks % check-dialogue)]
+    (dotimes [_ (count files)]
+      (metrics/record-file!))
+    (process-files files fetch-fn parallel?)))
 
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue exclude]} options
+  (let [{:keys [file config output code-blocks check-dialogue exclude parallel-files sequential-lines no-cache]} options
         exclude-patterns (if exclude (vector exclude) [])
-        c (conf/fetch-or-create! config)
-        cd (sys/check-dir config)
+        ;; Default to sequential file processing (false if not specified)
+        parallel-files? (if (nil? parallel-files) false parallel-files)
+        ;; Default to parallel line processing (true unless sequential-lines is set)
+        parallel-lines? (if sequential-lines false true)
+        ;; Save original config filepath before loading
+        config-filepath config
+        c (conf/fetch-or-create! config-filepath)
+        cd (sys/check-dir config-filepath)
         updated-options (assoc options :config c :check-dir cd)]
     (map->Input
      {:file file
-      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns)
+      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel-files?)
       :config c
       :check-dir cd
       :checks (checks/create updated-options)
       :cached-result (store/inventory file)
-      :output output})))
+      :output output
+      :no-cache no-cache
+      :parallel-lines parallel-lines?})))
 
 ;;;; Core functions for vetting a lines of text with each check.
+
+(defn safe-dispatch
+  "Safely dispatch to an editor, catching and logging any errors.
+   Returns the line unchanged if an error occurs."
+  [line check]
+  (try
+    (registry/dispatch line check)
+    (catch Exception e
+      (let [{:keys [name kind]} check
+            {:keys [file line-num]} line]
+        (println (str "Warning: Check '" name "' (" kind ") failed on "
+                     file ":" line-num ": " (.getMessage e))))
+      ;; Return line unchanged if check fails
+      line)))
 
 (defn dispatch
   "Takes a `line` and a `check` returns result of relevant editor.
   Uses dynamic registry for extensibility."
   [line check]
-  (registry/dispatch line check))
+  (safe-dispatch line check))
 
 (defn process
   "Takes `checks` and `lines` and runs each check on each line,
   return lines with any issues found.
-  Uses chunked parallel processing to reduce thread overhead."
-  [checks lines]
-  (if (empty? lines)
-    []
-    (let [num-cores (.availableProcessors (Runtime/getRuntime))
-          chunk-size (max 1 (quot (count lines) num-cores))]
-      (->> lines
-           (partition-all chunk-size)
-           (pmap (fn [chunk]
-                   (->> chunk
-                        (map #(reduce dispatch % checks))
-                        (filter :issue?))))
-           (apply concat)))))
+  Uses pmap for parallel processing of lines when parallel? is true."
+  [checks lines parallel?]
+  (let [map-fn (if parallel? pmap map)]
+    (->> lines
+         (map-fn #(reduce dispatch % checks))
+         (filter :issue?))))
 
 (defn compute
   "Takes an input, and returns the results of
   running the configured checks on each line of text in the file."
-  [{:keys [file lines config checks output]}]
+  [{:keys [file lines config checks output parallel-lines]}]
+  (metrics/record-lines! (count lines))
   (store/map->Result {:lines lines
                       :lines-hash (hash lines)
                       :file-hash (hash file)
@@ -112,7 +184,7 @@
                       :config-hash (hash config)
                       :check-hash (hash checks)
                       :output output
-                      :results (process checks lines)}))
+                      :results (process checks lines parallel-lines)}))
 
 ;;;; Determine which lines have changed, and only process those changes.
 
@@ -158,7 +230,7 @@
   "Only process lines that have changed since the last vetting. If line numbers
   have shifted, update the results so they map to the correct line number."
   [input]
-  (let [{:keys [file lines config checks cached-result output]} input
+  (let [{:keys [file lines config checks cached-result output parallel-lines]} input
         ;; build a map of previous lines
         ;; to determine which lines we need to reprocess.
         cached-line-map (->> cached-result
@@ -177,13 +249,10 @@
      (hash config)
      (hash checks)
      output
-     (->> lines
-          ;; what lines have changed?
-          (changed cached-line-map)
-          ;; Process only changed lines
-          (process checks)
-          ;; Combine new results with cached results
-          (combine updated-results)))))
+     (let [changed-lines (changed cached-line-map lines)]
+       (->> (process checks changed-lines parallel-lines)
+            ;; Combine new results with cached results
+            (combine updated-results))))))
 
 ;;;; Validate cached results
 
@@ -215,15 +284,29 @@
         {:keys [cached-result output]} inputs
         results
         (cond
-          (:no-cache inputs) (compute-and-store inputs)
-      ;; If nothing has changed, return cached results
-      ;; As well as the output format, which may have changed.
-          (valid-result? inputs) (assoc cached-result :output output)
-      ;; If checks and config are the same, we only need to reprocess
-      ;; any lines that have changed.
-          (valid-checks? inputs) (let [result (compute-changed inputs)]
-                                   (store/save! result)
-                                   result)
-      ;; Otherwise process texts and cache results.
-          :else (compute-and-store inputs))]
+          (:no-cache inputs)
+          (do
+            (record-cache-miss!)
+            (compute-and-store inputs))
+
+          ;; If nothing has changed, return cached results
+          ;; As well as the output format, which may have changed.
+          (valid-result? inputs)
+          (do
+            (record-cache-hit!)
+            (assoc cached-result :output output))
+
+          ;; If checks and config are the same, we only need to reprocess
+          ;; any lines that have changed.
+          (valid-checks? inputs)
+          (let [result (compute-changed inputs)]
+            (record-partial-cache-hit!)
+            (store/save! result)
+            result)
+
+          ;; Otherwise process texts and cache results.
+          :else
+          (do
+            (record-cache-miss!)
+            (compute-and-store inputs)))]
     (assoc inputs :results results)))

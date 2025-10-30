@@ -1,7 +1,7 @@
 (ns editors.recommender-test
   (:require [editors.recommender :as r]
-            [clerk.text :as text]
-            [clerk.checks :as checks]
+            [proserunner.text :as text]
+            [proserunner.checks :as checks]
             [clojure.test :as t :refer [deftest is]]))
 
 (def error-line (text/->Line
