@@ -3,6 +3,7 @@
   (:require [benchmarks.core :as bench]
             [proserunner.vet :as vet]
             [clojure.java.io :as io]
+            [clojure.string :as string]
             [editors.registry :as registry]
             [editors.existence :as existence]
             [editors.recommender :as recommender]
@@ -34,30 +35,20 @@
                                   existing-files))]
 
     (when (seq existing-files)
-      (println "DEBUG: Found" (count existing-files) "files for parallel processing benchmark")
-      (println "DEBUG: Total lines:" total-lines)
       (bench/run-benchmark
        "Parallel File Processing"
        (format "Processing %d files in parallel (%d total lines)"
                (count existing-files) total-lines)
-       #(do
-          (println "DEBUG: Parallel file processing iteration starting...")
-          (let [result (doall (pmap (fn [file]
-                      (println "DEBUG: pmap processing file:" file)
+       #(doall (pmap (fn [file]
                       (let [input (vet/make-input {:file file
                                                    :config config-path
                                                    :output "table"
                                                    :code-blocks false
                                                    :no-cache true
                                                    :parallel-files false
-                                                   :parallel-lines false})]  ; Disable both to avoid nested parallelism
-                        (println "DEBUG: pmap computing for" file)
-                        (let [result (vet/compute input)]
-                          (println "DEBUG: pmap done with" file)
-                          result)))
-                    existing-files))]
-            (println "DEBUG: Parallel file processing iteration complete")
-            result))
+                                                   :parallel-lines false})]
+                        (vet/compute input)))
+                    existing-files))
        {:iterations 10
         :warmup 3
         :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
@@ -71,73 +62,54 @@
         existing-files (filter #(.exists (io/file %)) files)]
 
     (when (seq existing-files)
-      (println "DEBUG: Found" (count existing-files) "files for comparison benchmark")
       (let [total-lines (reduce + (map (fn [f]
                                         (with-open [rdr (io/reader f)]
                                           (count (line-seq rdr))))
                                       existing-files))]
-        (println "DEBUG: Total lines:" total-lines)
 
         ;; Sequential benchmark
-        (println "DEBUG: Starting sequential benchmark...")
         (let [seq-result (bench/run-benchmark
                           "Sequential Processing"
                           (format "%d files sequentially" (count existing-files))
-                          #(do
-                             (println "DEBUG: Sequential iteration starting...")
-                             (let [result (doall (map (fn [file]
-                                                        (println "DEBUG: Processing file sequentially:" file)
-                                                        (let [input (vet/make-input {:file file
+                          #(doall (map (fn [file]
+                                        (let [input (vet/make-input {:file file
                                                                                      :config config-path
                                                                                      :output "table"
                                                                                      :code-blocks false
                                                                                      :no-cache true
                                                                                      :parallel-files false
-                                                                                     :parallel-lines false})]  ; Disable both for testing
-                                                          (println "DEBUG: Computing for" file)
-                                                          (vet/compute input)))
-                                                      existing-files))]
-                               (println "DEBUG: Sequential iteration complete")
-                               result))
+                                                                                     :parallel-lines false})]
+                                          (vet/compute input)))
+                                      existing-files))
                           {:iterations 10
                            :warmup 3
                            :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
                            :throughput-unit "lines/sec"})]
 
-          (println "DEBUG: Sequential benchmark complete")
-
           ;; Parallel benchmark
-          (println "DEBUG: Starting parallel benchmark...")
           (let [par-result (bench/run-benchmark
                             "Parallel Processing"
                             (format "%d files in parallel" (count existing-files))
-                            #(do
-                               (println "DEBUG: Parallel iteration starting...")
-                               (let [result (doall (pmap (fn [file]
-                                                           (println "DEBUG: Processing file in parallel:" file)
-                                                           (let [input (vet/make-input {:file file
+                            #(doall (pmap (fn [file]
+                                           (let [input (vet/make-input {:file file
                                                                                         :config config-path
                                                                                         :output "table"
                                                                                         :code-blocks false
                                                                                         :no-cache true
                                                                                         :parallel-files false
-                                                                                        :parallel-lines false})]  ; Disable both to avoid nested parallelism
-                                                             (println "DEBUG: Computing for" file "in parallel")
-                                                             (vet/compute input)))
-                                                         existing-files))]
-                                 (println "DEBUG: Parallel iteration complete")
-                                 result))
+                                                                                        :parallel-lines false})]
+                                             (vet/compute input)))
+                                         existing-files))
                             {:iterations 10
                              :warmup 3
                              :throughput-fn (fn [_ mean-ms] (/ total-lines (/ mean-ms 1000)))
                              :throughput-unit "lines/sec"})]
 
-            (println "DEBUG: Parallel benchmark complete")
             [seq-result par-result]))))))
 
 (defn -main
   "Main entry point for parallel benchmark runner."
-  [& args]
+  [& _args]
   (println "\n╔════════════════════════════════════════════════════════════════════════════╗")
   (println "║              PROSERUNNER PARALLEL PROCESSING BENCHMARKS                   ║")
   (println "╚════════════════════════════════════════════════════════════════════════════╝\n")
@@ -145,9 +117,9 @@
   (setup-editors!)
 
   (let [config-path (str (System/getProperty "user.home")
-                        (java.io.File/separator)
+                        java.io.File/separator
                         ".proserunner"
-                        (java.io.File/separator)
+                        java.io.File/separator
                         "config.edn")]
 
     ;; Check for benchmark files
@@ -171,11 +143,11 @@
         (let [seq-time (:mean-ms (first (filter #(= (:name %) "Sequential Processing") valid-results)))
               par-time (:mean-ms (first (filter #(= (:name %) "Parallel Processing") valid-results)))
               speedup (/ seq-time par-time)]
-          (println "\n" (clojure.string/join "" (repeat 80 "=")))
+          (println "\n" (string/join "" (repeat 80 "=")))
           (println " PARALLEL SPEEDUP ANALYSIS")
-          (println (clojure.string/join "" (repeat 80 "=")))
+          (println (string/join "" (repeat 80 "=")))
           (println (format "\nSequential: %.2f ms" seq-time))
           (println (format "Parallel:   %.2f ms" par-time))
           (println (format "Speedup:    %.2fx" speedup))
-          (println "\n" (clojure.string/join "" (repeat 80 "="))))))
+          (println "\n" (string/join "" (repeat 80 "="))))))
     (shutdown-agents)))

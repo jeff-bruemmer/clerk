@@ -8,3 +8,6 @@ proserunner.build_artifacts.txt
 .clj-kondo
 .lsp
 /proserunner
+
+# Benchmark baseline backup files
+benchmark-baseline*.edn.bak
