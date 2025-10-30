@@ -12,13 +12,6 @@ This guide explains how to establish performance baselines and compare against t
 ./tools/update-baseline.sh
 ```
 
-This script will:
-
-- Back up existing baseline
-- Run full benchmark suite
-- Save new baseline
-- Show you next steps
-
 **Manual way** - Run benchmarks and save results:
 
 ```bash
@@ -28,13 +21,6 @@ clojure -M:benchmark --save benchmark-baseline.edn
 # Save only editor benchmarks (faster, for local development)
 clojure -M:benchmark --editors-only --save baseline-editors.edn
 ```
-
-**When to create a new baseline:**
-
-- After major optimizations (like cache removal)
-- Before making risky performance changes
-- When setting up CI/CD pipelines
-- At the start of each release cycle
 
 ### 2. Compare against baseline
 
@@ -66,21 +52,4 @@ clojure -M:benchmark --editors-only --baseline before-optimization.edn
 
 # 4. If improved, save as new baseline
 clojure -M:benchmark --editors-only --save after-optimization.edn
-```
-
-``
-
-## Baseline file format
-
-Baseline files are EDN format containing benchmark results:
-
-```clojure
-{:timestamp "2025-10-29 14:32:11"
- :results [{:name "Regex Editor"
-            :description "Tests regex pattern matching"
-            :iterations 10
-            :mean-ms 6.24
-            :throughput 160421.5
-            :throughput-unit "lines/sec"}
-           ...]}
 ```

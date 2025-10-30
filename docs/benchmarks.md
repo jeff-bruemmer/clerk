@@ -51,11 +51,7 @@ The `--metrics` flag automatically disables caching and provides:
 
 ## Baseline tracking
 
-Save current performance as baseline:
-
-```bash
-./tools/update-baseline.sh
-```
+See [baseline-management.md](baseline-management.md) for tracking performance baselines and detecting regressions.
 
 ## Adding custom benchmarks
 

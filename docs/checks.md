@@ -64,12 +64,7 @@ $ proserunner -f document.md --check-dialogue
 
 ### How dialogue detection works
 
-- **Double quotes**: `"Hello," she said` - detected as dialogue
-- **Single quotes**: `He said 'goodbye'` - detected as dialogue
-- **Apostrophes**: `It's a beautiful day` - NOT treated as dialogue
-- **Possessives**: `The dog's bone` - NOT treated as dialogue
-
-Proserunner distinguishes apostrophes from single-quote dialogue by looking at surrounding context (spaces and punctuation).
+Proserunner detects text within single or double quotes as dialogue. Apostrophes and possessives are not treated as dialogue.
 
 ### Example
 
@@ -218,15 +213,6 @@ The ignore list is stored in `~/.proserunner/ignore.edn` as a set of strings. Yo
 - Ignored specimens are stored in `~/.proserunner/ignore.edn`
 - The ignore list persists across Proserunner runs
 - You can use the `-i` flag to specify a different ignore file: `proserunner -f document.md -i my-ignore-file`
-
-### Typical workflow
-
-1. Run Proserunner on your document: `proserunner -f my-doc.md`
-2. Review the output and identify false positives
-3. Add them to the ignore list: `proserunner --add-ignore "technical-term"`
-4. Run Proserunner again to see updated results
-
-This allows you to progressively tune Proserunner to your writing domain without modifying check definitions.
 
 ## Adding checks
 
