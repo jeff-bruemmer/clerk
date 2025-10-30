@@ -243,13 +243,10 @@
      (hash config)
      (hash checks)
      output
-     (->> lines
-          ;; what lines have changed?
-          (changed cached-line-map)
-          ;; Process only changed lines
-          (process checks parallel-lines)
-          ;; Combine new results with cached results
-          (combine updated-results)))))
+     (let [changed-lines (changed cached-line-map lines)]
+       (->> (process checks changed-lines parallel-lines)
+            ;; Combine new results with cached results
+            (combine updated-results))))))
 
 ;;;; Validate cached results
 
