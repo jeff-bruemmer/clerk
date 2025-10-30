@@ -14,42 +14,47 @@
 (defrecord Expression [re message])
 (defrecord Check [name specimens message kind explanation recommendations expressions])
 
+(defn missing-or-empty?
+  "Used during check validation to ensure required fields have content."
+  [check-def field]
+  (or (nil? (get check-def field))
+      (empty? (get check-def field))))
+
+(defn validate-required-field
+  "Accumulates validation errors for fields that all checks must have."
+  [errors check-def field message]
+  (if (not (get check-def field))
+    (conj errors message)
+    errors))
+
+(defn validate-kind-field
+  "Enforces kind-specific requirements (e.g., 'existence' needs :specimens)."
+  [errors check-def kinds field message-template]
+  (if (and (contains? (set kinds) (:kind check-def))
+           (missing-or-empty? check-def field))
+    (conj errors (if (fn? message-template)
+                   (message-template (:kind check-def))
+                   message-template))
+    errors))
+
 (defn validate-check
   "Validates that a check definition has required fields.
    Returns {:valid? true} or {:valid? false :errors [...]}"
   [check-def]
   (let [kind (:kind check-def)
-        ;; Message is optional for recommender types (generated from recommendations)
         message-required? (not (contains? #{"recommender" "case-recommender"} kind))
-        errors (cond-> []
-                 (not (:name check-def))
-                 (conj "Check must have a :name field")
-
-                 (not kind)
-                 (conj "Check must have a :kind field")
-
-                 (and message-required? (not (:message check-def)))
-                 (conj "Check must have a :message field")
-
-                 (and (= (:kind check-def) "existence")
-                      (or (nil? (:specimens check-def))
-                          (empty? (:specimens check-def))))
-                 (conj "Check of kind 'existence' must have non-empty :specimens")
-
-                 (and (= (:kind check-def) "case")
-                      (or (nil? (:specimens check-def))
-                          (empty? (:specimens check-def))))
-                 (conj "Check of kind 'case' must have non-empty :specimens")
-
-                 (and (contains? #{"recommender" "case-recommender"} (:kind check-def))
-                      (or (nil? (:recommendations check-def))
-                          (empty? (:recommendations check-def))))
-                 (conj (str "Check of kind '" (:kind check-def) "' must have non-empty :recommendations"))
-
-                 (and (= (:kind check-def) "regex")
-                      (or (nil? (:expressions check-def))
-                          (empty? (:expressions check-def))))
-                 (conj "Check of kind 'regex' must have non-empty :expressions"))]
+        errors (-> []
+                   (validate-required-field check-def :name "Check must have a :name field")
+                   (validate-required-field check-def :kind "Check must have a :kind field")
+                   ((fn [e] (if (and message-required? (not (:message check-def)))
+                             (conj e "Check must have a :message field")
+                             e)))
+                   (validate-kind-field check-def ["existence" "case"] :specimens
+                                       (fn [k] (str "Check of kind '" k "' must have non-empty :specimens")))
+                   (validate-kind-field check-def ["recommender" "case-recommender"] :recommendations
+                                       (fn [k] (str "Check of kind '" k "' must have non-empty :recommendations")))
+                   (validate-kind-field check-def ["regex"] :expressions
+                                       "Check of kind 'regex' must have non-empty :expressions"))]
     (if (empty? errors)
       {:valid? true}
       {:valid? false :errors errors})))

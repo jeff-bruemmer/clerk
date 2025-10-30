@@ -221,6 +221,36 @@
           (println "\n✓ Default checks restored successfully.")
           (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))))
 
+(defn using-default-config?
+  "Determines if automatic check updates should be performed."
+  [config-filepath default-config]
+  (or (nil? config-filepath)
+      (= config-filepath default-config)))
+
+(defn backfill-version-if-needed
+  "Supports upgrades from older Proserunner versions that lacked version tracking."
+  [version-exists?]
+  (when-not version-exists?
+    (when-let [version (get-remote-version)]
+      (write-local-version! version))))
+
+(defn initialize-proserunner
+  "Sets up ~/.proserunner directory and downloads default checks for first-time users."
+  [default-config]
+  (println "Initializing Proserunner...")
+  (download-checks!)
+  (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
+  (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
+  (safe-load-config default-config))
+
+(defn update-default-checks
+  "Refreshes default checks when remote version is newer than local cache."
+  [default-config]
+  (println "Updating default checks...")
+  (download-checks!)
+  (println "Checks updated.")
+  (safe-load-config default-config))
+
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
    Automatically checks for updates to default checks."
@@ -229,39 +259,19 @@
     (throw (ex-info (str "fetch-or-create! expects a string filepath, got: " (type config-filepath))
                     {:config-filepath config-filepath})))
   (let [default-config (sys/filepath ".proserunner" "config.edn")
-        using-default? (or (nil? config-filepath)
-                           (= config-filepath default-config))
+        using-default? (using-default-config? config-filepath default-config)
         config-exists? (.exists (io/file default-config))
-        local-version (read-local-version)
-        version-exists? (not (nil? local-version))]
+        version-exists? (not (nil? (read-local-version)))]
     (cond
-      ;; Use custom (non-default) config if provided
-      (and (not using-default?)
-           (.exists (io/file config-filepath)))
+      (and (not using-default?) (.exists (io/file config-filepath)))
       (safe-load-config config-filepath)
 
-      ;; If using default config and checks are stale, update them
       (and using-default? config-exists? (checks-stale?))
-      (do
-        (println "Updating default checks...")
-        (download-checks!)
-        (println "Checks updated.")
-        (safe-load-config default-config))
+      (update-default-checks default-config)
 
-      ;; Config exists and is current
       config-exists?
-      (do
-        ;; Backfill version file for existing installations
-        (when-not version-exists?
-          (when-let [version (get-remote-version)]
-            (write-local-version! version)))
-        (safe-load-config default-config))
+      (do (backfill-version-if-needed version-exists?)
+          (safe-load-config default-config))
 
-      ;; First time setup
       :else
-      (do
-        (println "Initializing Proserunner...")
-        (download-checks!)
-        (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
-        (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
-        (safe-load-config default-config)))))
+      (initialize-proserunner default-config))))

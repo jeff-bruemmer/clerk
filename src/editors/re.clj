@@ -22,28 +22,39 @@
     (first specimen)
     specimen))
 
+(defn find-expression-matches
+  "Searches text for regex pattern. Safe against invalid patterns from user-defined checks."
+  [text pattern]
+  (when pattern
+    (re-seq pattern text)))
+
+(defn process-matches
+  "Converts regex matches into issue records, handling both string and vector captures."
+  [line matches file name kind message]
+  (reduce (fn [l m]
+            (util/add-issue {:file file
+                             :line l
+                             :specimen (handle-specimen m)
+                             :name name
+                             :kind kind
+                             :message message}))
+          line
+          matches))
+
+(defn apply-expression
+  "Tests a single regex expression against a line, accumulating any issues found."
+  [line expression check]
+  (let [{:keys [file text]} line
+        {:keys [name kind]} check
+        {:keys [re message]} expression
+        pattern (safe-re-pattern re)]
+    (if-let [matches (find-expression-matches text pattern)]
+      (process-matches line matches file name kind message)
+      line)))
+
 (defn proofread
   [line check]
-  (let [{:keys [expressions name kind]} check]
+  (let [{:keys [expressions]} check]
     (if (empty? expressions)
       line
-      (reduce (fn [line {:keys [re message]}]
-                (let [{:keys [file text]} line
-                      pattern (safe-re-pattern re)]
-                  (if (nil? pattern)
-                    ;; Skip this expression if pattern is invalid
-                    line
-                    (let [matches (re-seq pattern text)]
-                      (if (empty? matches)
-                        line
-                        (reduce (fn [l m]
-                                  (util/add-issue {:file file
-                                                   :line l
-                                                   :specimen (handle-specimen m)
-                                                   :name name
-                                                   :kind kind
-                                                   :message message}))
-                                line
-                                matches))))))
-              line
-              expressions))))
+      (reduce #(apply-expression %1 %2 check) line expressions))))

@@ -73,40 +73,46 @@
             no-cache
             parallel-lines])
 
+(defn build-ignore-patterns
+  "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
+  [file exclude-patterns]
+  (let [base-dir (-> file io/file .getAbsolutePath)
+        ignore-patterns (path-ignore/read-proserunnerignore base-dir)]
+    {:base-dir base-dir
+     :patterns (concat exclude-patterns ignore-patterns)}))
+
+(defn filter-valid-files
+  "Discovers files to check, respecting ignore patterns and supported file types."
+  [file {:keys [base-dir patterns]}]
+  (->> file
+       io/file
+       file-seq
+       (map str)
+       (filter text/supported-file-type?)
+       (remove #(path-ignore/should-ignore? % base-dir patterns))
+       text/handle-invalid-file))
+
+(defn process-files
+  "Dispatches to parallel or sequential file processing based on configuration and file count."
+  [files fetch-fn parallel?]
+  (let [num-files (count files)]
+    (if (and parallel? (> num-files 1))
+      (->> files
+           (pmap (comp doall fetch-fn))
+           doall
+           (apply concat))
+      (mapcat fetch-fn files))))
+
 (defn get-lines-from-all-files
   "Get lines from all files, optionally processing files in parallel.
    When parallel? is true, files are processed concurrently using pmap."
   [code-blocks check-dialogue file exclude-patterns parallel?]
-  (let [base-dir (-> file io/file .getAbsolutePath)
-        ;; Read .proserunnerignore if it exists
-        ignore-patterns (path-ignore/read-proserunnerignore base-dir)
-        ;; Combine CLI exclude patterns with .proserunnerignore
-        all-patterns (concat exclude-patterns ignore-patterns)
-        files (->> file
-                   io/file
-                   file-seq
-                   (map str)
-                   (filter text/supported-file-type?)
-                   ;; Filter out ignored paths
-                   (remove #(path-ignore/should-ignore? % base-dir all-patterns))
-                   text/handle-invalid-file)
-        num-files (count files)
+  (let [ignore-info (build-ignore-patterns file exclude-patterns)
+        files (filter-valid-files file ignore-info)
         fetch-fn #(text/fetch! code-blocks % check-dialogue)]
-    ;; Track file count for metrics
-    (dotimes [_ num-files]
+    (dotimes [_ (count files)]
       (metrics/record-file!))
-    (if parallel?
-      ;; Parallel file processing
-      (if (> num-files 1)
-        ;; Use pmap for multiple files, ensure eager evaluation
-        (->> files
-             (pmap (comp doall fetch-fn))
-             doall
-             (apply concat))
-        ;; Single file, no need for parallelism
-        (mapcat fetch-fn files))
-      ;; Sequential file processing (original behavior)
-      (mapcat fetch-fn files))))
+    (process-files files fetch-fn parallel?)))
 
 (defn make-input
   "Input combines user-defined options and arguments

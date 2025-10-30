@@ -41,29 +41,36 @@
           (into [] (map first matches))
           [])))))
 
+(defn find-column-position
+  "Locates specimen in text, trying case-sensitive match first, then case-insensitive.
+   Guards against false positives from legitimate repetition."
+  [text specimen]
+  (or (when (string/includes? text specimen)
+        (string/index-of text specimen))
+      (when-let [idx (string/index-of (string/lower-case text)
+                                     (string/lower-case specimen))]
+        idx)))
+
+(defn create-issue-record
+  "Builds an Issue record with normalized file path for consistent reporting."
+  [file name kind specimen col message]
+  (text/->Issue (text/home-path file) name kind specimen col message))
+
+(defn add-issue-to-line
+  "Marks line as having issues and appends the issue to its collection."
+  [line issue]
+  (-> line
+      (assoc :issue? true)
+      (update :issues conj issue)))
+
 (defn add-issue
   "Adds an issue to a text/Line's issues."
   [{:keys [line specimen name kind message]}]
   (let [{:keys [file text]} line
-        ;; Only convert to lowercase if needed
-        col (if (string/includes? text specimen)
-              (string/index-of text specimen)
-              (when-let [idx (string/index-of (string/lower-case text) 
-                                            (string/lower-case specimen))]
-                idx))]
-    ;; If the string is not in the line, there is no issue.
-    ;; Guards against legitimate repetition hits, hits that are valid.
+        col (find-column-position text specimen)]
     (if (nil? col)
       line
-      (-> line
-          (assoc :issue? true)
-          (update :issues conj (text/->Issue
-                               (text/home-path file)
-                               name
-                               kind
-                               specimen
-                               col
-                               message))))))
+      (add-issue-to-line line (create-issue-record file name kind specimen col message)))))
 
 (defn create-issue-collector
   "Samples lines for each specimen in check, and adds any issues to the line."
