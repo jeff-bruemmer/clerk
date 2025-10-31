@@ -2,20 +2,15 @@
   (:require [proserunner.vet :as vet]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [editors.registry :as registry]
-            [editors.existence :as existence]
-            [editors.recommender :as recommender]
+            [editors.utilities :as util]
             [editors.repetition :as repetition]
-            [editors.case :as c]
-            [editors.case-recommender :as cr]
             [editors.re :as re]))
 
 (defn setup-editors [f]
   ;; Register editors before each test
-  (registry/register-editor! "existence" existence/proofread)
-  (registry/register-editor! "recommender" recommender/proofread)
+  (doseq [editor-type (util/standard-editor-types)]
+    (registry/register-editor! editor-type (util/create-editor editor-type)))
   (registry/register-editor! "repetition" repetition/proofread)
-  (registry/register-editor! "case" c/proofread)
-  (registry/register-editor! "case-recommender" cr/proofread)
   (registry/register-editor! "regex" re/proofread)
   (f))
 

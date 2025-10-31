@@ -3,6 +3,7 @@
   (:gen-class)
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [proserunner.context :as context]
             [proserunner.file-utils :as file-utils]
             [proserunner.project-config :as project-config]
             [proserunner.system :as sys]))
@@ -63,22 +64,6 @@
 
 ;;; Context-Aware Public API
 
-(defn- with-project-context
-  "Determines project context and executes function with context map.
-
-   The function f receives a map with:
-   - :target - either :global or :project
-   - :start-dir - resolved start directory
-   - :project-root - project root directory (only when :target is :project)"
-  [options f]
-  (let [start-dir (project-config/resolve-start-dir options)
-        target (project-config/determine-target options start-dir)
-        context (cond-> {:target target
-                         :start-dir start-dir}
-                  (= target :project)
-                  (assoc :project-root (:project-root (project-config/find-manifest start-dir))))]
-    (f context)))
-
 (defn add-to-ignore!
   "Adds a specimen to the ignore list with context-aware targeting.
 
@@ -89,7 +74,7 @@
   ([specimen]
    (write-ignore-file! (add-to-set (read-ignore-file) specimen)))
   ([specimen options]
-   (with-project-context options
+   (context/with-context options
      (fn [{:keys [target project-root]}]
        (if (= target :global)
          (write-ignore-file! (add-to-set (read-ignore-file) specimen))
@@ -106,7 +91,7 @@
   ([specimen]
    (write-ignore-file! (remove-from-set (read-ignore-file) specimen)))
   ([specimen options]
-   (with-project-context options
+   (context/with-context options
      (fn [{:keys [target project-root]}]
        (if (= target :global)
          (write-ignore-file! (remove-from-set (read-ignore-file) specimen))
@@ -127,7 +112,7 @@
   ([]
    (sort (read-ignore-file)))
   ([options]
-   (with-project-context options
+   (context/with-context options
      (fn [{:keys [target start-dir]}]
        (if (= target :global)
          (sort (read-ignore-file))
@@ -143,7 +128,7 @@
   ([]
    (write-ignore-file! #{}))
   ([options]
-   (with-project-context options
+   (context/with-context options
      (fn [{:keys [target project-root]}]
        (if (= target :global)
          (write-ignore-file! #{})

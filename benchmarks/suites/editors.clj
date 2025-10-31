@@ -2,10 +2,7 @@
   "Benchmarks for individual editor performance."
   (:require [benchmarks.core :as bench]
             [editors.re :as re]
-            [editors.existence :as existence]
-            [editors.case :as case-editor]
-            [editors.recommender :as recommender]
-            [editors.case-recommender :as case-recommender]
+            [editors.utilities :as util]
             [editors.repetition :as repetition]))
 
 (defn generate-test-lines
@@ -45,12 +42,13 @@
                :kind "existence"
                :specimens ["obviously" "basically" "actually" "literally"
                           "just" "very" "really" "quite"]
-               :message "Avoid weak modifiers"}]
+               :message "Avoid weak modifiers"}
+        proofread (util/create-editor "existence")]
 
     (bench/run-benchmark
      "Existence Editor"
      "Tests word/phrase existence checking"
-     #(doall (map (fn [line] (existence/proofread line check)) lines))
+     #(doall (map (fn [line] (proofread line check)) lines))
      {:iterations 10
       :warmup 3
       :throughput-fn (fn [_ mean-ms] (/ 1000 (/ mean-ms 1000)))
@@ -65,12 +63,13 @@
         check {:name "case-test"
                :kind "case"
                :specimens ["Internet" "Email" "Website"]
-               :message "Check proper capitalization"}]
+               :message "Check proper capitalization"}
+        proofread (util/create-editor "case")]
 
     (bench/run-benchmark
      "Case Editor"
      "Tests case-sensitive word checking"
-     #(doall (map (fn [line] (case-editor/proofread line check)) lines))
+     #(doall (map (fn [line] (proofread line check)) lines))
      {:iterations 10
       :warmup 3
       :throughput-fn (fn [_ mean-ms] (/ 1000 (/ mean-ms 1000)))
@@ -85,12 +84,13 @@
                :recommendations [{:prefer "use" :avoid "utilize"}
                                 {:prefer "help" :avoid "facilitate"}
                                 {:prefer "show" :avoid "demonstrate"}
-                                {:prefer "about" :avoid "approximately"}]}]
+                                {:prefer "about" :avoid "approximately"}]}
+        proofread (util/create-editor "recommender")]
 
     (bench/run-benchmark
      "Recommender Editor"
      "Tests word recommendation/substitution"
-     #(doall (map (fn [line] (recommender/proofread line check)) lines))
+     #(doall (map (fn [line] (proofread line check)) lines))
      {:iterations 10
       :warmup 3
       :throughput-fn (fn [_ mean-ms] (/ 1000 (/ mean-ms 1000)))
@@ -105,12 +105,13 @@
         check {:name "case-recommender-test"
                :kind "case-recommender"
                :recommendations [{:prefer "API" :avoid "api"}
-                                {:prefer "HTTP" :avoid "http"}]}]
+                                {:prefer "HTTP" :avoid "http"}]}
+        proofread (util/create-editor "case-recommender")]
 
     (bench/run-benchmark
      "Case Recommender Editor"
      "Tests case-sensitive word recommendation"
-     #(doall (map (fn [line] (case-recommender/proofread line check)) lines))
+     #(doall (map (fn [line] (proofread line check)) lines))
      {:iterations 10
       :warmup 3
       :throughput-fn (fn [_ mean-ms] (/ 1000 (/ mean-ms 1000)))

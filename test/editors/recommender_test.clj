@@ -1,5 +1,5 @@
 (ns editors.recommender-test
-  (:require [editors.recommender :as r]
+  (:require [editors.utilities :as util]
             [proserunner.text :as text]
             [proserunner.checks :as checks]
             [clojure.test :as t :refer [deftest is]]))
@@ -38,7 +38,8 @@
                                                             {:avoid "extensible", :prefer "extendable"}]}))
 
 (deftest recommender
-  (is (true? (:issue? (r/proofread error-line needless-variant))))
-  (is (false? (:issue? (r/proofread handsome-line needless-variant))))
-  (is (= 2 (count (:issues (r/proofread error-line-double needless-variant))))))
+  (let [proofread (util/create-editor "recommender")]
+    (is (true? (:issue? (proofread error-line needless-variant))))
+    (is (false? (:issue? (proofread handsome-line needless-variant))))
+    (is (= 2 (count (:issues (proofread error-line-double needless-variant)))))))
 

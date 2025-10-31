@@ -78,23 +78,41 @@
   [check-dir filename]
   (str check-dir filename ".edn"))
 
-(defn load-edn!
-  "Loads an EDN-formatted check file.
-   Prints warning and returns nil if file cannot be loaded."
+(defn parse-check-edn
+  "Pure function: parses EDN string into a Check record.
+   Throws on invalid check definition."
+  [edn-string]
+  (->> edn-string
+       (edn/read-string)
+       (walk/keywordize-keys)
+       (make)))
+
+(defn read-check-file
+  "Pure I/O: reads file content as string.
+   Returns {:ok content} or {:error message}."
   [filename]
   (try
     (if-not (.exists (io/file filename))
-      (do
-        (println (str "Error: Check file not found: " filename))
-        nil)
-      (->> filename
-           (slurp)
-           (edn/read-string)
-           (walk/keywordize-keys)
-           (make)))
+      {:error (str "Check file not found: " filename)}
+      {:ok (slurp filename)})
     (catch Exception e
-      (println (str "Error: Failed to load check file '" filename "': " (.getMessage e)))
-      nil)))
+      {:error (str "Failed to read file '" filename "': " (.getMessage e))})))
+
+(defn load-edn!
+  "Loads an EDN-formatted check file (I/O + parsing).
+   Prints warning and returns nil if file cannot be loaded.
+   Composed from pure read and parse functions."
+  [filename]
+  (let [read-result (read-check-file filename)]
+    (if-let [error (:error read-result)]
+      (do
+        (println (str "Error: " error))
+        nil)
+      (try
+        (parse-check-edn (:ok read-result))
+        (catch Exception e
+          (println (str "Error: Failed to parse check file '" filename "': " (.getMessage e)))
+          nil)))))
 
 (defn load-ignore-set!
   "Takes a checks directory and a file name for an edn file that

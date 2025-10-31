@@ -117,3 +117,30 @@
                               matches))))
                 line
                 recommendations)))))
+
+;;; Editor Factory
+;;; Unified creation of all parameterized editors to eliminate duplication
+
+(def ^:private editor-specs
+  "Specifications for creating standard editors.
+   Each spec defines the constructor function and case-sensitivity parameter."
+  {"existence"        {:factory create-issue-collector :case-sensitive? false}
+   "case"             {:factory create-issue-collector :case-sensitive? true}
+   "recommender"      {:factory create-recommender :case-sensitive? false}
+   "case-recommender" {:factory create-recommender :case-sensitive? true}})
+
+(defn create-editor
+  "Factory function to create an editor by type.
+   Returns the editor function for the given type, or nil if unknown.
+
+   Example:
+     (create-editor \"existence\") => issue collector function (case-insensitive)
+     (create-editor \"case\")      => issue collector function (case-sensitive)"
+  [editor-type]
+  (when-let [{:keys [factory case-sensitive?]} (get editor-specs editor-type)]
+    (factory case-sensitive?)))
+
+(defn standard-editor-types
+  "Returns a set of all standard editor types available from the factory."
+  []
+  (set (keys editor-specs)))

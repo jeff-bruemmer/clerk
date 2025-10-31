@@ -15,12 +15,9 @@
     [text :as text]]
    [editors
     [re :as re]
-    [case :as c]
-    [case-recommender :as cr]
-    [existence :as existence]
-    [recommender :as recommender]
     [repetition :as repetition]
-    [registry :as registry]]))
+    [registry :as registry]
+    [utilities :as util]]))
 
 (set! *warn-on-reflection* true)
 
@@ -55,11 +52,12 @@
 
 ;;;; Register all standard editors
 
-(registry/register-editor! "existence" existence/proofread)
-(registry/register-editor! "recommender" recommender/proofread)
+;; Register parameterized editors via factory
+(doseq [editor-type (util/standard-editor-types)]
+  (registry/register-editor! editor-type (util/create-editor editor-type)))
+
+;; Register specialized editors that aren't parameterized
 (registry/register-editor! "repetition" repetition/proofread)
-(registry/register-editor! "case" c/proofread)
-(registry/register-editor! "case-recommender" cr/proofread)
 (registry/register-editor! "regex" re/proofread)
 
 ;;;; Combine user input and the relevant cached results

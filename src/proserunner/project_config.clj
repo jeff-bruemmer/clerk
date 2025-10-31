@@ -6,7 +6,8 @@
             [clojure.string :as string]
             [proserunner.config :as config]
             [proserunner.file-utils :as file-utils]
-            [proserunner.system :as sys])
+            [proserunner.system :as sys]
+            [proserunner.validation :as v])
   (:import java.io.File))
 
 (set! *warn-on-reflection* true)
@@ -96,92 +97,32 @@
 
 ;;; Manifest Parsing and Validation
 
-(defn- validation-ok
-  "Creates a successful validation result."
-  [value]
-  {:valid? true :value value :errors []})
+(def ^:private manifest-validators
+  "Declarative validator specifications for project manifest fields."
+  {:check-sources
+   (v/chain
+     (v/required ":check-sources")
+     (v/type-check ":check-sources" vector? "a vector")
+     (v/not-empty-check ":check-sources"))
 
-(defn- validation-error
-  "Creates a failed validation result."
-  [value & error-msgs]
-  {:valid? false :value value :errors (vec error-msgs)})
+   :ignore
+   (v/with-default #{}
+     (v/type-check ":ignore" set? "a set"))
 
-(defn- validate-check-sources*
-  "Validates :check-sources field, returns validation result."
-  [check-sources]
-  (cond
-    (nil? check-sources)
-    (validation-error nil ":check-sources is required in project manifest")
+   :ignore-mode
+   (v/with-default :extend
+     (v/enum-check ":ignore-mode" #{:extend :replace}))
 
-    (not (vector? check-sources))
-    (validation-error check-sources
-      (str ":check-sources must be a vector, got " (type check-sources)))
-
-    (empty? check-sources)
-    (validation-error check-sources ":check-sources cannot be empty")
-
-    :else
-    (validation-ok check-sources)))
-
-(defn- validate-ignore*
-  "Validates :ignore field, returns validation result."
-  [ignore-val]
-  (cond
-    (and ignore-val (not (set? ignore-val)))
-    (validation-error ignore-val
-      (str ":ignore must be a set, got " (type ignore-val)))
-
-    :else
-    (validation-ok (or ignore-val #{}))))
-
-(defn- validate-enum*
-  "Validates enum field, returns validation result."
-  [field value valid-values default-val]
-  (cond
-    (and value (not (contains? valid-values value)))
-    (validation-error value
-      (str field " must be one of " (pr-str valid-values) ", got " (pr-str value)))
-
-    :else
-    (validation-ok (or value default-val))))
-
-(defn- collect-validation-errors
-  "Collects all validation errors from a map of field -> validation-result.
-   Returns {:valid? bool :data map :errors [strings]}."
-  [validations-map]
-  (let [all-errors (mapcat :errors (vals validations-map))
-        valid? (empty? all-errors)
-        data (into {} (map (fn [[k v]] [k (:value v)]) validations-map))]
-    {:valid? valid?
-     :data data
-     :errors all-errors}))
+   :config-mode
+   (v/with-default :merged
+     (v/enum-check ":config-mode" #{:merged :project-only}))})
 
 (defn parse-manifest
   "Parses and validates a project manifest map.
    Throws with ALL validation errors if invalid.
    Returns validated map with defaults applied if valid."
   [manifest]
-  (let [validations {:check-sources (validate-check-sources* (:check-sources manifest))
-                     :ignore (validate-ignore* (:ignore manifest))
-                     :ignore-mode (validate-enum* :ignore-mode
-                                                   (:ignore-mode manifest)
-                                                   #{:extend :replace}
-                                                   :extend)
-                     :config-mode (validate-enum* :config-mode
-                                                   (:config-mode manifest)
-                                                   #{:merged :project-only}
-                                                   :merged)}
-        result (collect-validation-errors validations)]
-    (if (:valid? result)
-      (:data result)
-      (let [error-msg (if (= 1 (count (:errors result)))
-                        (first (:errors result))
-                        (str "Validation errors:\n"
-                             (string/join "\n"
-                               (map #(str "  - " %) (:errors result)))))]
-        (throw (ex-info error-msg
-                        {:errors (:errors result)
-                         :manifest manifest}))))))
+  (v/validate! manifest-validators manifest))
 
 (defn read-manifest
   "Reads and parses a manifest file from the given path."

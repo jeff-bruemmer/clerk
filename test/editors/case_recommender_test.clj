@@ -1,5 +1,5 @@
 (ns editors.case-recommender-test
-  (:require [editors.case-recommender :as cr]
+  (:require [editors.utilities :as util]
             [proserunner.text :as text]
             [proserunner.checks :as checks]
             [clojure.test :as t :refer [deftest is]]))
@@ -38,7 +38,8 @@
                                                                 {:avoid "sunday", :prefer "Sunday"}]}))
 
 (deftest recommender
-  (is (true? (:issue? (cr/proofread error-line case-sensitive-check))))
-  (is (false? (:issue? (cr/proofread handsome-line case-sensitive-check))))
-  (is (= 2 (count (:issues (cr/proofread error-line-double case-sensitive-check))))))
+  (let [proofread (util/create-editor "case-recommender")]
+    (is (true? (:issue? (proofread error-line case-sensitive-check))))
+    (is (false? (:issue? (proofread handsome-line case-sensitive-check))))
+    (is (= 2 (count (:issues (proofread error-line-double case-sensitive-check)))))))
 

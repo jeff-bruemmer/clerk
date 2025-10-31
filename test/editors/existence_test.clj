@@ -3,7 +3,7 @@
              [checks :as checks]
              [text :as text]]
             [clojure.test :as t :refer [deftest is]]
-            [editors.existence :as e]))
+            [editors.utilities :as util]))
 
 (def error-line (text/->Line
                  "resources"
@@ -40,7 +40,8 @@
                                       :recommendations []}))
 
 (deftest existence
-  (is (true? (:issue? (e/proofread error-line skunked-term))))
-  (is (false? (:issue? (e/proofread handsome-line skunked-term))))
-  (is (= 2 (count (:issues (e/proofread error-line-double skunked-term))))))
+  (let [proofread (util/create-editor "existence")]
+    (is (true? (:issue? (proofread error-line skunked-term))))
+    (is (false? (:issue? (proofread handsome-line skunked-term))))
+    (is (= 2 (count (:issues (proofread error-line-double skunked-term)))))))
 

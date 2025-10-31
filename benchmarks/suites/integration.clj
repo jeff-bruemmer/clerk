@@ -4,21 +4,16 @@
             [proserunner.vet :as vet]
             [clojure.java.io :as io]
             [editors.registry :as registry]
-            [editors.existence :as existence]
-            [editors.recommender :as recommender]
+            [editors.utilities :as util]
             [editors.repetition :as repetition]
-            [editors.case :as case-editor]
-            [editors.case-recommender :as case-recommender]
             [editors.re :as re]))
 
 (defn setup-editors!
   "Register all editors for benchmarking."
   []
-  (registry/register-editor! "existence" existence/proofread)
-  (registry/register-editor! "recommender" recommender/proofread)
+  (doseq [editor-type (util/standard-editor-types)]
+    (registry/register-editor! editor-type (util/create-editor editor-type)))
   (registry/register-editor! "repetition" repetition/proofread)
-  (registry/register-editor! "case" case-editor/proofread)
-  (registry/register-editor! "case-recommender" case-recommender/proofread)
   (registry/register-editor! "regex" re/proofread))
 
 (defn count-lines-in-file

@@ -1,7 +1,8 @@
 (ns proserunner.custom-checks
   "Functions for adding custom checks from external sources."
   (:gen-class)
-  (:require [proserunner.project-config :as project-config]
+  (:require [proserunner.context :as context]
+            [proserunner.project-config :as project-config]
             [proserunner.file-utils :as file-utils]
             [proserunner.system :as sys]
             [clojure.java.io :as io]
@@ -173,22 +174,20 @@
    - :project - Force project scope (.proserunner/checks/), fails if no project
    - :start-dir - Starting directory for project detection (defaults to user.dir)"
   [source options]
-  (let [start-dir (project-config/resolve-start-dir options)
-        target (project-config/determine-target options start-dir)
-        target-name (or (:name options) (extract-name-from-source source))]
+  (let [target-name (or (:name options) (extract-name-from-source source))]
+    (context/with-context options
+      (fn [{:keys [target project-root]}]
+        (if (= target :global)
+          ;; Global scope
+          (let [result (import-from-source source target-name nil)
+                config-path (sys/filepath ".proserunner" "config.edn")]
+            (update-config-with-checks! target-name (:check-names result))
+            (print-success-message target result config-path)
+            (assoc result :target :global))
 
-    (if (= target :global)
-      ;; Global scope
-      (let [result (import-from-source source target-name nil)
-            config-path (sys/filepath ".proserunner" "config.edn")]
-        (update-config-with-checks! target-name (:check-names result))
-        (print-success-message target result config-path)
-        (assoc result :target :global))
-
-      ;; Project scope
-      (let [{:keys [project-root]} (project-config/find-manifest start-dir)
-            result (import-from-source source target-name project-root)
-            config-path (project-config/project-config-path project-root)]
-        (update-project-config-with-checks! project-root)
-        (print-success-message target result config-path)
-        (assoc result :target :project)))))
+          ;; Project scope
+          (let [result (import-from-source source target-name project-root)
+                config-path (project-config/project-config-path project-root)]
+            (update-project-config-with-checks! project-root)
+            (print-success-message target result config-path)
+            (assoc result :target :project)))))))
