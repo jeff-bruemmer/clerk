@@ -9,6 +9,7 @@
     [config :as conf]
     [metrics :as metrics]
     [path-ignore :as path-ignore]
+    [project-config :as project-conf]
     [storage :as store]
     [system :as sys]
     [text :as text]]
@@ -71,7 +72,8 @@
             cached-result
             output
             no-cache
-            parallel-lines])
+            parallel-lines
+            project-ignore])
 
 (defn build-ignore-patterns
   "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
@@ -114,31 +116,49 @@
       (metrics/record-file!))
     (process-files files fetch-fn parallel?)))
 
+(defn- determine-parallel-settings
+  "Determines parallel processing settings from options."
+  [{:keys [parallel-files sequential-lines]}]
+  {:parallel-files? (boolean parallel-files)
+   :parallel-lines? (not sequential-lines)})
+
+(defn- load-config-and-dir
+  "Loads configuration and check directory, preferring project config if available."
+  [config project-config]
+  (if (= :project (:source project-config))
+    {:config (conf/map->Config {:checks (:checks project-config)
+                                :ignore "ignore"})
+     :check-dir ""}
+    {:config (conf/fetch-or-create! config)
+     :check-dir (sys/check-dir config)}))
+
 (defn make-input
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue exclude parallel-files sequential-lines no-cache]} options
-        exclude-patterns (if exclude (vector exclude) [])
-        ;; Default to sequential file processing (false if not specified)
-        parallel-files? (if (nil? parallel-files) false parallel-files)
-        ;; Default to parallel line processing (true unless sequential-lines is set)
-        parallel-lines? (if sequential-lines false true)
-        ;; Save original config filepath before loading
-        config-filepath config
-        c (conf/fetch-or-create! config-filepath)
-        cd (sys/check-dir config-filepath)
-        updated-options (assoc options :config c :check-dir cd)]
+  (let [{:keys [file config output code-blocks check-dialogue exclude no-cache]} options
+        exclude-patterns (if exclude [exclude] [])
+        {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
+
+        file-path (if (string? file) file (str file))
+        project-config (project-conf/load-project-config file-path)
+        {:keys [config check-dir]} (load-config-and-dir config project-config)
+
+        updated-options (assoc options
+                              :config config
+                              :check-dir check-dir
+                              :project-ignore (:ignore project-config))]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel-files?)
-      :config c
-      :check-dir cd
+      :config config
+      :check-dir check-dir
       :checks (checks/create updated-options)
       :cached-result (store/inventory file)
       :output output
       :no-cache no-cache
-      :parallel-lines parallel-lines?})))
+      :parallel-lines parallel-lines?
+      :project-ignore (:ignore project-config)})))
 
 ;;;; Core functions for vetting a lines of text with each check.
 

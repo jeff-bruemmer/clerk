@@ -234,23 +234,48 @@
   [ignore-set issue]
   (contains? ignore-set (:specimen issue)))
 
+(defn- load-ignore-set
+  "Loads ignore set from project config or file."
+  [project-ignore check-dir config]
+  (if (some? project-ignore)
+    project-ignore
+    (set (checks/load-ignore-set! check-dir (:ignore config)))))
+
+(defn- filter-ignored
+  "Removes ignored specimens from results."
+  [results ignore-set]
+  (if (empty? ignore-set)
+    results
+    (remove (partial ignore? ignore-set) results)))
+
+(defn- process-results
+  "Preps, filters, and sorts results."
+  [results ignore-set]
+  (->> results
+       (mapcat prep)
+       (#(filter-ignored % ignore-set))
+       (sort-by (juxt :file :line-num :col-num))))
+
+(defn- format-output
+  "Formats results according to output format."
+  [results output]
+  (case (string/lower-case output)
+    "edn" (pp/pprint results)
+    "json" (json/write-value *out* results)
+    "group" (group-results results)
+    "verbose" (verbose-results results)
+    (results-table results)))
+
 (defn out
   "Takes results, preps them, removes specimens to ignore, and
   prints them in the supplied output format."
   [payload]
-  (let [{:keys [results output check-dir config]} payload]
+  (let [{:keys [results output check-dir config project-ignore]} payload]
     (cond
       (empty? results) nil
-      (some? results) (let [ignore-set (set (checks/load-ignore-set! check-dir (:ignore config)))
-                            prepped-results (mapcat prep (:results results))
-                            results-minus-ignored (if (empty? ignore-set) prepped-results
-                                                      (remove (partial ignore? ignore-set) prepped-results))
-                            final-results (sort-by (juxt :file :line-num :col-num) results-minus-ignored)]
-                        (case (string/lower-case output)
-                          "edn" (pp/pprint final-results)
-                          "json" (json/write-value *out* final-results)
-                          "group" (group-results final-results)
-                          "verbose" (verbose-results final-results)
-                          (results-table final-results)))
+      (some? results)
+      (let [ignore-set (load-ignore-set project-ignore check-dir config)
+            final-results (process-results (:results results) ignore-set)]
+        (format-output final-results output))
       :else nil)))
 

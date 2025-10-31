@@ -106,6 +106,12 @@
              slurp
              edn/read-string))))
 
+(defn- absolute-path?
+  "Check if a path is absolute."
+  [path]
+  (or (.isAbsolute (io/file path))
+      (clojure.string/starts-with? path "~")))
+
 (defn create
   "Takes an options ball, and loads all the specified checks.
    Filters out any checks that failed to load."
@@ -114,7 +120,11 @@
         checks (:checks config)
         all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (map #(str check-dir directory (java.io.File/separator) % ".edn") files)) checks)
+                             (let [base-path (if (absolute-path? directory)
+                                              directory
+                                              (str check-dir directory))
+                                   sep java.io.File/separator]
+                               (map #(str base-path sep % ".edn") files))) checks)
         loaded-checks (keep load-edn! all-checks)
         failed-count (- (count all-checks) (count loaded-checks))]
     (when (pos? failed-count)

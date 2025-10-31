@@ -7,6 +7,7 @@
              [fmt :as fmt]
              [ignore :as ignore]
              [metrics :as metrics]
+             [project-config :as project-conf]
              [shipping :as ship]
              [text :as text]
              [vet :as vet]]
@@ -43,8 +44,36 @@
    ["-L" "--list-ignored" "List all ignored specimens."]
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
    ["-D" "--restore-defaults" "Restore default checks from GitHub."]
-   ["-a" "--add-checks SOURCE" "Import checks from directory or git URL."]
-   ["-N" "--name NAME" "Custom name for imported checks directory."]])
+   ["-a" "--add-checks SOURCE" "Import checks from local directory."]
+   ["-N" "--name NAME" "Custom name for imported checks directory."]
+   ["-G" "--global" "Add to global config (~/.proserunner/)."]
+   ["-P" "--project" "Add to project config (.proserunner/)."]
+   ["-I" "--init-project" "Initialize .proserunner/ directory in current directory."]])
+
+(defn- handle-init-project!
+  "Handles project initialization by creating .proserunner/ directory and displaying usage help."
+  []
+  (try
+    (let [cwd (System/getProperty "user.dir")
+          manifest-path (project-conf/init-project-config! cwd)]
+      (println "Created project configuration directory: .proserunner/")
+      (println "  + .proserunner/config.edn - Project configuration")
+      (println "  + .proserunner/checks/    - Directory for project-specific checks")
+      (println "\nEdit .proserunner/config.edn to customize:")
+      (println "  :check-sources - Specify check sources:")
+      (println "                   - \"default\" for built-in checks")
+      (println "                   - \"checks\" for .proserunner/checks/")
+      (println "                   - Local directory paths")
+      (println "  :ignore        - Set of specimens to ignore")
+      (println "  :ignore-mode   - :extend (merge with global) or :replace")
+      (println "  :config-mode   - :merged (use global+project) or :project-only")
+      (println "\nAdd custom checks by creating .edn files in .proserunner/checks/"))
+    (catch clojure.lang.ExceptionInfo e
+      (println "Error:" (.getMessage e))
+      (System/exit 1))
+    (catch Exception e
+      (println "Error initializing project:" (.getMessage e))
+      (System/exit 1))))
 
 (defn proserunner
   "Proserunner takes options and vets a text with the supplied checks."
@@ -75,9 +104,6 @@
     (catch Exception e
       (println "Error: An unexpected error occurred during processing.")
       (println "Details:" (.getMessage e))
-      (when (System/getenv "PROSERUNNER_DEBUG")
-        (println "\nStack trace:")
-        (.printStackTrace e))
       (System/exit 1))))
 
 (defn reception
@@ -88,41 +114,59 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version
                 add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults add-checks name parallel-files sequential-lines]} expanded-options
-        ;; Validate that both parallel modes are not enabled
+                restore-defaults add-checks name init-project parallel-files sequential-lines
+                global project]} expanded-options
+        ;; Validate that both parallel modes are not enabled and flag conflicts
         validation-errors (cond
                             (and parallel-files (not sequential-lines))
                             ["Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files."]
+
+                            (and global project)
+                            ["Cannot specify both --global and --project flags."]
+
                             :else nil)]
     (if (or (seq errors) (seq validation-errors))
       (error/inferior-input (concat errors validation-errors))
       ;; Dispatch on command.
       (do (cond
             ;; Ignore management commands
-            add-ignore (do
-                         (ignore/add-to-ignore! add-ignore)
-                         (println "Added to ignore list:" add-ignore)
-                         (println "Ignored specimens:" (count (ignore/read-ignore-file))))
-            remove-ignore (do
-                            (ignore/remove-from-ignore! remove-ignore)
-                            (println "Removed from ignore list:" remove-ignore)
-                            (println "Ignored specimens:" (count (ignore/read-ignore-file))))
-            list-ignored (let [ignored (ignore/list-ignored)]
+            add-ignore (let [opts (select-keys expanded-options [:global :project])
+                             target (project-conf/determine-target opts (System/getProperty "user.dir"))
+                             msg-context (if (= target :project) "project" "global")]
+                         (ignore/add-to-ignore! add-ignore opts)
+                         (println (format "Added to %s ignore list: %s" msg-context add-ignore))
+                         (if (= target :project)
+                           (println "Use --global to add to global ignore list instead.")
+                           (println "Use --project to add to project ignore list instead.")))
+
+            remove-ignore (let [opts (select-keys expanded-options [:global :project])
+                                target (project-conf/determine-target opts (System/getProperty "user.dir"))
+                                msg-context (if (= target :project) "project" "global")]
+                            (ignore/remove-from-ignore! remove-ignore opts)
+                            (println (format "Removed from %s ignore list: %s" msg-context remove-ignore)))
+
+            list-ignored (let [opts (select-keys expanded-options [:global :project])
+                               ignored (ignore/list-ignored opts)]
                            (if (empty? ignored)
                              (println "No ignored specimens.")
                              (do
                                (println "Ignored specimens:")
                                (doseq [specimen ignored]
                                  (println "  " specimen)))))
-            clear-ignored (do
-                            (ignore/clear-ignore!)
-                            (println "Cleared all ignored specimens."))
+
+            clear-ignored (let [opts (select-keys expanded-options [:global :project])
+                                target (project-conf/determine-target opts (System/getProperty "user.dir"))
+                                msg-context (if (= target :project) "project" "global")]
+                            (ignore/clear-ignore! opts)
+                            (println (format "Cleared all %s ignored specimens." msg-context)))
 
             restore-defaults (conf/restore-defaults!)
 
+            init-project (handle-init-project!)
+
             ;; Custom checks management
             add-checks (try
-                        (custom/add-checks add-checks {:name name})
+                        (custom/add-checks add-checks (select-keys expanded-options [:name :global :project]))
                         (catch Exception e
                           (println "Error adding checks:" (.getMessage e))
                           (System/exit 1)))

@@ -1,7 +1,8 @@
 (ns proserunner.custom-checks
   "Functions for adding custom checks from external sources."
   (:gen-class)
-  (:require [proserunner.system :as sys]
+  (:require [proserunner.project-config :as project-config]
+            [proserunner.system :as sys]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [clojure.edn :as edn]
@@ -10,19 +11,29 @@
 
 (set! *warn-on-reflection* true)
 
-(defn- git-url?
-  "Check if source is a git URL."
-  [source]
-  (or (string/starts-with? source "http://")
-      (string/starts-with? source "https://")
-      (string/starts-with? source "git@")))
+;;; Error Message Builders
+
+(defn- no-checks-found-error
+  "Builds error data for when no .edn files found in source directory."
+  [source-dir]
+  {:message (str "No .edn check files found in directory: " source-dir)
+   :source source-dir
+   :type :no-checks-found
+   :help ["Expected: Files ending with .edn containing check definitions"
+          "See: docs/checks.md for check file format"]})
+
+(defn- throw-no-checks-found!
+  "Throws formatted error when no checks found."
+  [source-dir]
+  (let [err (no-checks-found-error source-dir)
+        help-text (str "\n\n" (string/join "\n" (:help err)))]
+    (throw (ex-info (str (:message err) help-text)
+                    (dissoc err :message :help)))))
 
 (defn- extract-name-from-source
-  "Extract a reasonable name from the source path or URL."
+  "Extract a reasonable name from the source path."
   [source]
-  (let [cleaned (-> source
-                    (string/replace #"\.git$" "")
-                    (string/replace #"/$" ""))
+  (let [cleaned (string/replace source #"/$" "")
         parts (string/split cleaned #"[/\\]")]
     (last parts)))
 
@@ -43,18 +54,13 @@
     (io/make-parents dest)
     (io/copy src-file dest)))
 
-(defn- add-checks-from-directory
-  "Copy .edn files from a local directory to custom checks directory."
-  [source-dir target-name]
-  (let [target-dir (sys/filepath ".proserunner" "custom" target-name)
-        edn-files (find-edn-files source-dir)]
-
+(defn- copy-checks-to-directory
+  "Copy .edn files from source-dir to target-dir.
+   Returns map with :target-dir, :check-names, and :count."
+  [source-dir target-dir]
+  (let [edn-files (find-edn-files source-dir)]
     (when (empty? edn-files)
-      (throw (ex-info (str "No .edn check files found in directory: " source-dir
-                          "\n\nExpected: Files ending with .edn containing check definitions"
-                          "\nSee: docs/checks.md for check file format")
-                      {:source source-dir
-                       :type :no-checks-found})))
+      (throw-no-checks-found! source-dir))
 
     ;; Create target directory
     (.mkdirs (io/file target-dir))
@@ -70,66 +76,17 @@
      :check-names (map #(string/replace (.getName (io/file %)) #"\.edn$" "") edn-files)
      :count (count edn-files)}))
 
-(defn- clone-git-repo!
-  "Clone a git repository to a temporary directory.
-   Returns the path to the cloned directory."
-  [git-url]
-  (let [temp-dir (str (System/getProperty "java.io.tmpdir")
-                     File/separator
-                     "proserunner-import-"
-                     (System/currentTimeMillis))
-        process (-> (ProcessBuilder. ["git" "clone" "--depth" "1" git-url temp-dir])
-                   (.redirectErrorStream true)
-                   (.start))]
+(defn- add-checks-from-directory
+  "Copy .edn files from a local directory to global custom checks directory."
+  [source-dir target-name]
+  (let [target-dir (sys/filepath ".proserunner" "custom" target-name)]
+    (copy-checks-to-directory source-dir target-dir)))
 
-    ;; Wait for clone to complete (timeout after 60 seconds)
-    (when-not (.waitFor process 60 java.util.concurrent.TimeUnit/SECONDS)
-      (.destroy process)
-      (throw (ex-info (str "Git clone timed out after 60 seconds\n"
-                          "Repository: " git-url "\n\n"
-                          "Possible causes:\n"
-                          "  - Repository is very large\n"
-                          "  - Network connection is slow\n"
-                          "  - Repository URL is incorrect")
-                      {:url git-url
-                       :type :clone-timeout})))
-
-    ;; Check exit code
-    (let [exit-code (.exitValue process)]
-      (when-not (zero? exit-code)
-        (let [error-output (slurp (.getInputStream process))]
-          (throw (ex-info (str "Git clone failed\n"
-                              "Repository: " git-url "\n"
-                              "Exit code: " exit-code "\n\n"
-                              "Git error:\n" error-output "\n\n"
-                              "Possible causes:\n"
-                              "  - Repository doesn't exist or is private\n"
-                              "  - Git is not installed\n"
-                              "  - No network connection\n"
-                              "  - Invalid repository URL")
-                          {:url git-url
-                           :exit-code exit-code
-                           :error-output error-output
-                           :type :clone-failed})))))
-
-    temp-dir))
-
-(defn- delete-directory!
-  "Recursively delete a directory."
-  [^File dir]
-  (when (.exists dir)
-    (doseq [file (reverse (file-seq dir))]
-      (io/delete-file file true))))
-
-(defn- add-checks-from-git
-  "Clone a git repository and copy .edn files to custom checks directory."
-  [git-url target-name]
-  (let [temp-dir (clone-git-repo! git-url)]
-    (try
-      (add-checks-from-directory temp-dir target-name)
-      (finally
-        ;; Clean up temp directory
-        (delete-directory! (io/file temp-dir))))))
+(defn- add-checks-to-project-dir
+  "Copy .edn files from a local directory to project .proserunner/checks/ directory."
+  [source-dir _target-name project-root]
+  (let [target-dir (project-config/project-checks-dir project-root)]
+    (copy-checks-to-directory source-dir target-dir)))
 
 (defn- read-config
   "Read the config.edn file."
@@ -170,28 +127,67 @@
 
     (write-config! (assoc config :checks updated-checks))))
 
+(defn- update-project-config-with-checks!
+  "Add 'checks' to :check-sources in project config if not already present."
+  [project-root]
+  (let [config (project-config/read-project-config project-root)
+        check-sources (:check-sources config)
+        ;; Add "checks" if not already in the list
+        updated-sources (if (some #(= "checks" %) check-sources)
+                         check-sources
+                         (conj (vec check-sources) "checks"))]
+    (project-config/write-project-config! project-root (assoc config :check-sources updated-sources))))
+
+(defn- import-from-source
+  "Import checks from local directory.
+   Returns result map with :target-dir, :check-names, and :count."
+  [source target-name project-root]
+  (println (str "Importing from " source "..."))
+  (if project-root
+    (add-checks-to-project-dir source target-name project-root)
+    (add-checks-from-directory source target-name)))
+
+(defn- print-success-message
+  "Print success message for added checks."
+  [target result config-path]
+  (let [scope-name (if (= target :global) "global config" "project")
+        alt-flag (if (= target :global) "--project" "--global")
+        alt-scope (if (= target :global) "project" "global")
+        extra-msg (if (= target :project)
+                   "\nThese checks will apply to this project only."
+                   "")]
+    (println (str "\nAdded " (:count result) " checks to " scope-name))
+    (println (str "  + " (:target-dir result)))
+    (println (str "  + Updated config: " config-path))
+    (println (str "\nChecks added: " (string/join ", " (:check-names result))))
+    (println extra-msg)
+    (println (str "Use " alt-flag " to add to " alt-scope " instead."))))
+
 (defn add-checks
-  "Add checks from a source (local directory or git URL) to custom checks.
+  "Add checks from a local directory with context-aware targeting.
 
    Options:
-   - :name - Custom name for the check directory (optional, defaults to source basename)"
-  [source {:keys [name]}]
-  (let [target-name (or name (extract-name-from-source source))
-        result (if (git-url? source)
-                 (do
-                   (println (str "Cloning from " source "..."))
-                   (add-checks-from-git source target-name))
-                 (do
-                   (println (str "Importing from " source "..."))
-                   (add-checks-from-directory source target-name)))]
+   - :name - Custom name for the check directory (optional, defaults to source basename)
+   - :global - Force global scope (~/.proserunner/custom/)
+   - :project - Force project scope (.proserunner/checks/), fails if no project
+   - :start-dir - Starting directory for project detection (defaults to user.dir)"
+  [source options]
+  (let [start-dir (project-config/resolve-start-dir options)
+        target (project-config/determine-target options start-dir)
+        target-name (or (:name options) (extract-name-from-source source))]
 
-    ;; Update config.edn
-    (update-config-with-checks! target-name (:check-names result))
+    (if (= target :global)
+      ;; Global scope
+      (let [result (import-from-source source target-name nil)
+            config-path (sys/filepath ".proserunner" "config.edn")]
+        (update-config-with-checks! target-name (:check-names result))
+        (print-success-message target result config-path)
+        (assoc result :target :global))
 
-    ;; Print success message
-    (println (str "\nAdded " (:count result) " checks from " source))
-    (println (str "  + " (:target-dir result)))
-    (println (str "  + Updated config: " (sys/filepath ".proserunner" "config.edn")))
-    (println (str "\nChecks added: " (string/join ", " (:check-names result))))
-
-    result))
+      ;; Project scope
+      (let [{:keys [project-root]} (project-config/find-manifest start-dir)
+            result (import-from-source source target-name project-root)
+            config-path (project-config/project-config-path project-root)]
+        (update-project-config-with-checks! project-root)
+        (print-success-message target result config-path)
+        (assoc result :target :project)))))

@@ -3,9 +3,12 @@
   (:gen-class)
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [proserunner.project-config :as project-config]
             [proserunner.system :as sys]))
 
 (set! *warn-on-reflection* true)
+
+;;; Global Ignore File Management
 
 (defn ignore-file-path
   "Returns the path to the ignore file."
@@ -29,26 +32,120 @@
     (.mkdirs (.getParentFile (io/file ignore-path)))
     (spit ignore-path (pr-str (vec (sort ignored-set))))))
 
+;;; Set Operations
+
+(defn- add-to-set
+  "Adds specimen to ignore set."
+  [ignore-set specimen]
+  (conj ignore-set specimen))
+
+(defn- remove-from-set
+  "Removes specimen from ignore set."
+  [ignore-set specimen]
+  (disj ignore-set specimen))
+
+(defn- add-ignore-to-project!
+  "Adds a specimen to project .proserunner/config.edn :ignore set."
+  [specimen project-root]
+  (let [config (project-config/read-project-config project-root)
+        current-ignore (or (:ignore config) #{})
+        updated-ignore (add-to-set current-ignore specimen)]
+    (project-config/write-project-config! project-root (assoc config :ignore updated-ignore))))
+
+(defn- remove-ignore-from-project!
+  "Removes a specimen from project .proserunner/config.edn :ignore set."
+  [specimen project-root]
+  (let [config (project-config/read-project-config project-root)
+        current-ignore (or (:ignore config) #{})
+        updated-ignore (remove-from-set current-ignore specimen)]
+    (project-config/write-project-config! project-root (assoc config :ignore updated-ignore))))
+
+;;; Context-Aware Public API
+
+(defn- with-project-context
+  "Determines project context and executes function with context map.
+
+   The function f receives a map with:
+   - :target - either :global or :project
+   - :start-dir - resolved start directory
+   - :project-root - project root directory (only when :target is :project)"
+  [options f]
+  (let [start-dir (project-config/resolve-start-dir options)
+        target (project-config/determine-target options start-dir)
+        context (cond-> {:target target
+                         :start-dir start-dir}
+                  (= target :project)
+                  (assoc :project-root (:project-root (project-config/find-manifest start-dir))))]
+    (f context)))
+
 (defn add-to-ignore!
-  "Adds a specimen to the ignore list."
-  [specimen]
-  (let [current (read-ignore-file)
-        updated (conj current specimen)]
-    (write-ignore-file! updated)))
+  "Adds a specimen to the ignore list with context-aware targeting.
+
+   Options:
+   - :global - Force global scope (~/.proserunner/ignore.edn)
+   - :project - Force project scope (.proserunner/config.edn :ignore)
+   - :start-dir - Starting directory for project detection"
+  ([specimen]
+   (write-ignore-file! (add-to-set (read-ignore-file) specimen)))
+  ([specimen options]
+   (with-project-context options
+     (fn [{:keys [target project-root]}]
+       (if (= target :global)
+         (write-ignore-file! (add-to-set (read-ignore-file) specimen))
+         ;; Add to project
+         (add-ignore-to-project! specimen project-root))))))
 
 (defn remove-from-ignore!
-  "Removes a specimen from the ignore list."
-  [specimen]
-  (let [current (read-ignore-file)
-        updated (disj current specimen)]
-    (write-ignore-file! updated)))
+  "Removes a specimen from the ignore list with context-aware targeting.
+
+   Options:
+   - :global - Force global scope (~/.proserunner/ignore.edn)
+   - :project - Force project scope (.proserunner/config.edn :ignore)
+   - :start-dir - Starting directory for project detection"
+  ([specimen]
+   (write-ignore-file! (remove-from-set (read-ignore-file) specimen)))
+  ([specimen options]
+   (with-project-context options
+     (fn [{:keys [target project-root]}]
+       (if (= target :global)
+         (write-ignore-file! (remove-from-set (read-ignore-file) specimen))
+         ;; Remove from project
+         (remove-ignore-from-project! specimen project-root))))))
 
 (defn list-ignored
-  "Returns a sorted list of all ignored specimens."
-  []
-  (sort (read-ignore-file)))
+  "Returns a sorted list of all ignored specimens with context-aware targeting.
+
+   When in project context with :extend mode, shows both global and project ignores.
+   When in project context with :replace mode, shows only project ignores.
+   When in global context, shows only global ignores.
+
+   Options:
+   - :global - Force global scope
+   - :project - Force project scope
+   - :start-dir - Starting directory for project detection"
+  ([]
+   (sort (read-ignore-file)))
+  ([options]
+   (with-project-context options
+     (fn [{:keys [target start-dir]}]
+       (if (= target :global)
+         (sort (read-ignore-file))
+         ;; List from project context (respecting merge mode)
+         (let [config (project-config/load-project-config start-dir)
+               ;; The project-config loader already merges global and project ignores
+               ;; based on :ignore-mode
+               merged-ignore (:ignore config)]
+           (sort merged-ignore)))))))
 
 (defn clear-ignore!
   "Clears all ignored specimens."
-  []
-  (write-ignore-file! #{}))
+  ([]
+   (write-ignore-file! #{}))
+  ([options]
+   (with-project-context options
+     (fn [{:keys [target project-root]}]
+       (if (= target :global)
+         (write-ignore-file! #{})
+         ;; Clear project ignores
+         (let [config (project-config/read-project-config project-root)]
+           (project-config/write-project-config! project-root (assoc config :ignore #{}))))))))

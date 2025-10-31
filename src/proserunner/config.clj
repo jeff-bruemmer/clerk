@@ -251,9 +251,33 @@
   (println "Checks updated.")
   (safe-load-config default-config))
 
+(defn- load-custom-config
+  "Loads a custom config file specified via -c flag."
+  [config-filepath]
+  (safe-load-config config-filepath))
+
+(defn- load-project-based-config
+  "Loads project configuration, merging with global config as appropriate."
+  [current-dir]
+  (let [_ (require 'proserunner.project-config)
+        load-project-config (resolve 'proserunner.project-config/load-project-config)]
+    (if-let [project-cfg (load-project-config current-dir)]
+      (map->Config {:checks (:checks project-cfg)
+                    :ignore (:ignore project-cfg)})
+      (error/exit "Failed to load project configuration. Check .proserunner/config.edn for errors.\n"))))
+
+(defn- load-existing-global-config
+  "Loads existing global config, backfilling version if needed."
+  [default-config version-exists?]
+  (backfill-version-if-needed version-exists?)
+  (safe-load-config default-config))
+
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
-   Automatically checks for updates to default checks."
+   Automatically checks for updates to default checks.
+
+   If in a project directory, loads project config which may include
+   project-specific checks and ignores merged with global config."
   [config-filepath]
   (when (and config-filepath (not (string? config-filepath)))
     (throw (ex-info (str "fetch-or-create! expects a string filepath, got: " (type config-filepath))
@@ -261,17 +285,32 @@
   (let [default-config (sys/filepath ".proserunner" "config.edn")
         using-default? (using-default-config? config-filepath default-config)
         config-exists? (.exists (io/file default-config))
-        version-exists? (not (nil? (read-local-version)))]
-    (cond
-      (and (not using-default?) (.exists (io/file config-filepath)))
-      (safe-load-config config-filepath)
+        version-exists? (not (nil? (read-local-version)))
 
+        ;; Check if we're in a project directory
+        _ (require 'proserunner.project-config)
+        find-manifest (resolve 'proserunner.project-config/find-manifest)
+        current-dir (System/getProperty "user.dir")
+        in-project? (find-manifest current-dir)]
+
+    (cond
+      ;; Custom config file specified via -c flag
+      (and (not using-default?) (.exists (io/file config-filepath)))
+      (load-custom-config config-filepath)
+
+      ;; In a project directory - load project config (merges with global)
+      ;; This must come BEFORE the checks-stale? and config-exists? checks
+      (and using-default? in-project?)
+      (load-project-based-config current-dir)
+
+      ;; Using default config and checks need updating
       (and using-default? config-exists? (checks-stale?))
       (update-default-checks default-config)
 
+      ;; Global config exists
       config-exists?
-      (do (backfill-version-if-needed version-exists?)
-          (safe-load-config default-config))
+      (load-existing-global-config default-config version-exists?)
 
+      ;; First-time initialization
       :else
       (initialize-proserunner default-config))))
