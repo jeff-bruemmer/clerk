@@ -98,7 +98,7 @@
   (testing "Can override an existing editor"
     (reset-registry!)
     (registry/register-editor! "existence" mock-existence-editor)
-    (let [new-editor (fn [line check] (assoc line :custom-field true))]
+    (let [new-editor (fn [line _] (assoc line :custom-field true))]
       (registry/register-editor! "existence" new-editor)
       (is (= new-editor (registry/get-editor "existence"))
           "Should use new editor after override"))))
@@ -111,7 +111,7 @@
                      (Thread.
                       (fn []
                         (registry/register-editor! (str "editor-" i)
-                                                   (fn [line check] line))))))]
+                                                   (fn [line _] line))))))]
       (doseq [t threads] (.start t))
       (doseq [t threads] (.join t))
       (is (= 10 (count @registry/editors))
@@ -123,7 +123,7 @@
     (let [standard-types ["existence" "case" "recommender"
                           "case-recommender" "repetition" "regex"]]
       (doseq [kind standard-types]
-        (registry/register-editor! kind (fn [line check] line)))
+        (registry/register-editor! kind (fn [line _] line)))
       (is (= (count standard-types) (count @registry/editors))
           "Should register all standard types")
       (doseq [kind standard-types]

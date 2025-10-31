@@ -1,16 +1,15 @@
 (ns proserunner.core
   (:gen-class)
   (:require [proserunner
+             [commands :as cmd]
              [config :as conf]
-             [custom-checks :as custom]
+             [effects :as effects]
              [error :as error]
              [fmt :as fmt]
-             [ignore :as ignore]
-             [metrics :as metrics]
-             [project-config :as project-conf]
+             [process :as process]
+             [result :as result]
              [shipping :as ship]
-             [text :as text]
-             [vet :as vet]]
+             [text :as text]]
             [clojure.tools.cli :as cli]))
 
 (set! *warn-on-reflection* true)
@@ -50,135 +49,31 @@
    ["-P" "--project" "Add to project config (.proserunner/)."]
    ["-I" "--init-project" "Initialize .proserunner/ directory in current directory."]])
 
-(defn- handle-init-project!
-  "Handles project initialization by creating .proserunner/ directory and displaying usage help."
-  []
-  (try
-    (let [cwd (System/getProperty "user.dir")
-          _ (project-conf/init-project-config! cwd)]
-      (println "Created project configuration directory: .proserunner/")
-      (println "  + .proserunner/config.edn - Project configuration")
-      (println "  + .proserunner/checks/    - Directory for project-specific checks")
-      (println "\nEdit .proserunner/config.edn to customize:")
-      (println "  :check-sources - Specify check sources:")
-      (println "                   - \"default\" for built-in checks")
-      (println "                   - \"checks\" for .proserunner/checks/")
-      (println "                   - Local directory paths")
-      (println "  :ignore        - Set of specimens to ignore")
-      (println "  :ignore-mode   - :extend (merge with global) or :replace")
-      (println "  :config-mode   - :merged (use global+project) or :project-only")
-      (println "\nAdd custom checks by creating .edn files in .proserunner/checks/"))
-    (catch clojure.lang.ExceptionInfo e
-      (println "Error:" (.getMessage e))
-      (System/exit 1))
-    (catch Exception e
-      (println "Error initializing project:" (.getMessage e))
-      (System/exit 1))))
-
-(defn proserunner
-  "Proserunner takes options and vets a text with the supplied checks."
-  [options]
-  (try
-    (let [opts (if (:metrics options)
-                 (do
-                   (metrics/reset-metrics!)
-                   (metrics/start-timing!)
-                   ;; Force no-cache when metrics enabled
-                   (assoc options :no-cache true))
-                 options)
-          result (->> opts
-                      (vet/compute-or-cached)
-                      (ship/out))]
-      (when (:metrics options)
-        (metrics/end-timing!)
-        (metrics/print-metrics))
-      result)
-    (catch java.util.regex.PatternSyntaxException e
-      (println "Error: Invalid regex pattern in check definition.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))
-    (catch java.io.IOException e
-      (println "Error: File I/O operation failed.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))
-    (catch Exception e
-      (println "Error: An unexpected error occurred during processing.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))))
-
 (defn reception
-  "Parses command line `args` and applies the relevant function."
+  "Parses command line `args` and applies the relevant function.
+
+  Now uses pure command handlers and effect execution for better testability."
   [args]
   (let [opts (cli/parse-opts args options :summary-fn fmt/summary)
         {:keys [options errors]} opts
-        expanded-options (conf/default (merge opts options))
-        {:keys [file config help checks version
-                add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults add-checks init-project parallel-files sequential-lines
-                global project]} expanded-options
-        ;; Validate that both parallel modes are not enabled and flag conflicts
-        validation-errors (cond
-                            (and parallel-files (not sequential-lines))
-                            ["Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files."]
-
-                            (and global project)
-                            ["Cannot specify both --global and --project flags."]
-
-                            :else nil)]
-    (if (or (seq errors) (seq validation-errors))
-      (error/inferior-input (concat errors validation-errors))
-      ;; Dispatch on command.
-      (do (cond
-            ;; Ignore management commands
-            add-ignore (let [opts (select-keys expanded-options [:global :project])
-                             target (project-conf/determine-target opts (System/getProperty "user.dir"))
-                             msg-context (if (= target :project) "project" "global")]
-                         (ignore/add-to-ignore! add-ignore opts)
-                         (println (format "Added to %s ignore list: %s" msg-context add-ignore))
-                         (if (= target :project)
-                           (println "Use --global to add to global ignore list instead.")
-                           (println "Use --project to add to project ignore list instead.")))
-
-            remove-ignore (let [opts (select-keys expanded-options [:global :project])
-                                target (project-conf/determine-target opts (System/getProperty "user.dir"))
-                                msg-context (if (= target :project) "project" "global")]
-                            (ignore/remove-from-ignore! remove-ignore opts)
-                            (println (format "Removed from %s ignore list: %s" msg-context remove-ignore)))
-
-            list-ignored (let [opts (select-keys expanded-options [:global :project])
-                               ignored (ignore/list-ignored opts)]
-                           (if (empty? ignored)
-                             (println "No ignored specimens.")
-                             (do
-                               (println "Ignored specimens:")
-                               (doseq [specimen ignored]
-                                 (println "  " specimen)))))
-
-            clear-ignored (let [opts (select-keys expanded-options [:global :project])
-                                target (project-conf/determine-target opts (System/getProperty "user.dir"))
-                                msg-context (if (= target :project) "project" "global")]
-                            (ignore/clear-ignore! opts)
-                            (println (format "Cleared all %s ignored specimens." msg-context)))
-
-            restore-defaults (conf/restore-defaults!)
-
-            init-project (handle-init-project!)
-
-            ;; Custom checks management
-            add-checks (try
-                        (custom/add-checks add-checks (select-keys expanded-options [:name :global :project]))
-                        (catch Exception e
-                          (println "Error adding checks:" (.getMessage e))
-                          (System/exit 1)))
-
-            ;; Regular commands
-            file (proserunner expanded-options)
-            checks (ship/print-checks config)
-            help (ship/print-usage expanded-options)
-            version (ship/print-version)
-            :else (ship/print-usage expanded-options "P R O S E R U N N E R"))
-          ;; Return options for any follow-up activity, like printing time elapsed.
-          expanded-options))))
+        expanded-options (conf/default (merge opts options))]
+    (if (seq errors)
+      (error/inferior-input errors)
+      ;; Validate options, dispatch command, execute effects
+      (let [validation-result (cmd/validate-options expanded-options)]
+        (if (result/failure? validation-result)
+          ;; Validation failed - print error and exit
+          (error/inferior-input [(:error validation-result)])
+          ;; Valid options - dispatch and execute
+          (let [command-result (cmd/dispatch-command expanded-options)
+                effect-result (effects/execute-command-result command-result)]
+            ;; Return options for follow-up activity (like printing time)
+            (if (result/failure? effect-result)
+              ;; Effect failed - exit with error code
+              (do
+                (System/exit 1)
+                expanded-options)
+              expanded-options)))))))
 
 (defn run
   "For development; same as main, except `run` doesn't shutdown agents."
