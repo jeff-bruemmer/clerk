@@ -28,7 +28,7 @@
   (let [p (io/file
            (str
             (System/getProperty "java.io.tmpdir")
-            (java.io.File/separator)
+            java.io.File/separator
             path))]
     (if (.exists p)
       p
@@ -39,7 +39,7 @@
 (defn ^:private filepath
   "Builds filepath to cached results."
   [dir result]
-  (io/file (str dir (java.io.File/separator) "file" (:file-hash result) ".edn")))
+  (io/file dir (str "file" (:file-hash result) ".edn")))
 
 (defn save!
   "Creates a storage directory in the OS's temp directory (if it hasn't already,
@@ -68,7 +68,7 @@
   "Checks the storage directory for revelant cached results.
    Returns false if cache doesn't exist or is corrupted."
   [file]
-  (let [fp (str (string/join (java.io.File/separator)
+  (let [fp (str (string/join java.io.File/separator
                              [(System/getProperty "java.io.tmpdir") "proserunner-storage" "file"])
                 (hash file) ".edn")
         cache-file (io/file fp)
@@ -82,7 +82,7 @@
           ;; Delete corrupted cache file
           (try
             (.delete cache-file)
-            (catch Exception del-e
+            (catch Exception _del-e
               ;; Silently ignore deletion errors
               nil))
           false))

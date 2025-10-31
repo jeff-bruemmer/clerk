@@ -13,7 +13,7 @@
 (defn filepath
   "Builds filepath using the home directory."
   ([& args]
-   (str (string/join (java.io.File/separator) (concat [(home-dir)] args)))))
+   (string/join java.io.File/separator (concat [(home-dir)] args))))
 
 (defn check-dir
   "Infer the directory when supplied a config filepath.
@@ -24,8 +24,8 @@
       (do (println "Using default directory: " dd)
           dd)
       (-> config
-          (string/split (re-pattern (java.io.File/separator)))
+          (string/split (re-pattern java.io.File/separator))
           drop-last
           (#(string/join "/" %))
-          (str (java.io.File/separator))))))
+          (str java.io.File/separator)))))
 

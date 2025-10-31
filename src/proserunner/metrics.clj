@@ -1,5 +1,6 @@
 (ns proserunner.metrics
   "Performance metrics collection and reporting."
+  (:require [clojure.string :as str])
   (:gen-class))
 
 (def ^:private perf-stats
@@ -86,7 +87,7 @@
 
     (when (seq editor-calls)
       (println "\nEditor Performance:")
-      (println (clojure.string/join "" (repeat 80 "-")))
+      (println (str/join "" (repeat 80 "-")))
       (doseq [[editor {:keys [count total-ns]}] (sort-by (comp :total-ns second) > editor-calls)]
         (let [avg-ns (/ total-ns count)
               total-ms (/ total-ns 1000000.0)

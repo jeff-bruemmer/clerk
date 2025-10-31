@@ -3,6 +3,7 @@
   (:gen-class)
   (:require [proserunner
              [error :as error]
+             [file-utils :as file-utils]
              [system :as sys]]
             [clj-http.lite.client :as client]
             [clojure
@@ -130,11 +131,11 @@
         (catch Exception _ nil)))))
 
 (defn ^:private write-local-version!
-  "Write the current version SHA to local version file."
+  "Write the current version SHA to local version file atomically."
   [sha]
   (when sha
     (let [version-file (sys/filepath ".proserunner" ".version")]
-      (spit version-file sha))))
+      (file-utils/atomic-spit version-file sha))))
 
 (defn ^:private checks-stale?
   "Check if local checks are outdated compared to remote.
@@ -163,7 +164,7 @@
 
 (defn ^:private backup-directory!
   "Create a timestamped backup of a directory."
-  [dir-path backup-name]
+  [dir-path _backup-name]
   (let [timestamp (.format (java.text.SimpleDateFormat. "yyyyMMdd-HHmmss")
                            (java.util.Date.))
         backup-dir (str (sys/home-dir) File/separator ".proserunner-backup-" timestamp)]
@@ -192,7 +193,7 @@
       (do
         (println "No .proserunner directory found. Creating fresh installation...")
         (download-checks!)
-        (println "\n✓ Default checks installed."))
+        (println "\nDefault checks installed."))
       ;; Otherwise, backup and restore
       (do
         ;; Backup existing checks
@@ -209,16 +210,16 @@
           (println "\nDownloading fresh default checks...")
           (download-checks!)
 
-          ;; Restore preserved files if they existed
+          ;; Restore preserved files atomically if they existed
           (when config-backup
-            (spit config-file config-backup)
+            (file-utils/atomic-spit config-file config-backup)
             (println "Preserved your config.edn"))
 
           (when ignore-backup
-            (spit ignore-file ignore-backup)
+            (file-utils/atomic-spit ignore-file ignore-backup)
             (println "Preserved your ignore.edn"))
 
-          (println "\n✓ Default checks restored successfully.")
+          (println "\nDefault checks restored successfully.")
           (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))))
 
 (defn using-default-config?

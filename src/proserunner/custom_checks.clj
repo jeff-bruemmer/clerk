@@ -2,6 +2,7 @@
   "Functions for adding custom checks from external sources."
   (:gen-class)
   (:require [proserunner.project-config :as project-config]
+            [proserunner.file-utils :as file-utils]
             [proserunner.system :as sys]
             [clojure.java.io :as io]
             [clojure.string :as string]
@@ -96,10 +97,10 @@
       (edn/read-string (slurp config-path)))))
 
 (defn- write-config!
-  "Write config map to config.edn file."
+  "Write config map to config.edn file atomically."
   [config]
   (let [config-path (sys/filepath ".proserunner" "config.edn")]
-    (spit config-path (with-out-str (pprint/pprint config)))))
+    (file-utils/atomic-spit config-path (with-out-str (pprint/pprint config)))))
 
 (defn- update-config-with-checks!
   "Add new check entry to config.edn."

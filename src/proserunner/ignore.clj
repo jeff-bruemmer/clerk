@@ -3,6 +3,7 @@
   (:gen-class)
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [proserunner.file-utils :as file-utils]
             [proserunner.project-config :as project-config]
             [proserunner.system :as sys]))
 
@@ -26,11 +27,11 @@
       #{})))
 
 (defn write-ignore-file!
-  "Writes the set of ignored specimens to the ignore file."
+  "Writes the set of ignored specimens to the ignore file atomically."
   [ignored-set]
   (let [ignore-path (ignore-file-path)]
     (.mkdirs (.getParentFile (io/file ignore-path)))
-    (spit ignore-path (pr-str (vec (sort ignored-set))))))
+    (file-utils/atomic-spit ignore-path (pr-str (vec (sort ignored-set))))))
 
 ;;; Set Operations
 

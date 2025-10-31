@@ -55,7 +55,7 @@
   []
   (try
     (let [cwd (System/getProperty "user.dir")
-          manifest-path (project-conf/init-project-config! cwd)]
+          _ (project-conf/init-project-config! cwd)]
       (println "Created project configuration directory: .proserunner/")
       (println "  + .proserunner/config.edn - Project configuration")
       (println "  + .proserunner/checks/    - Directory for project-specific checks")
@@ -114,7 +114,7 @@
         expanded-options (conf/default (merge opts options))
         {:keys [file config help checks version
                 add-ignore remove-ignore list-ignored clear-ignored
-                restore-defaults add-checks name init-project parallel-files sequential-lines
+                restore-defaults add-checks init-project parallel-files sequential-lines
                 global project]} expanded-options
         ;; Validate that both parallel modes are not enabled and flag conflicts
         validation-errors (cond

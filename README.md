@@ -76,6 +76,9 @@ CLI options:
 -L, --list-ignored                 List all ignored specimens.
 -X, --clear-ignored                Clear all ignored specimens.
 -D, --restore-defaults             Restore default checks from GitHub.
+-I, --init-project                 Initialize .proserunner/ directory in current directory.
+-G, --global                       Add to global config (~/.proserunner/).
+-P, --project                      Add to project config (.proserunner/).
 ```
 
 Here's an example command to export results to EDN:
@@ -148,186 +151,88 @@ This will show:
 - Summary statistics
 - Ready-to-run commands to ignore specific issues
 
-### Managing ignored specimens
+### Project Configuration
 
-Proserunner allows you to ignore specific specimens (words or phrases) that you don't want flagged. This is useful for domain-specific terminology, proper nouns, or stylistic choices. These are stored in `~/.proserunner/ignore.edn`.
+Proserunner supports project-level configuration that can be versioned alongside your code. Initialize a project configuration with:
 
 ```bash
-# Add a specimen to the ignore list
+$ proserunner --init-project
+```
+
+This creates a `.proserunner/` directory with:
+
+- **config.edn** - Project configuration (check sources, ignores, modes)
+- **checks/** - Directory for project-specific custom checks
+
+You can configure check sources, ignore lists, and how project config merges with global config. The `.proserunner/` directory can be committed to version control, allowing teams to share prose guidelines.
+
+For complete details on project configuration options, see [docs/checks.md#project-configuration](docs/checks.md#project-configuration).
+
+### Managing ignored specimens
+
+Ignore specific words or phrases that you don't want flagged:
+
+```bash
+# Add to ignore list
 $ proserunner --add-ignore "hopefully"
-Added to ignore list: hopefully
-Ignored specimens: 1
 
-# List all ignored specimens
+# List ignored specimens
 $ proserunner --list-ignored
-Ignored specimens:
-   hopefully
 
-# Remove a specimen from the ignore list
+# Remove from ignore list
 $ proserunner --remove-ignore "hopefully"
-Removed from ignore list: hopefully
-Ignored specimens: 0
 
 # Clear all ignored specimens
 $ proserunner --clear-ignored
-Cleared all ignored specimens.
 ```
 
-The ignore list is stored in `~/.proserunner/ignore.edn`. You can also edit this file directly:
+Proserunner supports both global (`~/.proserunner/ignore.edn`) and project-level (`.proserunner/config.edn`) ignore lists. Use `--global` or `--project` flags to specify scope.
 
-```clojure
-;; ~/.proserunner/ignore.edn
-#{"hopefully"
-  "FIX THIS"
-  "my-custom-term"}
-```
+For complete details, see [docs/checks.md#ignoring-specimens](docs/checks.md#ignoring-specimens).
 
 ### Dialogue handling
 
-By default, Proserunner ignores text within quotation marks (dialogue) when checking prose.
-
-To include dialogue in your checks, use the `-d` or `--check-dialogue` flag:
+By default, Proserunner ignores text within quotation marks to avoid flagging intentional dialogue choices. Use `--check-dialogue` to include dialogue in checks:
 
 ```bash
 $ proserunner -f document.md --check-dialogue
 ```
 
-**Example:**
-
-Given this text:
-
-```markdown
-She said "hopefully we'll arrive soon."
-Hopefully this will be checked.
-```
-
-Default behavior (dialogue ignored):
-
-- "hopefully" in the first line is ignored (it's in dialogue)
-- "hopefully" in the second line is flagged (it's narrative)
-
-With `--check-dialogue`:
-
-- Both instances of "hopefully" are flagged
+For more details and examples, see [docs/checks.md#dialogue-handling](docs/checks.md#dialogue-handling).
 
 ### Restoring default checks
 
-If you've modified your default checks and want to restore them to their original state, use the `--restore-defaults` flag. For more information about managing baselines, see [docs/baseline-management.md](docs/baseline-management.md).
+If you've modified your default checks and want to restore them to their original state:
 
 ```bash
 $ proserunner --restore-defaults
-
-=== Restoring Default Checks ===
-
-Backing up existing checks...
-Created backup at: /home/user/.proserunner-backup-20251026-110441
-
-Downloading fresh default checks...
-Downloading default checks from:  https://github.com/jeff-bruemmer/proserunner-default-checks/archive/main.zip .
-Preserved your config.edn
-Preserved your ignore.edn
-
-✓ Default checks restored successfully.
-
-Your custom checks in ~/.proserunner/custom/ were not modified.
 ```
 
-This command:
+This creates a timestamped backup, downloads fresh default checks from GitHub, and preserves your custom checks and configuration files.
 
-- Creates a timestamped backup of your current default checks in `~/.proserunner-backup-TIMESTAMP/`
-- Downloads fresh default checks from GitHub
-- Preserves your `config.edn` and `ignore.edn` files
-- Leaves your custom checks in `~/.proserunner/custom/` untouched
+For complete details, see [docs/checks.md#restoring-defaults](docs/checks.md#restoring-defaults).
 
 ## Adding custom checks
 
-You can easily import custom checks from a local directory or GitHub repository using the `--add-checks` command. For complete details on creating checks, see [docs/checks.md](docs/checks.md).
-
-### Import from local directory
+Import custom checks from a local directory:
 
 ```bash
-proserunner --add-checks ~/my-project/style-checks
+# Add to global config
+proserunner --add-checks ~/my-checks --global
+
+# Add to project config
+proserunner --add-checks ~/my-checks --project
+
+# Specify custom directory name
+proserunner --add-checks ./checks --name company-style
 ```
 
-This will:
-
-- Copy all `.edn` check files from the source directory to `~/.proserunner/custom/style-checks/`
-- Automatically update `~/.proserunner/config.edn` to enable the new checks
-- Display which checks were added
-
-### Import from GitHub
-
-```bash
-proserunner --add-checks https://github.com/company/writing-style
-```
-
-This will:
-
-- Clone the repository
-- Extract all `.edn` check files
-- Copy them to `~/.proserunner/custom/writing-style/`
-- Update your config automatically
-
-### Custom directory name
-
-Use the `--name` flag to specify a custom directory name:
-
-```bash
-proserunner --add-checks ./checks --name my-company
-```
-
-The checks will be installed to `~/.proserunner/custom/my-company/` instead of using the source directory name.
-
-### Check file format
-
-Custom check files must be in EDN format. See [docs/checks.md](docs/checks.md) for details on available check types and formats.
+This automatically copies `.edn` check files and updates your configuration. For complete details on adding checks, creating custom checks, and check file formats, see [docs/checks.md#adding-checks](docs/checks.md#adding-checks).
 
 ## Custom editors
 
-Proserunner supports custom editor types through a dynamic registry system. This allows you to extend Proserunner with your own check types without modifying the core codebase. For detailed information on all available editor types, see [docs/checks.md](docs/checks.md).
+Proserunner supports custom editor types through a dynamic registry system. This allows you to extend Proserunner with entirely new check types without modifying the core codebase.
 
-To create a custom editor, add a Clojure file to `~/.proserunner/custom/` that registers your editor function:
+Proserunner includes 6 built-in editor types: `existence`, `case`, `recommender`, `case-recommender`, `repetition`, and `regex`.
 
-```clojure
-;; ~/.proserunner/custom/my-editor.clj
-(ns my-editor
-  (:require [editors.registry :as registry]
-            [proserunner.text :as text]))
-
-(defn my-proofread
-  "Custom editor function. Takes a line and check, returns updated line."
-  [line check]
-  (let [issue-found? (some-logic line check)]
-    (if issue-found?
-      (assoc line
-             :issue? true
-             :issues (conj (:issues line)
-                          (text/->Issue (:file line)
-                                       (:name check)
-                                       (:kind check)
-                                       "matched-text"
-                                       42
-                                       (:message check))))
-      line)))
-
-;; Register the editor
-(registry/register-editor! "my-check-type" my-proofread)
-```
-
-Then create a check file in `~/.proserunner/default/` or `~/.proserunner/custom/` that uses your custom editor:
-
-```clojure
-;; ~/.proserunner/custom/my-check.edn
-{:name "My Custom Check"
- :kind "my-check-type"
- :message "Custom issue found."
- :enabled true}
-```
-
-Editor functions must have the signature `[line check] -> line`, where:
-
-- `line` is a `Line` record from `proserunner.text`
-- `check` is a `Check` record from `proserunner.checks`
-- Return the line unchanged if no issue, or with `:issue?` set to `true` and updated `:issues` vector
-
-Proserunner includes 6 built-in editor types: `existence`, `case`, `recommender`, `case-recommender`, `repetition`, and `regex`. See [docs/checks.md](docs/checks.md) for details on these types.
+For details on creating custom editors and using built-in types, see [docs/checks.md#custom-editors](docs/checks.md#custom-editors).

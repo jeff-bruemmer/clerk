@@ -134,7 +134,7 @@
                            (:code? %))
                       (and (not check-dialogue)
                            (:dialogue? %))))))
-     (catch java.io.FileNotFoundException e
+     (catch java.io.FileNotFoundException _e
        (println (str "Error: File not found: " filepath))
        [])
      (catch java.io.IOException e

@@ -329,6 +329,113 @@
           "./nonexistent"
           @test-project-root)))))
 
+(deftest resolve-check-source-prevents-path-traversal
+  (testing "Prevents directory traversal with relative paths"
+    (let [project-root @test-project-root
+          ;; Create a directory outside project root
+          outside-dir (str (System/getProperty "java.io.tmpdir")
+                          File/separator
+                          "outside-project-"
+                          (System/currentTimeMillis))
+          _ (.mkdirs (io/file outside-dir))]
+      (try
+        ;; Try to reference a path outside project using ../
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"Path traversal detected"
+             (project-config/resolve-check-source
+              "../../../outside-project"
+              project-root)))
+        (finally
+          (.delete (io/file outside-dir))))))
+
+  (testing "Allows absolute paths outside project root"
+    (let [outside-dir (str (System/getProperty "java.io.tmpdir")
+                          File/separator
+                          "absolute-outside-"
+                          (System/currentTimeMillis))
+          _ (.mkdirs (io/file outside-dir))]
+      (try
+        ;; Absolute paths should be allowed (not validated against project root)
+        (let [result (project-config/resolve-check-source outside-dir nil)]
+          (is (= :local (:type result)))
+          (is (some? (:path result))))
+        (finally
+          (.delete (io/file outside-dir)))))))
+
+(deftest resolve-check-source-handles-symlinks
+  (testing "Follows symlinks within project root"
+    (let [project-root @test-project-root
+          real-dir (str project-root File/separator "real-checks")
+          symlink-path (str project-root File/separator "symlink-checks")
+          _ (.mkdirs (io/file real-dir))]
+      (try
+        ;; Create symlink (skip test if symlinks not supported)
+        (try
+          (java.nio.file.Files/createSymbolicLink
+           (.toPath (io/file symlink-path))
+           (.toPath (io/file real-dir))
+           (into-array java.nio.file.attribute.FileAttribute []))
+          (let [result (project-config/resolve-check-source "./symlink-checks" project-root)]
+            (is (= :local (:type result)))
+            (is (some? (:path result))))
+          (catch UnsupportedOperationException _
+            ;; Symlinks not supported on this platform, skip test
+            (is true "Symlinks not supported, skipping test")))
+        (finally
+          (.delete (io/file symlink-path))
+          (.delete (io/file real-dir))))))
+
+  (testing "Prevents symlink escape outside project root"
+    (let [project-root @test-project-root
+          outside-dir (str (System/getProperty "java.io.tmpdir")
+                          File/separator
+                          "outside-symlink-"
+                          (System/currentTimeMillis))
+          symlink-path (str project-root File/separator "escape-link")
+          _ (.mkdirs (io/file outside-dir))]
+      (try
+        ;; Create symlink pointing outside project
+        (try
+          (java.nio.file.Files/createSymbolicLink
+           (.toPath (io/file symlink-path))
+           (.toPath (io/file outside-dir))
+           (into-array java.nio.file.attribute.FileAttribute []))
+          ;; Canonical path resolution should detect the escape
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #"Path traversal detected"
+               (project-config/resolve-check-source "./escape-link" project-root)))
+          (catch UnsupportedOperationException _
+            ;; Symlinks not supported, skip test
+            (is true "Symlinks not supported, skipping test")))
+        (finally
+          (.delete (io/file symlink-path))
+          (letfn [(delete-recursively [^java.io.File file]
+                    (when (.exists file)
+                      (when (.isDirectory file)
+                        (doseq [child (.listFiles file)]
+                          (delete-recursively child)))
+                      (.delete file)))]
+            (delete-recursively (io/file outside-dir))))))))
+
+(deftest read-manifest-handles-permissions
+  (testing "Handles permission-denied when reading manifest"
+    (let [project-root @test-project-root
+          proserunner-dir (str project-root File/separator ".proserunner")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          _ (.mkdirs (io/file proserunner-dir))
+          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          manifest-file (io/file manifest-path)]
+      ;; Make file unreadable (may not work on all platforms)
+      (when (.setReadable manifest-file false false)
+        (try
+          (is (thrown? Exception
+                      (project-config/read-manifest manifest-path)))
+          (finally
+            ;; Restore permissions for cleanup
+            (.setReadable manifest-file true false)))))))
+
 ;;; Integration Tests
 
 (deftest load-project-config-full-workflow

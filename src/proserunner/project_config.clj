@@ -5,6 +5,7 @@
             [clojure.pprint :as pprint]
             [clojure.string :as string]
             [proserunner.config :as config]
+            [proserunner.file-utils :as file-utils]
             [proserunner.system :as sys])
   (:import java.io.File))
 
@@ -196,6 +197,57 @@
                       e)))))
 
 ;;; Config Merging
+;;;
+;;; The config merge pipeline combines global (~/.proserunner/) and project (.proserunner/)
+;;; configurations based on project settings. This section handles the complex merging logic.
+;;;
+;;; MERGE PIPELINE OVERVIEW:
+;;;
+;;; 1. Load Global Config (load-global-config)
+;;;    - Reads ~/.proserunner/config.edn → :checks (list of check definitions)
+;;;    - Reads ~/.proserunner/ignore.edn → :ignore (set of ignored specimens)
+;;;    - Global :checks contain directory paths relative to ~/.proserunner/
+;;;
+;;; 2. Parse Project Manifest (read-manifest → parse-manifest)
+;;;    - Reads .proserunner/config.edn in project directory
+;;;    - Contains :check-sources (vector of source specs like ["default" "checks" "./path"])
+;;;    - Contains :ignore (set), :ignore-mode (:extend/:replace), :config-mode (:merged/:project-only)
+;;;    - Validates all fields with helpful error messages
+;;;
+;;; 3. Merge Configs (merge-configs)
+;;;    - If :config-mode is :project-only → use only project config
+;;;    - If :config-mode is :merged:
+;;;      - Merge :ignore sets based on :ignore-mode (:extend unions, :replace uses only project)
+;;;      - Preserve project's :check-sources for later resolution
+;;;      - Keep global :checks available for potential inclusion
+;;;
+;;; 4. Resolve Check Sources (resolve-check-sources)
+;;;    - Converts abstract :check-sources specs into concrete check definitions
+;;;    - "default" → signals to include global checks
+;;;    - "checks" → resolves to .proserunner/checks/ in project root
+;;;    - "./path" or "/path" → resolves to local directory (with path traversal protection)
+;;;    - Each resolved source becomes a check definition with :directory and :files
+;;;
+;;; 5. Build Final Config (build-project-config)
+;;;    - Takes resolved project checks and merges with global checks if "default" is specified
+;;;    - Global checks get their paths converted to absolute (make-global-checks-absolute)
+;;;    - Returns final config with :checks, :ignore, and :source metadata
+;;;
+;;; EXAMPLE FLOWS:
+;;;
+;;; Example 1: Project with default checks + project checks
+;;;   Global:  {:checks [{:directory "default" :files ["cliches"]}] :ignore #{"foo"}}
+;;;   Project: {:check-sources ["default" "checks"] :ignore #{"bar"} :ignore-mode :extend}
+;;;   Result:  {:checks [global-checks... project-checks...] :ignore #{"foo" "bar"}}
+;;;
+;;; Example 2: Project-only configuration
+;;;   Global:  {:checks [...] :ignore #{"foo"}}
+;;;   Project: {:check-sources ["checks"] :ignore #{"bar"} :config-mode :project-only}
+;;;   Result:  {:checks [project-checks-only] :ignore #{"bar"}}
+;;;
+;;; Example 3: Local check directory
+;;;   Project: {:check-sources ["./custom-checks"]}
+;;;   Result:  Resolves ./custom-checks relative to project root, includes those checks
 
 (defn- merge-ignores
   "Merges ignore sets based on ignore-mode."
@@ -236,18 +288,32 @@
       (string/starts-with? path "~")))
 
 (defn- resolve-local-path
-  "Resolves a local path to absolute path, validating it exists."
+  "Resolves a local path to absolute path, validating it exists and is safe.
+   For relative paths, ensures the resolved path is within project-root to prevent directory traversal."
   [source project-root]
-  (let [^File source-file (if (relative-path? source)
-                            (io/file project-root source)
-                            (io/file source))
-        absolute-path (.getAbsolutePath source-file)]
+  (let [source-file (if (relative-path? source)
+                      (io/file project-root source)
+                      (io/file source))
+        canonical-path (.getCanonicalPath source-file)]
+
+    ;; Check path traversal for relative paths
+    (when (and (relative-path? source) project-root)
+      (let [canonical-root (.getCanonicalPath (io/file project-root))]
+        (when-not (.startsWith canonical-path canonical-root)
+          (throw (ex-info "Path traversal detected"
+                         {:source source
+                          :resolved-path canonical-path
+                          :project-root canonical-root
+                          :type :path-traversal})))))
+
+    ;; Check existence
     (when-not (.exists source-file)
-      (throw (ex-info (file-not-found-error source absolute-path)
-                      {:source source
-                       :resolved-path absolute-path
-                       :type :file-not-found})))
-    absolute-path))
+      (throw (ex-info (file-not-found-error source canonical-path)
+                     {:source source
+                      :resolved-path canonical-path
+                      :type :file-not-found})))
+
+    canonical-path))
 
 (defn resolve-check-source
   "Resolves a check source specification to a concrete source map.
@@ -378,14 +444,19 @@
 (defn load-project-config
   "Main entry point for loading project configuration.
 
-   1. Searches for .proserunner/config.edn starting from start-dir
-   2. If found, parses and validates it
-   3. Loads global config from ~/.proserunner/
-   4. Merges global and project configs based on project settings
-   5. Resolves check sources into check definitions
-   6. Returns the final configuration with :checks, :ignore, and :source
+   Orchestrates the entire config merge pipeline (see 'Config Merging' section above):
 
-   If no project manifest is found, returns global config with :source :global."
+   1. Searches for .proserunner/config.edn starting from start-dir
+   2. If found, parses and validates it (parse-manifest)
+   3. Loads global config from ~/.proserunner/ (load-global-config)
+   4. Merges global and project configs based on project settings (merge-configs)
+   5. Resolves check sources into check definitions (resolve-check-sources)
+   6. Builds final configuration with merged checks (build-project-config)
+   7. Returns the final configuration with :checks, :ignore, and :source
+
+   If no project manifest is found, returns global config with :source :global.
+
+   See the 'Config Merging' section documentation for detailed examples and flow diagrams."
   [start-dir]
   (if-let [{:keys [manifest-path project-root]} (find-manifest start-dir)]
     (let [project-config (read-manifest manifest-path)
@@ -443,8 +514,6 @@
       :project
       :global)))
 
-;;; Project Config I/O
-
 (defn read-project-config
   "Read the project .proserunner/config.edn file.
    Returns the parsed config map, or nil if file doesn't exist."
@@ -454,10 +523,10 @@
       (edn/read-string (slurp config-path)))))
 
 (defn write-project-config!
-  "Write config map to project .proserunner/config.edn file."
+  "Write config map to project .proserunner/config.edn file atomically."
   [project-root config]
   (let [config-path (project-config-path project-root)]
-    (spit config-path (with-out-str (pprint/pprint config)))))
+    (file-utils/atomic-spit config-path (with-out-str (pprint/pprint config)))))
 
 ;;; Project Initialization
 
@@ -486,9 +555,9 @@
          config-file (manifest-path dir)]
      ;; Create directories
      (.mkdirs checks-dir)
-     ;; Write config file
-     (spit config-file
-           (str ";; Proserunner Project Configuration\n"
-                ";; See: https://github.com/jeff-bruemmer/proserunner\n\n"
-                (with-out-str (pprint/pprint manifest-template))))
+     ;; Write config file atomically
+     (file-utils/atomic-spit (.getAbsolutePath config-file)
+                             (str ";; Proserunner Project Configuration\n"
+                                  ";; See: https://github.com/jeff-bruemmer/proserunner\n\n"
+                                  (with-out-str (pprint/pprint manifest-template))))
      (.getAbsolutePath config-file))))
