@@ -28,6 +28,7 @@
    ["-h" "--help" "Prints this help message."]
    ["-i" "--ignore IGNORE" "EDN file listing specimens to ignore." :default "ignore"]
    ["-n" "--no-cache" "Don't use cached results." :default false]
+   ["-s" "--skip-ignore" "Skip all ignore lists (global and project)." :default false]
    ["-o" "--output FORMAT" "Output type: group, edn, json, table, verbose."
     :default "group"]
    ["-p" "--parallel-files" "Process multiple files in parallel."

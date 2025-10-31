@@ -68,6 +68,7 @@ CLI options:
 -h, --help                         Prints this help message.
 -i, --ignore           IGNORE      EDN file listing specimens to ignore.
 -n, --no-cache                     Don't use cached results.
+-s, --skip-ignore                  Skip all ignore lists (global and project).
 -o, --output           FORMAT      Output type: group, edn, json, table, verbose.
 -t, --timer                        Print time elapsed.
 -v, --version                      Prints version number.
@@ -184,9 +185,12 @@ $ proserunner --remove-ignore "hopefully"
 
 # Clear all ignored specimens
 $ proserunner --clear-ignored
+
+# Temporarily skip all ignore lists
+$ proserunner -f document.md --skip-ignore
 ```
 
-Proserunner supports both global (`~/.proserunner/ignore.edn`) and project-level (`.proserunner/config.edn`) ignore lists. Use `--global` or `--project` flags to specify scope.
+Proserunner supports both global (`~/.proserunner/ignore.edn`) and project-level (`.proserunner/config.edn`) ignore lists. Use `--global` or `--project` flags to specify scope. The `--skip-ignore` flag temporarily bypasses all ignore lists without modifying them, useful for seeing all issues including ignored ones.
 
 For complete details, see [docs/checks.md#ignoring-specimens](docs/checks.md#ignoring-specimens).
 

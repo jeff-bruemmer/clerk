@@ -146,6 +146,43 @@
               ;; Ignore cleanup errors
               nil)))))))
 
+(defn- verify-project-config
+  "Helper to verify project config ignore settings."
+  [temp-project expected-source expected-ignore msg]
+  (let [loaded-config (binding [*out* (java.io.StringWriter.)]
+                        (project-config/load-project-config temp-project))]
+    (is (= expected-source (:source loaded-config)))
+    (is (= expected-ignore (:ignore loaded-config)) msg)))
+
+(defn- with-temp-project-env
+  "Execute test-fn with temporary project and home directories set up."
+  [test-name-suffix test-fn]
+  (let [original-dir (System/getProperty "user.dir")
+        original-home (System/getProperty "user.home")
+        temp-project (str (System/getProperty "java.io.tmpdir")
+                         File/separator
+                         "proserunner-" test-name-suffix "-"
+                         (System/currentTimeMillis))
+        proserunner-dir (str temp-project File/separator ".proserunner")
+        temp-home (str (System/getProperty "java.io.tmpdir")
+                      File/separator
+                      "proserunner-test-home-" test-name-suffix "-"
+                      (System/currentTimeMillis))
+        temp-home-config (str temp-home File/separator ".proserunner")]
+    (try
+      (test-fn temp-project proserunner-dir temp-home temp-home-config)
+      (finally
+        (System/setProperty "user.dir" original-dir)
+        (System/setProperty "user.home" original-home)
+        (try
+          (when (.exists (io/file temp-project))
+            (doseq [f (reverse (file-seq (io/file temp-project)))]
+              (.delete f)))
+          (when (.exists (io/file temp-home))
+            (doseq [f (reverse (file-seq (io/file temp-home)))]
+              (.delete f)))
+          (catch Exception _e nil))))))
+
 (deftest global-and-project-ignores-are-both-used
   (testing "Both global and project ignores are used when ignore-mode is :extend"
     ;; This test verifies that specimens in BOTH the global ignore list
@@ -190,15 +227,10 @@
         (System/setProperty "user.dir" temp-project)
 
         ;; Load project config - should merge global and project ignores
-        (let [loaded-config (binding [*out* (java.io.StringWriter.)]
-                              (project-config/load-project-config temp-project))]
-
-          ;; Verify that BOTH global and project ignores are included
-          (is (= :project (:source loaded-config))
-              "Project config should be loaded")
-          (is (= #{"global-ignore-1" "global-ignore-2" "project-ignore-1" "project-ignore-2"}
-                 (:ignore loaded-config))
-              "Ignore set should include BOTH global and project ignores when :ignore-mode is :extend"))
+        (verify-project-config temp-project
+                              :project
+                              #{"global-ignore-1" "global-ignore-2" "project-ignore-1" "project-ignore-2"}
+                              "Ignore set should include BOTH global and project ignores when :ignore-mode is :extend")
 
         (finally
           ;; Restore original directories
@@ -220,20 +252,8 @@
   (testing "Only project ignores are used when ignore-mode is :replace"
     ;; This test verifies that when :ignore-mode is :replace,
     ;; only the project ignores are used (global ignores are ignored)
-    (let [original-dir (System/getProperty "user.dir")
-          original-home (System/getProperty "user.home")
-          temp-project (str (System/getProperty "java.io.tmpdir")
-                           File/separator
-                           "proserunner-replace-test-"
-                           (System/currentTimeMillis))
-          proserunner-dir (str temp-project File/separator ".proserunner")
-          temp-home (str (System/getProperty "java.io.tmpdir")
-                        File/separator
-                        "proserunner-test-home-replace-"
-                        (System/currentTimeMillis))
-          temp-home-config (str temp-home File/separator ".proserunner")]
-
-      (try
+    (with-temp-project-env "replace-test"
+      (fn [temp-project proserunner-dir temp-home temp-home-config]
         ;; Set up temp home with global ignores
         (System/setProperty "user.home" temp-home)
         (.mkdirs (io/file temp-home-config "default"))
@@ -254,14 +274,67 @@
 
         (System/setProperty "user.dir" temp-project)
 
-        ;; Load project config
-        (let [loaded-config (binding [*out* (java.io.StringWriter.)]
-                              (project-config/load-project-config temp-project))]
+        ;; Load project config and verify ONLY project ignores are included
+        (verify-project-config temp-project
+                              :project
+                              #{"project-ignore-only"}
+                              "Ignore set should include ONLY project ignores when :ignore-mode is :replace"))))))
 
-          ;; Verify that ONLY project ignores are included (global ignores excluded)
-          (is (= :project (:source loaded-config)))
-          (is (= #{"project-ignore-only"} (:ignore loaded-config))
-              "Ignore set should include ONLY project ignores when :ignore-mode is :replace"))
+(deftest skip-ignore-flag-skips-all-ignores
+  (testing "--skip-ignore flag bypasses both global and project ignores"
+    (let [original-dir (System/getProperty "user.dir")
+          original-home (System/getProperty "user.home")
+          temp-project (str (System/getProperty "java.io.tmpdir")
+                           File/separator
+                           "proserunner-skip-ignore-test-"
+                           (System/currentTimeMillis))
+          proserunner-dir (str temp-project File/separator ".proserunner")
+          temp-home (str (System/getProperty "java.io.tmpdir")
+                        File/separator
+                        "proserunner-test-home-skip-"
+                        (System/currentTimeMillis))
+          temp-home-config (str temp-home File/separator ".proserunner")]
+
+      (try
+        ;; Set up temp home with global ignores and a dummy check file
+        (System/setProperty "user.home" temp-home)
+        (.mkdirs (io/file temp-home-config "default"))
+        (spit (str temp-home-config File/separator "config.edn")
+              (pr-str {:checks [{:name "default" :directory "default" :files ["dummy"]}]}))
+        (spit (str temp-home-config File/separator "ignore.edn")
+              (pr-str #{"global-ignore"}))
+        ;; Create a dummy check file
+        (spit (str temp-home-config File/separator "default" File/separator "dummy.edn")
+              (pr-str {:name "dummy-check"
+                       :kind "existence"
+                       :message "Test message"
+                       :explanation "Test explanation"
+                       :specimens ["test-specimen"]}))
+
+        ;; Create project with project ignores
+        (.mkdirs (io/file temp-project ".git"))
+        (.mkdirs (io/file proserunner-dir "checks"))
+        (spit (str proserunner-dir File/separator "config.edn")
+              (pr-str {:check-sources ["default"]
+                       :ignore #{"project-ignore"}
+                       :ignore-mode :extend
+                       :config-mode :merged}))
+
+        (System/setProperty "user.dir" temp-project)
+
+        ;; Test with skip-ignore flag
+        (let [input-with-skip (vet/make-input {:file "resources"
+                                               :config (str temp-home-config File/separator "config.edn")
+                                               :skip-ignore true})]
+          (is (= #{} (:project-ignore input-with-skip))
+              "--skip-ignore should result in empty ignore set"))
+
+        ;; Test without skip-ignore flag (should use merged ignores)
+        (let [input-without-skip (vet/make-input {:file "resources"
+                                                  :config (str temp-home-config File/separator "config.edn")
+                                                  :skip-ignore false})]
+          (is (= #{"global-ignore" "project-ignore"} (:project-ignore input-without-skip))
+              "Without --skip-ignore, both global and project ignores should be used"))
 
         (finally
           (System/setProperty "user.dir" original-dir)
@@ -273,4 +346,4 @@
             (when (.exists (io/file temp-home))
               (doseq [f (reverse (file-seq (io/file temp-home)))]
                 (.delete f)))
-            (catch Exception _e nil))))))))
+            (catch Exception _e nil)))))))

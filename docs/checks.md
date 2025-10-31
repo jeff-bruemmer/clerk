@@ -159,7 +159,12 @@ $ proserunner --remove-ignore "hopefully"
 
 # Clear all ignored specimens
 $ proserunner --clear-ignored
+
+# Temporarily skip all ignore lists
+$ proserunner -f document.md --skip-ignore
 ```
+
+The `--skip-ignore` flag allows you to run Proserunner without applying any ignore filters, showing all issues including ignored ones. This is useful when you want to review all potential issues without permanently clearing your ignore lists.
 
 ### Manual editing
 

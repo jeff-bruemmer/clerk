@@ -131,7 +131,7 @@
   "Input combines user-defined options and arguments
   with the relevant cached results."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue exclude no-cache]} options
+  (let [{:keys [file config output code-blocks check-dialogue exclude no-cache skip-ignore]} options
         exclude-patterns (if exclude [exclude] [])
         {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
 
@@ -139,10 +139,13 @@
         project-config (project-conf/load-project-config current-dir)
         {:keys [config check-dir]} (load-config-and-dir config project-config)
 
+        ;; Use empty set for project-ignore if skip-ignore flag is set
+        project-ignore (if skip-ignore #{} (:ignore project-config))
+
         updated-options (assoc options
                               :config config
                               :check-dir check-dir
-                              :project-ignore (:ignore project-config))]
+                              :project-ignore project-ignore)]
     (map->Input
      {:file file
       :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel-files?)
@@ -153,7 +156,7 @@
       :output output
       :no-cache no-cache
       :parallel-lines parallel-lines?
-      :project-ignore (:ignore project-config)})))
+      :project-ignore project-ignore})))
 
 ;;;; Core functions for vetting a lines of text with each check.
 
