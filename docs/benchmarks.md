@@ -1,83 +1,46 @@
-# Performance benchmarks
-
-Proserunner includes a comprehensive benchmark suite to detect performance regressions and measure optimization impacts.
+# Benchmarks
 
 ## Running benchmarks
 
-Run all benchmarks (editor + integration):
-
 ```bash
+# All benchmarks
 clojure -M:benchmark
-```
 
-Run only editor benchmarks (fast, no files required):
-
-```bash
+# Editor benchmarks only (fast)
 clojure -M:benchmark --editors-only
-```
 
-Run only integration benchmarks (tests with real files):
-
-```bash
+# Integration benchmarks only
 clojure -M:benchmark --integration-only
-```
 
-Run parallel processing benchmarks:
-
-```bash
+# Parallel processing
 clojure -M:parallel-bench
-```
 
-Run comprehensive scaling benchmarks (file size and count):
-
-```bash
+# Scaling tests
 clojure -M:scaling-bench
 ```
 
 ## Baseline tracking
 
-See [baseline-management.md](baseline-management.md) for tracking performance baselines and detecting regressions.
+See [baseline-management.md](baseline-management.md) for performance tracking and regression detection.
 
-## Adding custom benchmarks
+## Custom benchmarks
 
-To add new benchmarks, create a namespace in `benchmarks/` and use the benchmark utilities:
+Create namespace in `benchmarks/`:
 
 ```clojure
 (ns benchmarks.my-benchmark
-  (:require [benchmarks.core :as bench]
-            [proserunner.vet :as vet])
-  (:gen-class))
+  (:require [benchmarks.core :as bench]))
 
-(defn my-benchmark
-  "Benchmark description."
-  []
+(defn my-benchmark []
   (bench/run-benchmark
-   "Benchmark Name"
-   "Description of what is being tested"
-   #(do-something)  ; Function to benchmark
-   {:iterations 10
-    :warmup 3
-    :throughput-fn (fn [result mean-ms] (/ items (/ mean-ms 1000)))
-    :throughput-unit "items/sec"}))
-
-(defn -main
-  "Entry point for benchmark."
-  [& args]
-  (let [result (my-benchmark)]
-    (bench/print-summary [result]))
-  (shutdown-agents))
+   "Name"
+   "Description"
+   #(do-something)
+   {:iterations 10 :warmup 3}))
 ```
 
-Then add an alias in `deps.edn`:
+Add alias to `deps.edn`:
 
 ```clojure
-:my-bench
-{:extra-paths ["."]
- :main-opts ["-m" "benchmarks.my-benchmark"]}
-```
-
-Run your benchmark with:
-
-```bash
-clojure -M:my-bench
+:my-bench {:main-opts ["-m" "benchmarks.my-benchmark"]}
 ```
