@@ -34,21 +34,6 @@ Run comprehensive scaling benchmarks (file size and count):
 clojure -M:scaling-bench
 ```
 
-## Performance metrics
-
-Get detailed performance metrics for any proserunner run:
-
-```bash
-clojure -M:run -f <file> --metrics
-```
-
-The `--metrics` flag automatically disables caching and provides:
-
-- Total execution time
-- Files and lines processed
-- Throughput (lines/sec)
-- Average time per file
-
 ## Baseline tracking
 
 See [baseline-management.md](baseline-management.md) for tracking performance baselines and detecting regressions.

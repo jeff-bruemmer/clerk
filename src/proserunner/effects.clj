@@ -10,6 +10,8 @@
              [config :as conf]
              [custom-checks :as custom]
              [ignore :as ignore]
+             #_{:clj-kondo/ignore [:unused-namespace]}
+             [process :as process]  ; Required for AOT compilation (loaded via requiring-resolve at line 97)
              [project-config :as project-conf]
              [result :as result]
              [shipping :as ship]

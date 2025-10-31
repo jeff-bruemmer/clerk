@@ -6,7 +6,6 @@
              [effects :as effects]
              [error :as error]
              [fmt :as fmt]
-             [process :as process]
              [result :as result]
              [shipping :as ship]
              [text :as text]]
@@ -36,7 +35,6 @@
    ["-S" "--sequential-lines" "Process lines sequentially."
     :default false]
    ["-t" "--timer" "Print time elapsed." :default false]
-   ["-m" "--metrics" "Show performance metrics." :default false]
    ["-v" "--version" "Prints version number."]
    ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list."]
    ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]

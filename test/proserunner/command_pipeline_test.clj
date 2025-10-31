@@ -169,7 +169,7 @@
   (testing "Running the same pipeline twice produces same results"
     (let [opts {:version true}
           run-pipeline (fn []
-                         (let [validation (cmd/validate-options opts)
+                         (let [_validation (cmd/validate-options opts)
                                cmd-result (cmd/dispatch-command opts)]
                            cmd-result))
           result1 (run-pipeline)
@@ -183,6 +183,6 @@
           cmd-result (cmd/dispatch-command opts)]
       (is (= :default (:command cmd-result)))
       (is (some? (:effects cmd-result)))
-      (let [[effect-type effect-opts title] (first (:effects cmd-result))]
+      (let [[effect-type _effect-opts title] (first (:effects cmd-result))]
         (is (= :help/print effect-type))
         (is (= "P R O S E R U N N E R" title))))))

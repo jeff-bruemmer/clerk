@@ -7,7 +7,6 @@
    [proserunner
     [checks :as checks]
     [config :as conf]
-    [metrics :as metrics]
     [path-ignore :as path-ignore]
     [project-config :as project-conf]
     [storage :as store]
@@ -110,8 +109,6 @@
   (let [ignore-info (build-ignore-patterns file exclude-patterns)
         files (filter-valid-files file ignore-info)
         fetch-fn #(text/fetch! code-blocks % check-dialogue)]
-    (dotimes [_ (count files)]
-      (metrics/record-file!))
     (process-files files fetch-fn parallel?)))
 
 (defn- determine-parallel-settings
@@ -138,8 +135,8 @@
         exclude-patterns (if exclude [exclude] [])
         {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
 
-        file-path (if (string? file) file (str file))
-        project-config (project-conf/load-project-config file-path)
+        current-dir (System/getProperty "user.dir")
+        project-config (project-conf/load-project-config current-dir)
         {:keys [config check-dir]} (load-config-and-dir config project-config)
 
         updated-options (assoc options
@@ -194,7 +191,6 @@
   "Takes an input, and returns the results of
   running the configured checks on each line of text in the file."
   [{:keys [file lines config checks output parallel-lines]}]
-  (metrics/record-lines! (count lines))
   (store/map->Result {:lines lines
                       :lines-hash (hash lines)
                       :file-hash (hash file)

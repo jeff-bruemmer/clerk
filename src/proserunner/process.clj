@@ -5,7 +5,6 @@
   core.clj to avoid circular dependencies with the effects system."
   (:gen-class)
   (:require [proserunner
-             [metrics :as metrics]
              [shipping :as ship]
              [vet :as vet]]))
 
@@ -15,20 +14,9 @@
   "Proserunner takes options and vets a text with the supplied checks."
   [options]
   (try
-    (let [opts (if (:metrics options)
-                 (do
-                   (metrics/reset-metrics!)
-                   (metrics/start-timing!)
-                   ;; Force no-cache when metrics enabled
-                   (assoc options :no-cache true))
-                 options)
-          result (->> opts
-                      (vet/compute-or-cached)
-                      (ship/out))]
-      (when (:metrics options)
-        (metrics/end-timing!)
-        (metrics/print-metrics))
-      result)
+    (->> options
+         (vet/compute-or-cached)
+         (ship/out))
     (catch java.util.regex.PatternSyntaxException e
       (println "Error: Invalid regex pattern in check definition.")
       (println "Details:" (.getMessage e))

@@ -130,11 +130,47 @@
   (or (.isAbsolute (io/file path))
       (clojure.string/starts-with? path "~")))
 
+(defn- filter-specimens
+  "Filters specimens from a check, removing any that are in the ignore set.
+   Returns the check with filtered specimens. Case-insensitive matching."
+  [check ignore-set]
+  (if (or (nil? ignore-set) (empty? ignore-set) (nil? (:specimens check)))
+    check
+    (let [ignore-set-lower (set (map string/lower-case ignore-set))
+          filtered-specimens (filterv
+                               #(not (contains? ignore-set-lower (string/lower-case %)))
+                               (:specimens check))]
+      (assoc check :specimens filtered-specimens))))
+
+(defn- filter-recommendations
+  "Filters recommendations from a check, removing any where :avoid is in the ignore set.
+   Returns the check with filtered recommendations. Case-insensitive matching."
+  [check ignore-set]
+  (if (or (nil? ignore-set) (empty? ignore-set) (nil? (:recommendations check)))
+    check
+    (let [ignore-set-lower (set (map string/lower-case ignore-set))
+          filtered-recs (filterv
+                          (fn [rec]
+                            (not (contains? ignore-set-lower
+                                           (string/lower-case (:avoid rec)))))
+                          (:recommendations check))]
+      (assoc check :recommendations filtered-recs))))
+
+(defn- apply-ignore-filter
+  "Applies ignore filtering to a check, removing ignored specimens and recommendations."
+  [check ignore-set]
+  (if (or (nil? ignore-set) (empty? ignore-set))
+    check
+    (-> check
+        (filter-specimens ignore-set)
+        (filter-recommendations ignore-set))))
+
 (defn create
   "Takes an options ball, and loads all the specified checks.
-   Filters out any checks that failed to load."
+   Filters out any checks that failed to load.
+   Applies ignore filtering to remove specimens in the ignore set."
   [options]
-  (let [{:keys [config check-dir]} options
+  (let [{:keys [config check-dir project-ignore]} options
         checks (:checks config)
         all-checks (mapcat (fn
                              [{:keys [directory files]}]
@@ -144,10 +180,11 @@
                                    sep java.io.File/separator]
                                (map #(str base-path sep % ".edn") files))) checks)
         loaded-checks (keep load-edn! all-checks)
+        filtered-checks (mapv #(apply-ignore-filter % project-ignore) loaded-checks)
         failed-count (- (count all-checks) (count loaded-checks))]
     (when (pos? failed-count)
       (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped.")))
-    (when (empty? loaded-checks)
+    (when (empty? filtered-checks)
       (error/exit "No valid checks could be loaded. Please check your configuration."))
-    loaded-checks))
+    filtered-checks))
 

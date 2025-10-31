@@ -140,12 +140,12 @@
                               :files [\"old-check\"]}]}")
 
           ;; Add checks (should update existing entry)
-          _ (custom/add-checks source-dir {})]
+          _ (custom/add-checks source-dir {})
+          config (edn/read-string (slurp config-path))]
 
       ;; Verify config was updated (not duplicated)
-      (let [config (edn/read-string (slurp config-path))]
-        (is (= 1 (count (:checks config))))
-        (is (= ["new-check"] (-> config :checks first :files)))))))
+      (is (= 1 (count (:checks config))))
+      (is (= ["new-check"] (-> config :checks first :files))))))
 
 (deftest extract-name-from-source
   (testing "Extracting name from local directory paths"

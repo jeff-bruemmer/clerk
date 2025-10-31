@@ -258,11 +258,11 @@
   (testing "Associativity with initial failure"
     (let [f (fn [x] (result/ok (* x 2)))
           g (fn [x] (result/ok (+ x 10)))
-          m (result/err "initial failure" {})]
-      (let [left (result/bind (result/bind m f) g)
-            right (result/bind m (fn [y] (result/bind (f y) g)))]
-        (is (= left right)
-            "Associativity should hold even with initial failure")))))
+          m (result/err "initial failure" {})
+          left (result/bind (result/bind m f) g)
+          right (result/bind m (fn [y] (result/bind (f y) g)))]
+      (is (= left right)
+          "Associativity should hold even with initial failure"))))
 
 (deftest monad-law-functor-composition-test
   (testing "Functor law: fmap (f ∘ g) === fmap f ∘ fmap g"
