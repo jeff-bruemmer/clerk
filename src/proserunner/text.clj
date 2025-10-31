@@ -41,31 +41,37 @@
 
 ;;;; Dialogue detection
 
+;; Regex patterns for detecting quoted dialogue
+(def ^:private double-quote-pattern
+  "Matches double-quoted text: \"...\""
+  #"\"[^\"]*\"")
+
+(def ^:private single-quote-pattern
+  "Matches single-quoted dialogue, excluding apostrophes and possessives.
+   Requires whitespace or punctuation before/after to distinguish from
+   contractions like \"it's\" or possessives like \"dog's\"."
+  #"(?:^|[\s,;:\.\!\?])'[^']*'(?:[\s,;:\.\!\?]|$)")
+
 (defn contains-dialogue?
   "Detects if text contains dialogue (quoted text).
    Handles both double quotes and single quotes, but distinguishes
    apostrophes/possessives from single-quote dialogue."
   [text]
-  (let [;; Match double-quoted text: "..."
-        double-quote-pattern #"\"[^\"]*\""
-        ;; Match single-quoted text, but not apostrophes
-        ;; Look for single quotes with space/punctuation before or after
-        ;; to distinguish from apostrophes like "it's" or "dog's"
-        single-quote-pattern #"(?:^|[\s,;:\.\!\?])'[^']*'(?:[\s,;:\.\!\?]|$)"]
-    (or (re-find double-quote-pattern text)
-        (re-find single-quote-pattern text))))
+  (or (re-find double-quote-pattern text)
+      (re-find single-quote-pattern text)))
+
+(defn- replace-with-spaces
+  "Replaces a matched string with equivalent number of spaces."
+  [match]
+  (string/join (repeat (count match) \space)))
 
 (defn strip-dialogue
   "Removes dialogue from text while preserving character positions.
    Replaces quoted text with spaces so column numbers remain accurate."
   [text]
   (-> text
-      ;; Replace double-quoted dialogue with spaces
-      (string/replace #"\"[^\"]*\""
-                      (fn [match] (string/join (repeat (count match) \space))))
-      ;; Replace single-quoted dialogue with spaces
-      (string/replace #"(?:^|[\s,;:\.\!\?])'[^']*'(?:[\s,;:\.\!\?]|$)"
-                      (fn [match] (string/join (repeat (count match) \space))))))
+      (string/replace double-quote-pattern replace-with-spaces)
+      (string/replace single-quote-pattern replace-with-spaces)))
 
 (defn mark-dialogue
   "Marks a Line record with :dialogue? field based on dialogue detection."

@@ -20,35 +20,6 @@
 
 (set! *warn-on-reflection* true)
 
-;;;; Cache performance tracking
-
-(def ^:private cache-stats (atom {:hits 0 :misses 0 :partial-hits 0}))
-
-(defn reset-cache-stats!
-  "Reset cache statistics."
-  []
-  (reset! cache-stats {:hits 0 :misses 0 :partial-hits 0}))
-
-(defn get-cache-stats
-  "Get current cache statistics."
-  []
-  @cache-stats)
-
-(defn- record-cache-hit!
-  "Record a full cache hit."
-  []
-  (swap! cache-stats update :hits inc))
-
-(defn- record-cache-miss!
-  "Record a cache miss (full recompute)."
-  []
-  (swap! cache-stats update :misses inc))
-
-(defn- record-partial-cache-hit!
-  "Record a partial cache hit (only some lines recomputed)."
-  []
-  (swap! cache-stats update :partial-hits inc))
-
 ;;;; Register all standard editors
 
 ;; Register parameterized editors via factory
@@ -302,28 +273,21 @@
         results
         (cond
           (:no-cache inputs)
-          (do
-            (record-cache-miss!)
-            (compute-and-store inputs))
+          (compute-and-store inputs)
 
           ;; If nothing has changed, return cached results
           ;; As well as the output format, which may have changed.
           (valid-result? inputs)
-          (do
-            (record-cache-hit!)
-            (assoc cached-result :output output))
+          (assoc cached-result :output output)
 
           ;; If checks and config are the same, we only need to reprocess
           ;; any lines that have changed.
           (valid-checks? inputs)
           (let [result (compute-changed inputs)]
-            (record-partial-cache-hit!)
             (store/save! result)
             result)
 
           ;; Otherwise process texts and cache results.
           :else
-          (do
-            (record-cache-miss!)
-            (compute-and-store inputs)))]
+          (compute-and-store inputs))]
     (assoc inputs :results results)))

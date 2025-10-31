@@ -12,7 +12,8 @@
 
   The effects namespace executes these descriptions."
   (:gen-class)
-  (:require [proserunner.result :as result]))
+  (:require [proserunner.result :as result]
+            [proserunner.shipping :as ship]))
 
 (set! *warn-on-reflection* true)
 
@@ -40,11 +41,7 @@
   "Handler for listing all ignored specimens."
   [opts]
   {:effects [[:ignore/list opts]]
-   :format-fn (fn [ignored]
-                (if (empty? ignored)
-                  ["No ignored specimens."]
-                  (cons "Ignored specimens:"
-                        (map #(str "   " %) ignored))))})
+   :format-fn ship/format-ignored-list})
 
 (defn handle-clear-ignored
   "Handler for clearing all ignored specimens."
@@ -64,21 +61,7 @@
   "Handler for initializing project configuration."
   [_opts]
   {:effects [[:project/init]]
-   :format-fn (fn [_]
-                ["Created project configuration directory: .proserunner/"
-                 "  + .proserunner/config.edn - Project configuration"
-                 "  + .proserunner/checks/    - Directory for project-specific checks"
-                 ""
-                 "Edit .proserunner/config.edn to customize:"
-                 "  :check-sources - Specify check sources:"
-                 "                   - \"default\" for built-in checks"
-                 "                   - \"checks\" for .proserunner/checks/"
-                 "                   - Local directory paths"
-                 "  :ignore        - Set of specimens to ignore"
-                 "  :ignore-mode   - :extend (merge with global) or :replace"
-                 "  :config-mode   - :merged (use global+project) or :project-only"
-                 ""
-                 "Add custom checks by creating .edn files in .proserunner/checks/"])})
+   :format-fn ship/format-init-project})
 
 (defn handle-add-checks
   "Handler for adding custom checks from a directory."

@@ -4,6 +4,7 @@
   (:require [proserunner
              [error :as error]
              [file-utils :as file-utils]
+             [result :as result]
              [system :as sys]]
             [clj-http.lite.client :as client]
             [clojure
@@ -20,18 +21,51 @@
 
 (defrecord Config [checks ignore])
 
+(defn load-config-from-file
+  "Loads and parses a config file, returning Result<Config>.
+
+  This is the primary config loading function that handles all error cases:
+  - File not found
+  - File read errors
+  - EDN parse errors
+
+  Returns Success<Config> or Failure with error details."
+  [filepath]
+  (result/try-result-with-context
+   (fn []
+     (let [content (slurp filepath)
+           parsed (edn/read-string content)
+           ;; Provide default value for :ignore if not present
+           with-defaults (if (contains? parsed :ignore)
+                           parsed
+                           (assoc parsed :ignore "ignore"))]
+       (map->Config with-defaults)))
+   {:filepath filepath :operation :load-config}))
+
+(defn safe-load-config
+  "Loads and parses config file, exiting on error (for backwards compatibility).
+
+  Prefer using load-config-from-file for better error handling."
+  [filepath]
+  (let [result (load-config-from-file filepath)]
+    (if (result/success? result)
+      (:value result)
+      (error/exit (str "Proserunner could not load config file '" filepath "':\n"
+                      (:error result) "\n")))))
+
 (defn load-config
-  "Parse config EDN string and return Config record."
-  [file]
+  "Parse config EDN string and return Config record.
+  Throws exception on parse error."
+  [edn-string]
   (try
-    (let [parsed (edn/read-string file)
+    (let [parsed (edn/read-string edn-string)
           ;; Provide default value for :ignore if not present
           with-defaults (if (contains? parsed :ignore)
                           parsed
                           (assoc parsed :ignore "ignore"))]
       (map->Config with-defaults))
     (catch Exception e
-      (throw (ex-info "Failed to parse config file"
+      (throw (ex-info "Failed to parse config EDN"
                       {:error (.getMessage e)})))))
 
 (defn default
@@ -47,32 +81,11 @@
 (def invalid-msg "config must be an edn file.")
 
 (defn valid?
-  "File should be a text, markdown, tex, or org file."
+  "File should be an edn file."
   [filepath]
   (contains?
    #{"edn"}
    (peek (string/split filepath #"\."))))
-
-(defn fetch!
-  "Takes a file path and returns a Config record.
-   Proserunner will exit if it cannot load the config."
-  [config-filepath]
-  (try
-    (slurp config-filepath)
-    (catch Exception e (error/exit
-                        (str "Proserunner could not load config file '" config-filepath "':\n" (.getMessage e) "\n")))))
-
-(defn safe-load-config
-  "Safely load and parse config file, with proper error reporting."
-  [config-filepath]
-  (try
-    (load-config (fetch! config-filepath))
-    (catch clojure.lang.ExceptionInfo e
-      (error/exit (str "Proserunner could not parse config file '" config-filepath "':\n"
-                      (get (ex-data e) :error "Invalid EDN format") "\n")))
-    (catch Exception e
-      (error/exit (str "Proserunner encountered an error loading config file '" config-filepath "':\n"
-                      (.getMessage e) "\n")))))
 
 (defn ^:private get-remote-zip!
   "Retrieves default checks, or times out after 5 seconds."
@@ -167,7 +180,7 @@
   [dir-path _backup-name]
   (let [timestamp (.format (java.text.SimpleDateFormat. "yyyyMMdd-HHmmss")
                            (java.util.Date.))
-        backup-dir (str (sys/home-dir) File/separator ".proserunner-backup-" timestamp)]
+        backup-dir (file-utils/join-path (sys/home-dir) (str ".proserunner-backup-" timestamp))]
     (when (.exists (io/file dir-path))
       (.mkdirs (io/file backup-dir))
       (doseq [^java.io.File file (file-seq (io/file dir-path))]

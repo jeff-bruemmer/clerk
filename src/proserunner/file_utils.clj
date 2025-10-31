@@ -1,7 +1,17 @@
 (ns proserunner.file-utils
   "File utility functions for safe file operations."
-  (:require [clojure.java.io :as io])
+  (:require [clojure.java.io :as io]
+            [clojure.string :as string])
   (:gen-class))
+
+(defn join-path
+  "Joins path components using the system's file separator.
+
+  Examples:
+    (join-path \"home\" \"user\" \"file.txt\") => \"home/user/file.txt\" (on Unix)
+    (join-path \"C:\" \"Users\" \"file.txt\") => \"C:\\Users\\file.txt\" (on Windows)"
+  [& components]
+  (string/join java.io.File/separator components))
 
 (defn atomic-spit
   "Atomically writes content to a file by writing to a temp file and renaming.

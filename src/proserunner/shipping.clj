@@ -51,6 +51,34 @@
     (doseq [issue (map issue-str v)]
       (println issue))))
 
+;;;; Formatters for command output
+
+(defn format-ignored-list
+  "Formats a list of ignored specimens for display."
+  [ignored]
+  (if (empty? ignored)
+    ["No ignored specimens."]
+    (cons "Ignored specimens:"
+          (map #(str "   " %) ignored))))
+
+(defn format-init-project
+  "Formats project initialization success message."
+  [_]
+  ["Created project configuration directory: .proserunner/"
+   "  + .proserunner/config.edn - Project configuration"
+   "  + .proserunner/checks/    - Directory for project-specific checks"
+   ""
+   "Edit .proserunner/config.edn to customize:"
+   "  :check-sources - Specify check sources:"
+   "                   - \"default\" for built-in checks"
+   "                   - \"checks\" for .proserunner/checks/"
+   "                   - Local directory paths"
+   "  :ignore        - Set of specimens to ignore"
+   "  :ignore-mode   - :extend (merge with global) or :replace"
+   "  :config-mode   - :merged (use global+project) or :project-only"
+   ""
+   "Add custom checks by creating .edn files in .proserunner/checks/"])
+
 ;;;; Print version
 
 (defn print-version

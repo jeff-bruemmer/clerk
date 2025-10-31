@@ -1,7 +1,8 @@
 (ns proserunner.system
   "Utilites for proserunner to figure out what OS it's on so it can follow system mores."
   (:gen-class)
-  (:require [clojure.string :as string]))
+  (:require [proserunner.file-utils :as file-utils]
+            [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
 
@@ -11,9 +12,10 @@
   (System/getProperty "user.home"))
 
 (defn filepath
-  "Builds filepath using the home directory."
-  ([& args]
-   (string/join java.io.File/separator (concat [(home-dir)] args))))
+  "Builds filepath using the home directory.
+   Joins path components with system file separator."
+  [& args]
+  (apply file-utils/join-path (concat [(home-dir)] args)))
 
 (defn check-dir
   "Infer the directory when supplied a config filepath.

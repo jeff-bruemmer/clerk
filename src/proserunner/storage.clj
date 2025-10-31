@@ -5,10 +5,10 @@
              [checks :as checks]
              [error :as error]
              [config :as conf]
+             [file-utils :as file-utils]
              [text :as text]]
             [clojure
-             [edn :as edn]
-             [string :as string]]
+             [edn :as edn]]
             [clojure.java.io :as io]))
 
 (set! *warn-on-reflection* true)
@@ -25,11 +25,7 @@
 (defn mk-tmp-dir!
   "Makes dir in tmp directory to store cached results."
   [path]
-  (let [p (io/file
-           (str
-            (System/getProperty "java.io.tmpdir")
-            java.io.File/separator
-            path))]
+  (let [p (io/file (file-utils/join-path (System/getProperty "java.io.tmpdir") path))]
     (if (.exists p)
       p
       (do (try (.mkdirs p)
@@ -68,8 +64,9 @@
   "Checks the storage directory for revelant cached results.
    Returns false if cache doesn't exist or is corrupted."
   [file]
-  (let [fp (str (string/join java.io.File/separator
-                             [(System/getProperty "java.io.tmpdir") "proserunner-storage" "file"])
+  (let [fp (str (file-utils/join-path (System/getProperty "java.io.tmpdir")
+                                       "proserunner-storage"
+                                       "file")
                 (hash file) ".edn")
         cache-file (io/file fp)
         use-cache? (.exists cache-file)]
