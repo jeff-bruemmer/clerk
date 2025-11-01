@@ -1,4 +1,5 @@
 (ns editors.utilities
+  "Shared utilities for creating editor functions that detect and report issues in text."
   (:require [proserunner.text :as text]
             [clojure.string :as string])
   (:gen-class))

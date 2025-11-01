@@ -1,4 +1,5 @@
 (ns proserunner.checks
+  "Loading, validating, and filtering check definitions from EDN files."
   (:gen-class)
   (:require [proserunner
              [edn-utils :as edn-utils]

@@ -1,4 +1,5 @@
 (ns proserunner.core
+  "Main entry point for Proserunner CLI. Parses command-line arguments and dispatches to command handlers."
   (:gen-class)
   (:require [proserunner
              [commands :as cmd]

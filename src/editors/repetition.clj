@@ -1,4 +1,5 @@
 (ns editors.repetition
+  "Detects consecutive repeated words in text."
   (:gen-class)
   (:require [clojure.string :as string]
             [editors.utilities :as util]))

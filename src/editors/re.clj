@@ -1,4 +1,5 @@
 (ns editors.re
+  "Applies regex pattern-based checks to text."
   (:require
    [editors.utilities :as util])
   (:gen-class))
