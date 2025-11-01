@@ -5,10 +5,10 @@
              [checks :as checks]
              [error :as error]
              [config :as conf]
+             [edn-utils :as edn-utils]
              [file-utils :as file-utils]
+             [result :as result]
              [text :as text]]
-            [clojure
-             [edn :as edn]]
             [clojure.java.io :as io]))
 
 (set! *warn-on-reflection* true)
@@ -43,9 +43,9 @@
   [result]
   (try
     (let [dir (mk-tmp-dir! "proserunner-storage")
-          storage-file (io/file (filepath dir result))]
+          storage-file (filepath dir result)]
       (if (.exists (io/file dir))
-        (spit storage-file (pr-str result))
+        (file-utils/atomic-spit storage-file (pr-str result))
         (println "Warning: Unable to cache results - storage directory doesn't exist.")))
     (catch Exception e
       (println (str "Warning: Failed to save cache: " (.getMessage e))))))
@@ -71,37 +71,43 @@
         cache-file (io/file fp)
         use-cache? (.exists cache-file)]
     (if use-cache?
-      (try
-        (edn/read-string edn-readers (slurp fp))
-        (catch Exception e
-          (println (str "Warning: Corrupted cache detected for file '" file "': " (.getMessage e)))
-          (println "Clearing corrupted cache and recomputing...")
-          ;; Delete corrupted cache file
-          (try
-            (.delete cache-file)
-            (catch Exception _del-e
-              ;; Silently ignore deletion errors
-              nil))
-          false))
+      (let [read-result (edn-utils/read-edn-file-with-readers fp edn-readers)]
+        (if (result/success? read-result)
+          (:value read-result)
+          (do
+            (println (str "Warning: Corrupted cache detected for file '" file "': " (:error read-result)))
+            (println "Clearing corrupted cache and recomputing...")
+            ;; Delete corrupted cache file
+            (try
+              (.delete cache-file)
+              (catch Exception _del-e
+                ;; Silently ignore deletion errors
+                nil))
+            false)))
       false)))
 
 ;;;; Predicate functions for validating cached results by comparing hashes.
+
+(defn- stable-hash
+  "Computes a stable hash that persists across JVM restarts."
+  [data]
+  (hash (pr-str data)))
 
 (defn valid-checks?
   [cached-result chs]
   (=
    (:check-hash cached-result)
-   (hash chs)))
+   (stable-hash chs)))
 
 (defn valid-lines?
   [cached-result lines]
   (=
    (:lines-hash cached-result)
-   (hash lines)))
+   (stable-hash lines)))
 
 (defn valid-config?
   [cached-result config]
   (=
    (:config-hash cached-result)
-   (hash config)))
+   (stable-hash config)))
 

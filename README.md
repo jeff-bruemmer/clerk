@@ -71,8 +71,8 @@ proserunner -f /path/to/file
 # Ignore specific words
 proserunner --add-ignore "hopefully"
 
-# Check dialogue
-proserunner -f document.md --check-dialogue
+# Check quoted text
+proserunner -f document.md --quoted-text
 
 # Exclude files
 proserunner -f docs/ --exclude "drafts/*"

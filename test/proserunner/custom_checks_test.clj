@@ -3,6 +3,7 @@
             [proserunner.ignore :as ignore]
             [proserunner.project-config :as project-config]
             [proserunner.system :as sys]
+            [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
             [clojure.string :as string]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
@@ -18,15 +19,9 @@
   (reset! original-home (System/getProperty "user.home"))
 
   ;; Create temporary home directory
-  (let [temp-home (str (System/getProperty "java.io.tmpdir")
-                      File/separator
-                      "proserunner-test-home-"
-                      (System/currentTimeMillis))
+  (let [temp-home (temp-dir-path "proserunner-test-home")
         proserunner-dir (str temp-home File/separator ".proserunner")
-        temp-project (str (System/getProperty "java.io.tmpdir")
-                         File/separator
-                         "proserunner-test-project-"
-                         (System/currentTimeMillis))]
+        temp-project (temp-dir-path "proserunner-test-project")]
     (reset! test-home temp-home)
     (reset! test-project-root temp-project)
 
@@ -43,21 +38,14 @@
 
     ;; Run the test with suppressed output
     (try
-      (binding [*out* (java.io.StringWriter.)]
-        (f))
+      (silently (f))
       (finally
         ;; Restore original home
         (System/setProperty "user.home" @original-home)
 
         ;; Clean up temp directories
-        (letfn [(delete-recursively [^File file]
-                  (when (.exists file)
-                    (when (.isDirectory file)
-                      (doseq [child (.listFiles file)]
-                        (delete-recursively child)))
-                    (.delete file)))]
-          (delete-recursively (io/file temp-home))
-          (delete-recursively (io/file temp-project)))))))
+        (delete-recursively (io/file temp-home))
+        (delete-recursively (io/file temp-project))))))
 
 (use-fixtures :each setup-test-env)
 

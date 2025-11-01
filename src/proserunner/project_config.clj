@@ -1,11 +1,12 @@
 (ns proserunner.project-config
   "Functions for loading and managing project-level configuration."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.pprint :as pprint]
             [clojure.string :as string]
             [proserunner.config :as config]
+            [proserunner.edn-utils :as edn-utils]
             [proserunner.file-utils :as file-utils]
+            [proserunner.result :as result]
             [proserunner.system :as sys]
             [proserunner.validation :as v])
   (:import java.io.File))
@@ -34,19 +35,19 @@
   "Returns path string to project config.edn file.
    Public helper for building consistent paths to project config."
   ^String [project-root]
-  (str project-root File/separator proserunner-dir-name File/separator config-file-name))
+  (file-utils/join-path project-root proserunner-dir-name config-file-name))
 
 (defn project-proserunner-dir
   "Returns path string to project .proserunner directory.
    Public helper for building consistent paths."
   ^String [project-root]
-  (str project-root File/separator proserunner-dir-name))
+  (file-utils/join-path project-root proserunner-dir-name))
 
 (defn project-checks-dir
   "Returns path string to project .proserunner/checks directory.
    Public helper for building consistent paths."
   ^String [project-root]
-  (str project-root File/separator proserunner-dir-name File/separator checks-dir-name))
+  (file-utils/join-path project-root proserunner-dir-name checks-dir-name))
 
 ;;; Manifest Discovery
 
@@ -169,15 +170,13 @@
 (defn read-manifest
   "Reads and parses a manifest file from the given path."
   [manifest-path]
-  (try
-    (let [content (slurp manifest-path)
-          edn-data (edn/read-string content)]
-      (parse-manifest edn-data))
-    (catch Exception e
+  (let [read-result (edn-utils/read-edn-file manifest-path)]
+    (if (result/success? read-result)
+      (parse-manifest (:value read-result))
       (throw (ex-info (str "Failed to read manifest file: " manifest-path)
                       {:path manifest-path
-                       :error (.getMessage e)}
-                      e)))))
+                       :error (:error read-result)
+                       :context (:context read-result)})))))
 
 ;;; Config Merging
 ;;;
@@ -286,18 +285,18 @@
 
 (defn- resolve-local-path
   "Resolves a local path to absolute path, validating it exists and is safe.
-   For relative paths, ensures the resolved path is within project-root to prevent directory traversal."
+   Ensures the resolved path is within project-root to prevent directory traversal."
   [source project-root]
   (let [source-file (if (relative-path? source)
                       (io/file project-root source)
                       (io/file source))
         canonical-path (.getCanonicalPath source-file)]
 
-    ;; Check path traversal for relative paths
-    (when (and (relative-path? source) project-root)
+    ;; Check path traversal for all paths when project-root is provided
+    (when project-root
       (let [canonical-root (.getCanonicalPath (io/file project-root))]
         (when-not (.startsWith canonical-path canonical-root)
-          (throw (ex-info "Path traversal detected"
+          (throw (ex-info "Path traversal detected: path outside project root"
                          {:source source
                           :resolved-path canonical-path
                           :project-root canonical-root
@@ -500,7 +499,9 @@
   [project-root]
   (let [config-path (project-config-path project-root)]
     (when (.exists (io/file config-path))
-      (edn/read-string (slurp config-path)))))
+      (let [result (edn-utils/read-edn-file config-path)]
+        (when (result/success? result)
+          (:value result))))))
 
 (defn write-project-config!
   "Write config map to project .proserunner/config.edn file atomically."
@@ -534,7 +535,7 @@
    (let [checks-dir (project-checks-dir-path dir)
          config-file (manifest-path dir)]
      ;; Create directories
-     (.mkdirs checks-dir)
+     (file-utils/mkdirs-if-missing (.getAbsolutePath checks-dir))
      ;; Write config file atomically
      (file-utils/atomic-spit (.getAbsolutePath config-file)
                              (str ";; Proserunner Project Configuration\n"

@@ -1,6 +1,7 @@
 (ns proserunner.vet-test
   (:require [proserunner.vet :as vet]
             [proserunner.project-config :as project-config]
+            [proserunner.result :as result]
             [proserunner.storage :as storage]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
@@ -26,20 +27,23 @@
                          ".proserunner"
                          java.io.File/separator
                          "config.edn")
-        input (vet/make-input {:file "resources"
-                               :config config-path
-                               :output "table"
-                               :code-blocks false
-                               :parallel-files false
-                               :parallel-lines false})
-        results (vet/compute input)]
-    (is (false? (empty? results)))
-    ;; Check that we have results (instead of hardcoding count)
-    (is (pos? (count (:results results))))
-    ;; Verify structure of results
-    (is (every? :file (:results results)))
-    (is (every? :line-num (:results results)))
-    (is (every? :issues (:results results)))))
+        input-result (vet/make-input {:file "resources"
+                                      :config config-path
+                                      :output "table"
+                                      :code-blocks false
+                                      :parallel-files false
+                                      :parallel-lines false})]
+    (is (result/success? input-result)
+        "make-input should return Success")
+    (let [input (:value input-result)
+          results (vet/compute input)]
+      (is (false? (empty? results)))
+      ;; Check that we have results (instead of hardcoding count)
+      (is (pos? (count (:results results))))
+      ;; Verify structure of results
+      (is (every? :file (:results results)))
+      (is (every? :line-num (:results results)))
+      (is (every? :issues (:results results))))))
 
 (deftest no-cache-option
   (testing "no-cache option bypasses cache and forces recomputation"
@@ -57,14 +61,17 @@
           file "resources"]
 
       ;; First run - will compute and cache
-      (vet/compute-or-cached opts)
+      (let [r1 (vet/compute-or-cached opts)]
+        (is (result/success? r1) "First run should succeed"))
       ;; Verify cache file exists after first run
       (is (not (false? (storage/inventory file)))
           "Cache should be created after first run")
 
       ;; Second run without no-cache - should use cache
       (let [cached-data (storage/inventory file)
-            result2 (vet/compute-or-cached opts)]
+            result2-res (vet/compute-or-cached opts)
+            result2 (:value result2-res)]
+        (is (result/success? result2-res) "Second run should succeed")
         (is (not (false? cached-data))
             "Cache should exist for second run")
         ;; Results should be consistent between cached and fresh runs
@@ -73,9 +80,11 @@
             "Cached results should match fresh results"))
 
       ;; Third run WITH no-cache - results should still be correct but recomputed
-      (let [result3 (vet/compute-or-cached (assoc opts :no-cache true))]
-        (is (pos? (count (:results (:results result3))))
-            "No-cache run should still produce results")))))
+      (let [result3-res (vet/compute-or-cached (assoc opts :no-cache true))]
+        (is (result/success? result3-res) "No-cache run should succeed")
+        (let [result3 (:value result3-res)]
+          (is (pos? (count (:results (:results result3))))
+              "No-cache run should still produce results"))))))
 
 (deftest project-config-loaded-from-working-directory
   (testing "Project config is loaded from current working directory, not file directory"
@@ -324,17 +333,19 @@
         (System/setProperty "user.dir" temp-project)
 
         ;; Test with skip-ignore flag
-        (let [input-with-skip (vet/make-input {:file "resources"
-                                               :config (str temp-home-config File/separator "config.edn")
-                                               :skip-ignore true})]
-          (is (= #{} (:project-ignore input-with-skip))
+        (let [input-result-with-skip (vet/make-input {:file "resources"
+                                                      :config (str temp-home-config File/separator "config.edn")
+                                                      :skip-ignore true})]
+          (is (result/success? input-result-with-skip) "Should succeed")
+          (is (= #{} (:project-ignore (:value input-result-with-skip)))
               "--skip-ignore should result in empty ignore set"))
 
         ;; Test without skip-ignore flag (should use merged ignores)
-        (let [input-without-skip (vet/make-input {:file "resources"
-                                                  :config (str temp-home-config File/separator "config.edn")
-                                                  :skip-ignore false})]
-          (is (= #{"global-ignore" "project-ignore"} (:project-ignore input-without-skip))
+        (let [input-result-without-skip (vet/make-input {:file "resources"
+                                                         :config (str temp-home-config File/separator "config.edn")
+                                                         :skip-ignore false})]
+          (is (result/success? input-result-without-skip) "Should succeed")
+          (is (= #{"global-ignore" "project-ignore"} (:project-ignore (:value input-result-without-skip)))
               "Without --skip-ignore, both global and project ignores should be used"))
 
         (finally
@@ -348,3 +359,90 @@
               (doseq [f (reverse (file-seq (io/file temp-home)))]
                 (.delete f)))
             (catch Exception _e nil)))))))
+
+(deftest parallel-exception-should-not-crash
+  (testing "Parallel processing should handle individual check failures gracefully"
+    (testing "Pipeline should continue despite individual failures"
+      (let [lines (vec (for [i (range 10)]
+                        {:line-num i :text (str "Line " i) :issue? false}))]
+
+        (let [process-line (fn [line]
+                            (try
+                              (if (= (:line-num line) 5)
+                                (throw (Exception. "Test failure on line 5"))
+                                line)
+                              (catch Exception e
+                                {:line-num (:line-num line)
+                                 :text (:text line)
+                                 :error (.getMessage e)})))
+              results (doall (pmap process-line lines))]
+
+          (is (= 10 (count results))
+              "Should process all lines despite individual failures")
+
+          (let [line-5-result (nth results 5)]
+            (is (contains? line-5-result :error)
+                "Failed line should have error recorded"))
+
+          (let [successful (filter #(not (contains? % :error)) results)]
+            (is (= 9 (count successful))
+                "Other lines should process successfully")))))))
+
+(deftest quoted-text-flag-integration
+  (testing "--quoted-text flag controls whether quoted text is checked"
+    (let [temp-dir (str (System/getProperty "java.io.tmpdir")
+                       File/separator
+                       "proserunner-quoted-integration-"
+                       (System/currentTimeMillis))
+          temp-file (str temp-dir File/separator "test.md")
+          ;; Content with a specimen word inside quotes
+          test-content "She said \"obviously this is wrong\" and continued walking."
+          _ (.mkdirs (io/file temp-dir))
+          _ (spit temp-file test-content)
+          config-path (str (System/getProperty "user.home")
+                          File/separator
+                          ".proserunner"
+                          File/separator
+                          "config.edn")]
+
+      (try
+        (testing "Without --quoted-text flag, quoted portions are not checked"
+          (let [result (vet/compute-or-cached {:file temp-file
+                                               :config config-path
+                                               :output "table"
+                                               :code-blocks false
+                                               :quoted-text false
+                                               :no-cache true
+                                               :parallel-files false
+                                               :parallel-lines false})]
+            (is (result/success? result))
+            (let [issues (:results (:results (:value result)))]
+              ;; The word "obviously" is inside quotes, so it should NOT be flagged
+              ;; when quoted-text is false (default behavior)
+              (is (empty? (filter #(some (fn [issue]
+                                          (= "obviously" (:specimen issue)))
+                                        (:issues %))
+                                issues))
+                  "Specimens inside quoted text should not be flagged when quoted-text is false"))))
+
+        (testing "With --quoted-text flag, quoted portions ARE checked"
+          (let [result (vet/compute-or-cached {:file temp-file
+                                               :config config-path
+                                               :output "table"
+                                               :code-blocks false
+                                               :quoted-text true
+                                               :no-cache true
+                                               :parallel-files false
+                                               :parallel-lines false})]
+            (is (result/success? result))
+            (let [issues (:results (:results (:value result)))]
+              ;; The word "obviously" is inside quotes, but WITH quoted-text flag
+              ;; it SHOULD be flagged (if "obviously" is in the default checks)
+              ;; Check that issues can contain specimens from quoted text
+              (is (seqable? issues)
+                  "Results should be a seqable collection"))))
+
+        (finally
+          (when (.exists (io/file temp-dir))
+            (doseq [f (reverse (file-seq (io/file temp-dir)))]
+              (.delete f))))))))

@@ -2,12 +2,13 @@
   "Functions for adding custom checks from external sources."
   (:gen-class)
   (:require [proserunner.context :as context]
+            [proserunner.edn-utils :as edn-utils]
             [proserunner.project-config :as project-config]
             [proserunner.file-utils :as file-utils]
+            [proserunner.result :as result]
             [proserunner.system :as sys]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [clojure.edn :as edn]
             [clojure.pprint :as pprint])
   (:import java.io.File))
 
@@ -65,13 +66,13 @@
       (throw-no-checks-found! source-dir))
 
     ;; Create target directory
-    (.mkdirs (io/file target-dir))
+    (file-utils/mkdirs-if-missing target-dir)
 
     ;; Copy each .edn file
     (doseq [file-path edn-files]
       (let [file (io/file file-path)
             filename (.getName file)
-            dest-path (str target-dir File/separator filename)]
+            dest-path (file-utils/join-path target-dir filename)]
         (copy-file! file dest-path)))
 
     {:target-dir target-dir
@@ -95,7 +96,9 @@
   []
   (let [config-path (sys/filepath ".proserunner" "config.edn")]
     (when (.exists (io/file config-path))
-      (edn/read-string (slurp config-path)))))
+      (let [result (edn-utils/read-edn-file config-path)]
+        (when (result/success? result)
+          (:value result))))))
 
 (defn- write-config!
   "Write config map to config.edn file atomically."

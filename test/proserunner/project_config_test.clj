@@ -1,7 +1,9 @@
 (ns proserunner.project-config-test
   (:require [proserunner.project-config :as project-config]
+            [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
+            [clojure.string :as string]
             [clojure.edn :as edn])
   (:import java.io.File))
 
@@ -14,15 +16,9 @@
   (reset! original-home (System/getProperty "user.home"))
   (let [original-dir (System/getProperty "user.dir")
         ;; Create temporary home directory
-        temp-home (str (System/getProperty "java.io.tmpdir")
-                      File/separator
-                      "proserunner-test-home-"
-                      (System/currentTimeMillis))
+        temp-home (temp-dir-path "proserunner-test-home")
         proserunner-dir (str temp-home File/separator ".proserunner")
-        temp-project (str (System/getProperty "java.io.tmpdir")
-                         File/separator
-                         "proserunner-test-project-"
-                         (System/currentTimeMillis))]
+        temp-project (temp-dir-path "proserunner-test-project")]
     (reset! test-home temp-home)
     (reset! test-project-root temp-project)
 
@@ -46,22 +42,15 @@
 
     ;; Run the test with suppressed output
     (try
-      (binding [*out* (java.io.StringWriter.)]
-        (f))
+      (silently (f))
       (finally
         ;; Restore original home and directory
         (System/setProperty "user.home" @original-home)
         (System/setProperty "user.dir" original-dir)
 
         ;; Clean up temp directories
-        (letfn [(delete-recursively [^File file]
-                  (when (.exists file)
-                    (when (.isDirectory file)
-                      (doseq [child (.listFiles file)]
-                        (delete-recursively child)))
-                    (.delete file)))]
-          (delete-recursively (io/file temp-home))
-          (delete-recursively (io/file temp-project)))))))
+        (delete-recursively (io/file temp-home))
+        (delete-recursively (io/file temp-project))))))
 
 (use-fixtures :each setup-test-env)
 
@@ -641,3 +630,36 @@
       (is (= ["cliches" "redundancies"] (:files (first (:checks config)))))
       ;; Second should be the project check
       (is (= ["custom"] (:files (second (:checks config))))))))
+
+(deftest path-traversal-should-be-prevented
+  (testing "Path validation should prevent traversal outside project root"
+    (let [temp-project (str (System/getProperty "java.io.tmpdir")
+                           File/separator
+                           "proserunner-path-test-"
+                           (System/currentTimeMillis))
+          malicious-config-content (pr-str {:checks [{:directory "/etc/passwd"}]
+                                           :config-mode :merged})]
+
+      (try
+        (.mkdirs (io/file temp-project ".git"))
+        (.mkdirs (io/file temp-project ".proserunner"))
+
+        (spit (str temp-project File/separator ".proserunner" File/separator "config.edn")
+              malicious-config-content)
+
+        (testing "Loading config with absolute path outside project should fail"
+          (try
+            (let [loaded-config (project-config/load-project-config temp-project)]
+              (is (or (empty? (:checks loaded-config))
+                     (not-any? #(string/includes? (str (:directory %)) "/etc")
+                              (:checks loaded-config)))
+                  "Config should reject absolute paths outside project root"))
+            (catch Exception e
+              (is (or (string/includes? (.getMessage e) "traversal")
+                     (string/includes? (.getMessage e) "not found"))
+                  "Should throw exception for path traversal or file not found"))))
+
+        (finally
+          (when (.exists (io/file temp-project))
+            (doseq [f (reverse (file-seq (io/file temp-project)))]
+              (.delete f))))))))

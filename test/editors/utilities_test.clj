@@ -43,7 +43,7 @@
                                 :text "This is hopefully a test."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           result (util/add-issue {:line line
@@ -61,7 +61,7 @@
                                 :text "This is a test."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           result (util/add-issue {:line line
@@ -79,7 +79,7 @@
                                 :text "This is hopefully a test."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           check {:file "test.md"
@@ -97,7 +97,7 @@
                                 :text "This is a test."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           check {:file "test.md"
@@ -116,7 +116,7 @@
                                 :text "I would utilize this tool."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           check {:name "test-recommender"
@@ -137,7 +137,7 @@
                                 :text "This is fine."
                                 :line-num 1
                                 :code? false
-                                :dialogue? false
+                                :quoted? false
                                 :issue? false
                                 :issues []})
           check {:name "test-recommender"

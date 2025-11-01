@@ -3,6 +3,7 @@
   (:require [proserunner.project-config :as project-config]
             [proserunner.config :as config]
             [proserunner.custom-checks :as custom-checks]
+            [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
             [clojure.string :as string]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
@@ -12,24 +13,14 @@
 (def test-project-root (atom nil))
 
 (defn setup-test-env [f]
-  (let [temp-project (str (System/getProperty "java.io.tmpdir")
-                         File/separator
-                         "proserunner-integration-test-"
-                         (System/currentTimeMillis))]
+  (let [temp-project (temp-dir-path "proserunner-integration-test")]
     (reset! test-project-root temp-project)
     (.mkdirs (io/file temp-project))
 
     (try
-      (binding [*out* (java.io.StringWriter.)]
-        (f))
+      (silently (f))
       (finally
-        (letfn [(delete-recursively [^File file]
-                  (when (.exists file)
-                    (when (.isDirectory file)
-                      (doseq [child (.listFiles file)]
-                        (delete-recursively child)))
-                    (.delete file)))]
-          (delete-recursively (io/file temp-project)))))))
+        (delete-recursively (io/file temp-project))))))
 
 (use-fixtures :each setup-test-env)
 

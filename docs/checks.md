@@ -15,13 +15,29 @@ Default checks: [github.com/jeff-bruemmer/proserunner-default-checks](https://gi
 | repetition       | Detect consecutive word repetition  |
 | regex            | Custom regular expressions          |
 
-## Dialogue handling
+## Quoted text handling
 
-By default, Proserunner ignores text in quotation marks. Use `--check-dialogue` to include dialogue:
+By default, Proserunner strips quoted text from lines before checking. This allows checking the narrative portions of dialogue while ignoring the quoted speech itself.
+
+For example, this line:
+```
+She said "obviously this is wrong" and walked away.
+```
+
+Will be checked as:
+```
+She said                         and walked away.
+```
+
+The quoted portion is replaced with spaces to preserve column positions for error reporting. Entire lines are kept—only the quoted portions are removed.
+
+To check quoted text, use `--quoted-text`:
 
 ```bash
-proserunner -f document.md --check-dialogue
+proserunner -f document.md --quoted-text
 ```
+
+This includes both straight quotes (`"..."`, `'...'`) and curly quotes (`"..."`, `'...'`).
 
 ## Configuration
 

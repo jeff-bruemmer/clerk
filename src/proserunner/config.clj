@@ -88,23 +88,29 @@
    (peek (string/split filepath #"\."))))
 
 (defn ^:private get-remote-zip!
-  "Retrieves default checks, or times out after 5 seconds."
+  "Retrieves default checks, or times out after 5 seconds.
+
+  Returns Result<byte-array> - Success with ZIP bytes, or Failure on error."
   [address]
-  (let [resp (try (client/get address {:as :byte-array
-                                       :socket-timeout 5000
-                                       :connection-timeout 5000
-                                       :throw-exceptions false})
-                  (catch Exception e (error/exit (str "Proserunner couldn't reach: " (.getMessage e)
-                                                      "\nAre you connected to the Internet?\n"))))]
-    (:body resp)))
+  (result/try-result-with-context
+   (fn []
+     (let [resp (client/get address {:as :byte-array
+                                     :socket-timeout 5000
+                                     :connection-timeout 5000
+                                     :throw-exceptions false})]
+       (if (= 200 (:status resp))
+         (:body resp)
+         (throw (ex-info "Failed to fetch remote checks"
+                        {:status (:status resp)
+                         :address address})))))
+   {:operation :get-remote-zip :address address}))
 
 (defn ^:private copy!
   "Copies `stream` to `out-file`, creating parent-dir if necessary.
   Used in unzip-file!"
   [stream save-path out-file]
-  (let [parent-dir (io/file (subs save-path 0 (string/last-index-of save-path File/separator)))]
-    (when-not (.exists parent-dir) (.mkdirs parent-dir))
-    (io/copy stream out-file)))
+  (file-utils/ensure-parent-dir save-path)
+  (io/copy stream out-file))
 
 (defn ^:private unzip-file!
   "Uncompress zip archive.
@@ -114,10 +120,11 @@
   (with-open [stream (-> input io/input-stream java.util.zip.ZipInputStream.)]
     (loop [entry (.getNextEntry stream)]
       (when entry
-        (let [save-path (str output File/separatorChar (string/replace (.getName entry) old-name new-name))
+        (let [entry-name (string/replace (.getName entry) old-name new-name)
+              save-path (file-utils/join-path output entry-name)
               out-file (io/file save-path)]
           (if (.isDirectory entry)
-            (when-not (.exists out-file) (.mkdirs out-file))
+            (file-utils/mkdirs-if-missing save-path)
             (copy! stream save-path out-file))
           (recur (.getNextEntry stream)))))))
 
@@ -165,15 +172,23 @@
       :else (not= local-version remote-version))))
 
 (defn ^:private download-checks!
-  "Download and extract default checks from GitHub."
+  "Download and extract default checks from GitHub.
+
+  Returns Result<nil> - Success when complete, Failure on error."
   []
   (println "Downloading default checks from: " remote-address ".")
-  (try
-    (unzip-file! (get-remote-zip! remote-address) (sys/home-dir) "proserunner-default-checks-main" ".proserunner")
-    ;; Save the version after successful download
-    (when-let [version (get-remote-version)]
-      (write-local-version! version))
-    (catch Exception e (error/exit (str "Couldn't unzip default checks\n" (.getMessage e))))))
+  (result/try-result-with-context
+   (fn []
+     (let [zip-result (get-remote-zip! remote-address)]
+       (if (result/failure? zip-result)
+         (throw (ex-info (:error zip-result) (:context zip-result)))
+         (do
+           (unzip-file! (:value zip-result) (sys/home-dir) "proserunner-default-checks-main" ".proserunner")
+           ;; Save the version after successful download
+           (when-let [version (get-remote-version)]
+             (write-local-version! version))
+           nil))))
+   {:operation :download-checks}))
 
 (defn ^:private backup-directory!
   "Create a timestamped backup of a directory."
@@ -182,58 +197,68 @@
                            (java.util.Date.))
         backup-dir (file-utils/join-path (sys/home-dir) (str ".proserunner-backup-" timestamp))]
     (when (.exists (io/file dir-path))
-      (.mkdirs (io/file backup-dir))
+      (file-utils/mkdirs-if-missing backup-dir)
       (doseq [^java.io.File file (file-seq (io/file dir-path))]
         (when (.isFile file)
           (let [rel-path (subs (.getPath file) (count dir-path))
                 target (io/file (str backup-dir rel-path))]
-            (.mkdirs (.getParentFile target))
+            (file-utils/ensure-parent-dir (.getPath target))
             (io/copy file target))))
       (println "Created backup at:" backup-dir)
       backup-dir)))
 
 (defn restore-defaults!
-  "Restore default checks from GitHub, backing up existing checks first."
+  "Restore default checks from GitHub, backing up existing checks first.
+
+  Returns Result<nil> - Success when complete, Failure on error."
   []
   (println "\n=== Restoring Default Checks ===\n")
-  (let [proserunner-dir (sys/filepath ".proserunner")
-        default-dir (sys/filepath ".proserunner" "default")
-        config-file (sys/filepath ".proserunner" "config.edn")
-        ignore-file (sys/filepath ".proserunner" "ignore.edn")]
+  (result/try-result-with-context
+   (fn []
+     (let [proserunner-dir (sys/filepath ".proserunner")
+           default-dir (sys/filepath ".proserunner" "default")
+           config-file (sys/filepath ".proserunner" "config.edn")
+           ignore-file (sys/filepath ".proserunner" "ignore.edn")]
 
-    ;; Check if .proserunner directory exists
-    (if-not (.exists (io/file proserunner-dir))
-      (do
-        (println "No .proserunner directory found. Creating fresh installation...")
-        (download-checks!)
-        (println "\nDefault checks installed."))
-      ;; Otherwise, backup and restore
-      (do
-        ;; Backup existing checks
-        (println "Backing up existing checks...")
-        (backup-directory! default-dir "default")
+       ;; Check if .proserunner directory exists
+       (if-not (.exists (io/file proserunner-dir))
+         (do
+           (println "No .proserunner directory found. Creating fresh installation...")
+           (let [dl-result (download-checks!)]
+             (if (result/failure? dl-result)
+               (throw (ex-info (:error dl-result) (:context dl-result)))
+               (println "\nDefault checks installed."))))
+         ;; Otherwise, backup and restore
+         (do
+           ;; Backup existing checks
+           (println "Backing up existing checks...")
+           (backup-directory! default-dir "default")
 
-        ;; Preserve config and ignore files
-        (let [config-backup (when (.exists (io/file config-file))
-                              (slurp config-file))
-              ignore-backup (when (.exists (io/file ignore-file))
-                              (slurp ignore-file))]
+           ;; Preserve config and ignore files
+           (let [config-backup (when (.exists (io/file config-file))
+                                 (slurp config-file))
+                 ignore-backup (when (.exists (io/file ignore-file))
+                                 (slurp ignore-file))]
 
-          ;; Download fresh checks
-          (println "\nDownloading fresh default checks...")
-          (download-checks!)
+             ;; Download fresh checks
+             (println "\nDownloading fresh default checks...")
+             (let [dl-result (download-checks!)]
+               (when (result/failure? dl-result)
+                 (throw (ex-info (:error dl-result) (:context dl-result)))))
 
-          ;; Restore preserved files atomically if they existed
-          (when config-backup
-            (file-utils/atomic-spit config-file config-backup)
-            (println "Preserved your config.edn"))
+             ;; Restore preserved files atomically if they existed
+             (when config-backup
+               (file-utils/atomic-spit config-file config-backup)
+               (println "Preserved your config.edn"))
 
-          (when ignore-backup
-            (file-utils/atomic-spit ignore-file ignore-backup)
-            (println "Preserved your ignore.edn"))
+             (when ignore-backup
+               (file-utils/atomic-spit ignore-file ignore-backup)
+               (println "Preserved your ignore.edn"))
 
-          (println "\nDefault checks restored successfully.")
-          (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))))
+             (println "\nDefault checks restored successfully.")
+             (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))
+       nil))
+   {:operation :restore-defaults}))
 
 (defn using-default-config?
   "Determines if automatic check updates should be performed."
@@ -252,18 +277,27 @@
   "Sets up ~/.proserunner directory and downloads default checks for first-time users."
   [default-config]
   (println "Initializing Proserunner...")
-  (download-checks!)
-  (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
-  (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
-  (safe-load-config default-config))
+  (let [dl-result (download-checks!)]
+    (if (result/failure? dl-result)
+      (error/exit (str "Failed to download default checks: " (:error dl-result)))
+      (do
+        (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
+        (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
+        (safe-load-config default-config)))))
 
 (defn update-default-checks
   "Refreshes default checks when remote version is newer than local cache."
   [default-config]
   (println "Updating default checks...")
-  (download-checks!)
-  (println "Checks updated.")
-  (safe-load-config default-config))
+  (let [dl-result (download-checks!)]
+    (if (result/failure? dl-result)
+      (do
+        (println "Warning: Failed to update checks:" (:error dl-result))
+        (println "Continuing with existing checks...")
+        (safe-load-config default-config))
+      (do
+        (println "Checks updated.")
+        (safe-load-config default-config)))))
 
 (defn- load-custom-config
   "Loads a custom config file specified via -c flag."

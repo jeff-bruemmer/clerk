@@ -6,6 +6,13 @@
             [proserunner.effects :as effects]
             [proserunner.result :as result]))
 
+(defmacro silently
+  "Suppresses stdout/stderr during test execution."
+  [& body]
+  `(binding [*out* (java.io.StringWriter.)
+             *err* (java.io.StringWriter.)]
+     ~@body))
+
 (deftest execute-effect-unknown-test
   (testing "Unknown effect types return failure"
     (let [result (effects/execute-effect [:unknown/type "arg"])]
@@ -15,83 +22,94 @@
 
 (deftest execute-effect-help-print-test
   (testing "Help print effect succeeds without title"
-    (let [opts {:help true}
-          result (effects/execute-effect [:help/print opts])]
-      (is (result/success? result))
-      ;; Help effect prints to stdout and returns nil, which is ok
-      (is (nil? (:value result)))))
+    (silently
+      (let [opts {:help true}
+            result (effects/execute-effect [:help/print opts])]
+        (is (result/success? result))
+        ;; Help effect prints to stdout and returns nil, which is ok
+        (is (nil? (:value result))))))
 
   (testing "Help print effect succeeds with title"
-    (let [opts {:help true}
-          result (effects/execute-effect [:help/print opts "TEST TITLE"])]
-      (is (result/success? result))
-      (is (nil? (:value result))))))
+    (silently
+      (let [opts {:help true}
+            result (effects/execute-effect [:help/print opts "TEST TITLE"])]
+        (is (result/success? result))
+        (is (nil? (:value result)))))))
 
 (deftest execute-effect-version-print-test
   (testing "Version print effect succeeds"
-    (let [result (effects/execute-effect [:version/print])]
-      (is (result/success? result))
-      ;; Version prints to stdout and returns nil, which is ok
-      (is (nil? (:value result))))))
+    (silently
+      (let [result (effects/execute-effect [:version/print])]
+        (is (result/success? result))
+        ;; Version prints to stdout and returns nil, which is ok
+        (is (nil? (:value result)))))))
 
 (deftest execute-effects-test
   (testing "Execute multiple effects in sequence"
-    (let [effects [[:help/print {}]
-                   [:version/print]]
-          result (effects/execute-effects effects)]
-      (is (result/success? result))
-      (is (= 2 (count (:value result))))))
+    (silently
+      (let [effects [[:help/print {}]
+                     [:version/print]]
+            result (effects/execute-effects effects)]
+        (is (result/success? result))
+        (is (= 2 (count (:value result)))))))
 
   (testing "Short-circuits on first failure"
-    (let [effects [[:help/print {}]
-                   [:unknown/type]
-                   [:version/print]]
-          result (effects/execute-effects effects)]
-      (is (result/failure? result))
-      (is (re-find #"Unknown effect type" (:error result))))))
+    (silently
+      (let [effects [[:help/print {}]
+                     [:unknown/type]
+                     [:version/print]]
+            result (effects/execute-effects effects)]
+        (is (result/failure? result))
+        (is (re-find #"Unknown effect type" (:error result)))))))
 
 (deftest execute-effects-all-test
   (testing "Execute all effects successfully"
-    (let [effects [[:help/print {}]
-                   [:version/print]]
-          result (effects/execute-effects-all effects)]
-      (is (result/success? result))
-      (is (= 2 (count (:value result))))))
+    (silently
+      (let [effects [[:help/print {}]
+                     [:version/print]]
+            result (effects/execute-effects-all effects)]
+        (is (result/success? result))
+        (is (= 2 (count (:value result)))))))
 
   (testing "Collects all failures"
-    (let [effects [[:help/print {}]
-                   [:unknown/type1]
-                   [:version/print]
-                   [:unknown/type2]]
-          result (effects/execute-effects-all effects)]
-      (is (result/failure? result))
-      (is (= "Multiple errors occurred" (:error result)))
-      (is (= 2 (-> result :context :count))))))
+    (silently
+      (let [effects [[:help/print {}]
+                     [:unknown/type1]
+                     [:version/print]
+                     [:unknown/type2]]
+            result (effects/execute-effects-all effects)]
+        (is (result/failure? result))
+        (is (= "Multiple errors occurred" (:error result)))
+        (is (= 2 (-> result :context :count)))))))
 
 (deftest execute-command-result-test
   (testing "Execute command with messages"
-    (let [cmd-result {:effects [[:help/print {}]]
-                      :messages ["Message 1" "Message 2"]}
-          result (effects/execute-command-result cmd-result)]
-      (is (result/success? result))))
+    (silently
+      (let [cmd-result {:effects [[:help/print {}]]
+                        :messages ["Message 1" "Message 2"]}
+            result (effects/execute-command-result cmd-result)]
+        (is (result/success? result)))))
 
   (testing "Execute command with format function"
-    (let [format-fn (fn [data] [(str "Formatted: " data)])
-          cmd-result {:effects [[:version/print]]
-                      :format-fn format-fn}
-          result (effects/execute-command-result cmd-result)]
-      (is (result/success? result))))
+    (silently
+      (let [format-fn (fn [data] [(str "Formatted: " data)])
+            cmd-result {:effects [[:version/print]]
+                        :format-fn format-fn}
+            result (effects/execute-command-result cmd-result)]
+        (is (result/success? result)))))
 
   (testing "Execute command with no effects returns ok"
-    (let [cmd-result {:messages ["Just a message"]}
-          result (effects/execute-command-result cmd-result)]
-      (is (result/success? result))
-      (is (nil? (:value result)))))
+    (silently
+      (let [cmd-result {:messages ["Just a message"]}
+            result (effects/execute-command-result cmd-result)]
+        (is (result/success? result))
+        (is (nil? (:value result))))))
 
   (testing "Handles failures gracefully"
-    (let [cmd-result {:effects [[:unknown/effect]]}
-          result (effects/execute-command-result cmd-result)]
-      (is (result/failure? result)))))
+    (silently
+      (let [cmd-result {:effects [[:unknown/effect]]}
+            result (effects/execute-command-result cmd-result)]
+        (is (result/failure? result))))))
 
 (deftest effect-context-test
   (testing "Effects include context in error results"
@@ -102,24 +120,26 @@
 
 (deftest effect-result-type-test
   (testing "All effects return Result types"
-    (let [test-effects [[:help/print {}]
-                        [:version/print]
-                        [:unknown/type]]]
-      (doseq [effect test-effects]
-        (let [result (effects/execute-effect effect)]
-          (is (or (result/success? result) (result/failure? result))
-              (str "Effect " effect " should return a Result")))))))
+    (silently
+      (let [test-effects [[:help/print {}]
+                          [:version/print]
+                          [:unknown/type]]]
+        (doseq [effect test-effects]
+          (let [result (effects/execute-effect effect)]
+            (is (or (result/success? result) (result/failure? result))
+                (str "Effect " effect " should return a Result"))))))))
 
 (deftest effect-idempotency-test
   (testing "Help and version effects are idempotent"
-    (let [help-result1 (effects/execute-effect [:help/print {}])
-          help-result2 (effects/execute-effect [:help/print {}])
-          version-result1 (effects/execute-effect [:version/print])
-          version-result2 (effects/execute-effect [:version/print])]
-      (is (result/success? help-result1))
-      (is (result/success? help-result2))
-      (is (result/success? version-result1))
-      (is (result/success? version-result2)))))
+    (silently
+      (let [help-result1 (effects/execute-effect [:help/print {}])
+            help-result2 (effects/execute-effect [:help/print {}])
+            version-result1 (effects/execute-effect [:version/print])
+            version-result2 (effects/execute-effect [:version/print])]
+        (is (result/success? help-result1))
+        (is (result/success? help-result2))
+        (is (result/success? version-result1))
+        (is (result/success? version-result2))))))
 
 ;; Integration-style tests with actual effects
 ;; These test that the effects properly interact with their dependencies

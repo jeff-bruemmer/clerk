@@ -60,11 +60,10 @@
 ;; Configuration effects
 (defmethod execute-effect :config/restore-defaults
   [[_]]
-  (result/try-result-with-context
-   #(do
-      (conf/restore-defaults!)
-      {:restored true})
-   {:effect :config/restore-defaults}))
+  (let [restore-result (conf/restore-defaults!)]
+    (if (result/success? restore-result)
+      (result/ok {:restored true})
+      restore-result)))
 
 ;; Project initialization effects
 (defmethod execute-effect :project/init

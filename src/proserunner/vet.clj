@@ -9,6 +9,7 @@
     [config :as conf]
     [path-ignore :as path-ignore]
     [project-config :as project-conf]
+    [result :as result]
     [storage :as store]
     [system :as sys]
     [text :as text]]
@@ -63,24 +64,36 @@
        text/handle-invalid-file))
 
 (defn process-files
-  "Dispatches to parallel or sequential file processing based on configuration and file count."
+  "Dispatches to parallel or sequential file processing based on configuration and file count.
+
+  fetch-fn returns Result<lines>, this function collects all Results and combines them."
   [files fetch-fn parallel?]
-  (let [num-files (count files)]
-    (if (and parallel? (> num-files 1))
-      (->> files
-           (pmap (comp doall fetch-fn))
-           doall
-           (apply concat))
-      (mapcat fetch-fn files))))
+  (let [num-files (count files)
+        results (if (and parallel? (> num-files 1))
+                  (doall (pmap fetch-fn files))
+                  (map fetch-fn files))
+        ;; Separate successes and failures
+        failures (filter result/failure? results)
+        successes (filter result/success? results)]
+    (if (seq failures)
+      ;; Return first failure (could combine all failures in future)
+      (first failures)
+      ;; Combine all successful line vectors
+      (result/ok (vec (mapcat :value successes))))))
 
 (defn get-lines-from-all-files
   "Get lines from all files, optionally processing files in parallel.
-   When parallel? is true, files are processed concurrently using pmap."
-  [code-blocks check-dialogue file exclude-patterns parallel?]
+   When parallel? is true, files are processed concurrently using pmap.
+
+   Returns Result<lines> - Success with all lines, or Failure on error."
+  [code-blocks check-quoted-text file exclude-patterns parallel?]
   (let [ignore-info (build-ignore-patterns file exclude-patterns)
-        files (filter-valid-files file ignore-info)
-        fetch-fn #(text/fetch! code-blocks % check-dialogue)]
-    (process-files files fetch-fn parallel?)))
+        files-result (filter-valid-files file ignore-info)]
+    (if (result/failure? files-result)
+      files-result
+      (let [files (:value files-result)
+            fetch-fn #(text/fetch! code-blocks % check-quoted-text)]
+        (process-files files fetch-fn parallel?)))))
 
 (defn- determine-parallel-settings
   "Determines parallel processing settings from options."
@@ -100,9 +113,11 @@
 
 (defn make-input
   "Input combines user-defined options and arguments
-  with the relevant cached results."
+  with the relevant cached results.
+
+  Returns Result<Input> - Success with Input record, or Failure on error."
   [options]
-  (let [{:keys [file config output code-blocks check-dialogue exclude no-cache skip-ignore]} options
+  (let [{:keys [file config output code-blocks quoted-text exclude no-cache skip-ignore]} options
         exclude-patterns (if exclude [exclude] [])
         {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
 
@@ -116,18 +131,22 @@
         updated-options (assoc options
                               :config config
                               :check-dir check-dir
-                              :project-ignore project-ignore)]
-    (map->Input
-     {:file file
-      :lines (get-lines-from-all-files code-blocks check-dialogue file exclude-patterns parallel-files?)
-      :config config
-      :check-dir check-dir
-      :checks (checks/create updated-options)
-      :cached-result (store/inventory file)
-      :output output
-      :no-cache no-cache
-      :parallel-lines parallel-lines?
-      :project-ignore project-ignore})))
+                              :project-ignore project-ignore)
+        lines-result (get-lines-from-all-files code-blocks quoted-text file exclude-patterns parallel-files?)]
+    (if (result/failure? lines-result)
+      lines-result
+      (result/ok
+       (map->Input
+        {:file file
+         :lines (:value lines-result)
+         :config config
+         :check-dir check-dir
+         :checks (checks/create updated-options)
+         :cached-result (store/inventory file)
+         :output output
+         :no-cache no-cache
+         :parallel-lines parallel-lines?
+         :project-ignore project-ignore})))))
 
 ;;;; Core functions for vetting a lines of text with each check.
 
@@ -161,16 +180,22 @@
          (map-fn #(reduce dispatch % checks))
          (filter :issue?))))
 
+(defn stable-hash
+  "Computes a stable hash that persists across JVM restarts.
+  Uses hash of the string representation rather than JVM's hash."
+  [data]
+  (hash (pr-str data)))
+
 (defn compute
   "Takes an input, and returns the results of
   running the configured checks on each line of text in the file."
   [{:keys [file lines config checks output parallel-lines]}]
   (store/map->Result {:lines lines
-                      :lines-hash (hash lines)
-                      :file-hash (hash file)
+                      :lines-hash (stable-hash lines)
+                      :file-hash (stable-hash file)
                       :config config
-                      :config-hash (hash config)
-                      :check-hash (hash checks)
+                      :config-hash (stable-hash config)
+                      :check-hash (stable-hash checks)
                       :output output
                       :results (process checks lines parallel-lines)}))
 
@@ -266,28 +291,33 @@
     result))
 
 (defn compute-or-cached
-  "Returns computed or cached results of running checks on text."
+  "Returns computed or cached results of running checks on text.
+
+  Returns Result with computed/cached results, or Failure on error."
   [options]
-  (let [inputs (make-input options)
-        {:keys [cached-result output]} inputs
-        results
-        (cond
-          (:no-cache inputs)
-          (compute-and-store inputs)
+  (let [input-result (make-input options)]
+    (if (result/failure? input-result)
+      input-result
+      (let [inputs (:value input-result)
+            {:keys [cached-result output]} inputs
+            results
+            (cond
+              (:no-cache inputs)
+              (compute-and-store inputs)
 
-          ;; If nothing has changed, return cached results
-          ;; As well as the output format, which may have changed.
-          (valid-result? inputs)
-          (assoc cached-result :output output)
+              ;; If nothing has changed, return cached results
+              ;; As well as the output format, which may have changed.
+              (valid-result? inputs)
+              (assoc cached-result :output output)
 
-          ;; If checks and config are the same, we only need to reprocess
-          ;; any lines that have changed.
-          (valid-checks? inputs)
-          (let [result (compute-changed inputs)]
-            (store/save! result)
-            result)
+              ;; If checks and config are the same, we only need to reprocess
+              ;; any lines that have changed.
+              (valid-checks? inputs)
+              (let [result (compute-changed inputs)]
+                (store/save! result)
+                result)
 
-          ;; Otherwise process texts and cache results.
-          :else
-          (compute-and-store inputs))]
-    (assoc inputs :results results)))
+              ;; Otherwise process texts and cache results.
+              :else
+              (compute-and-store inputs))]
+        (result/ok (assoc inputs :results results))))))

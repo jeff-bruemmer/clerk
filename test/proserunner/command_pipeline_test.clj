@@ -7,36 +7,45 @@
             [proserunner.effects :as effects]
             [proserunner.result :as result]))
 
+(defmacro silently
+  "Suppresses stdout/stderr during test execution."
+  [& body]
+  `(binding [*out* (java.io.StringWriter.)
+             *err* (java.io.StringWriter.)]
+     ~@body))
+
 ;; Integration Tests: Full Pipeline
 ;; These tests verify the complete flow from options to effect execution
 
 (deftest pipeline-help-command-test
   (testing "Help command flows through entire pipeline"
-    (let [opts {:help true}
-          ;; Step 1: Validate options
-          validation (cmd/validate-options opts)]
-      (is (result/success? validation))
+    (silently
+      (let [opts {:help true}
+            ;; Step 1: Validate options
+            validation (cmd/validate-options opts)]
+        (is (result/success? validation))
 
-      ;; Step 2: Dispatch command
-      (let [cmd-result (cmd/dispatch-command opts)]
-        (is (= :help (:command cmd-result)))
-        (is (some? (:effects cmd-result)))
+        ;; Step 2: Dispatch command
+        (let [cmd-result (cmd/dispatch-command opts)]
+          (is (= :help (:command cmd-result)))
+          (is (some? (:effects cmd-result)))
 
-        ;; Step 3: Execute effects
-        (let [effect-result (effects/execute-command-result cmd-result)]
-          (is (result/success? effect-result)))))))
+          ;; Step 3: Execute effects
+          (let [effect-result (effects/execute-command-result cmd-result)]
+            (is (result/success? effect-result))))))))
 
 (deftest pipeline-version-command-test
   (testing "Version command flows through entire pipeline"
-    (let [opts {:version true}
-          validation (cmd/validate-options opts)]
-      (is (result/success? validation))
+    (silently
+      (let [opts {:version true}
+            validation (cmd/validate-options opts)]
+        (is (result/success? validation))
 
-      (let [cmd-result (cmd/dispatch-command opts)]
-        (is (= :version (:command cmd-result)))
+        (let [cmd-result (cmd/dispatch-command opts)]
+          (is (= :version (:command cmd-result)))
 
-        (let [effect-result (effects/execute-command-result cmd-result)]
-          (is (result/success? effect-result)))))))
+          (let [effect-result (effects/execute-command-result cmd-result)]
+            (is (result/success? effect-result))))))))
 
 (deftest pipeline-validation-failure-test
   (testing "Validation failure prevents dispatch and execution"
@@ -99,18 +108,20 @@
 
 (deftest pipeline-effect-execution-test
   (testing "Effects execute and return Results"
-    (let [opts {:help true}
-          cmd-result (cmd/dispatch-command opts)
-          exec-result (effects/execute-command-result cmd-result)]
-      (is (or (result/success? exec-result) (result/failure? exec-result))
-          "Execution should return a Result"))))
+    (silently
+      (let [opts {:help true}
+            cmd-result (cmd/dispatch-command opts)
+            exec-result (effects/execute-command-result cmd-result)]
+        (is (or (result/success? exec-result) (result/failure? exec-result))
+            "Execution should return a Result")))))
 
 (deftest pipeline-unknown-effect-handling-test
   (testing "Unknown effects are handled gracefully"
-    (let [cmd-result {:effects [[:unknown/bad-effect "arg"]]}
-          exec-result (effects/execute-command-result cmd-result)]
-      (is (result/failure? exec-result))
-      (is (re-find #"Unknown effect type" (:error exec-result))))))
+    (silently
+      (let [cmd-result {:effects [[:unknown/bad-effect "arg"]]}
+            exec-result (effects/execute-command-result cmd-result)]
+        (is (result/failure? exec-result))
+        (is (re-find #"Unknown effect type" (:error exec-result)))))))
 
 (deftest pipeline-message-formatting-test
   (testing "Messages are properly formatted in command results"
@@ -132,17 +143,18 @@
 
 (deftest pipeline-end-to-end-success-test
   (testing "Complete successful pipeline: validate → dispatch → execute"
-    (let [opts {:version true}]
-      ;; Full pipeline
-      (-> opts
-          cmd/validate-options
-          (result/bind (fn [valid-opts]
-                         (result/ok (cmd/dispatch-command valid-opts))))
-          (result/bind (fn [cmd-result]
-                         (effects/execute-command-result cmd-result)))
-          (#(do
-              (is (result/success? %))
-              %))))))
+    (silently
+      (let [opts {:version true}]
+        ;; Full pipeline
+        (-> opts
+            cmd/validate-options
+            (result/bind (fn [valid-opts]
+                           (result/ok (cmd/dispatch-command valid-opts))))
+            (result/bind (fn [cmd-result]
+                           (effects/execute-command-result cmd-result)))
+            (#(do
+                (is (result/success? %))
+                %)))))))
 
 (deftest pipeline-end-to-end-failure-test
   (testing "Complete failing pipeline: validation fails early"
@@ -157,13 +169,14 @@
 
 (deftest pipeline-effect-short-circuit-test
   (testing "Multiple effects execute in sequence until failure"
-    (let [cmd-result {:effects [[:version/print]
-                                [:unknown/bad-effect]
-                                [:help/print {}]]}
-          exec-result (effects/execute-command-result cmd-result)]
-      ;; Should fail on the unknown effect
-      (is (result/failure? exec-result))
-      (is (re-find #"Unknown effect type" (:error exec-result))))))
+    (silently
+      (let [cmd-result {:effects [[:version/print]
+                                  [:unknown/bad-effect]
+                                  [:help/print {}]]}
+            exec-result (effects/execute-command-result cmd-result)]
+        ;; Should fail on the unknown effect
+        (is (result/failure? exec-result))
+        (is (re-find #"Unknown effect type" (:error exec-result)))))))
 
 (deftest pipeline-idempotency-test
   (testing "Running the same pipeline twice produces same results"
@@ -179,10 +192,11 @@
 
 (deftest pipeline-default-command-test
   (testing "Empty options trigger default command"
-    (let [opts {}
-          cmd-result (cmd/dispatch-command opts)]
-      (is (= :default (:command cmd-result)))
-      (is (some? (:effects cmd-result)))
-      (let [[effect-type _effect-opts title] (first (:effects cmd-result))]
-        (is (= :help/print effect-type))
-        (is (= "P R O S E R U N N E R" title))))))
+    (silently
+      (let [opts {}
+            cmd-result (cmd/dispatch-command opts)]
+        (is (= :default (:command cmd-result)))
+        (is (some? (:effects cmd-result)))
+        (let [[effect-type _effect-opts title] (first (:effects cmd-result))]
+          (is (= :help/print effect-type))
+          (is (= "P R O S E R U N N E R" title)))))))

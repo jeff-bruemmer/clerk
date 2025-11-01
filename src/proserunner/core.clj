@@ -19,7 +19,7 @@
   [["-b" "--code-blocks" "Include code blocks." :default false]
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
-   ["-d" "--check-dialogue" "Include dialogue in checks." :default false]
+   ["-q" "--quoted-text" "Include quoted text in checks." :default false]
    ["-e" "--exclude PATTERN" "Exclude files/dirs matching pattern (glob)." :default nil]
    ["-f" "--file FILE" "File or dir to proofread."
     :default nil

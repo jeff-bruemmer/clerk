@@ -1,7 +1,9 @@
 (ns proserunner.checks
   (:gen-class)
   (:require [proserunner
-             [error :as error]]
+             [edn-utils :as edn-utils]
+             [error :as error]
+             [result :as result]]
             [clojure
              [edn :as edn]
              [string :as string]
@@ -119,10 +121,13 @@
   lists specimens to ignore."
   [check-dir filename]
   (if (nil? filename) #{}
-      (let [f (path check-dir filename)]
-        (->> f
-             slurp
-             edn/read-string))))
+      (let [f (path check-dir filename)
+            read-result (edn-utils/read-edn-file f)]
+        (if (result/success? read-result)
+          (:value read-result)
+          (throw (ex-info (str "Failed to load ignore set from file: " f)
+                          {:error (:error read-result)
+                           :context (:context read-result)}))))))
 
 (defn- absolute-path?
   "Check if a path is absolute."

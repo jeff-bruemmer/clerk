@@ -1,11 +1,12 @@
 (ns proserunner.ignore
   "Functions for managing ignored specimens."
   (:gen-class)
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [proserunner.context :as context]
+            [proserunner.edn-utils :as edn-utils]
             [proserunner.file-utils :as file-utils]
             [proserunner.project-config :as project-config]
+            [proserunner.result :as result]
             [proserunner.system :as sys]))
 
 (set! *warn-on-reflection* true)
@@ -22,16 +23,17 @@
   []
   (let [ignore-path (ignore-file-path)]
     (if (.exists (io/file ignore-path))
-      (try
-        (set (edn/read-string (slurp ignore-path)))
-        (catch Exception _ #{}))
+      (let [result (edn-utils/read-edn-file ignore-path)]
+        (if (result/success? result)
+          (set (:value result))
+          #{}))
       #{})))
 
 (defn write-ignore-file!
   "Writes the set of ignored specimens to the ignore file atomically."
   [ignored-set]
   (let [ignore-path (ignore-file-path)]
-    (.mkdirs (.getParentFile (io/file ignore-path)))
+    (file-utils/ensure-parent-dir ignore-path)
     (file-utils/atomic-spit ignore-path (pr-str (vec (sort ignored-set))))))
 
 ;;; Set Operations

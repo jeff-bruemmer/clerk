@@ -3,11 +3,12 @@
   (:gen-class)
   (:require [clojure.java.io :as io]
             [proserunner.error :as error]
+            [proserunner.result :as result]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
 
-(defrecord Line [file text line-num code? dialogue? issue? issues])
+(defrecord Line [file text line-num code? quoted? issue? issues])
 (defrecord Issue [file name kind specimen col-num message])
 
 (def supported-files (sorted-set "txt" "tex" "md" "markdown" "org"))
@@ -22,9 +23,11 @@
   (.exists (io/file filepath)))
 
 (defn less-than-10-MB?
-  "Is the file less then 10 MB?"
+  "Is the file less than 10 MB and actually a file (not a directory)?"
   [filepath]
-  (< (.length (io/file filepath)) 10000001))
+  (let [f (io/file filepath)]
+    (and (.isFile f)
+         (< (.length f) 10000001))))
 
 (defn supported-file-type?
   "File should be a text, markdown, tex, or org file."
@@ -34,28 +37,31 @@
    (peek (string/split filepath #"\."))))
 
 (defn handle-invalid-file
-  "If proserunner has no files to vet, it pours out its beer."
+  "Returns Result with files if valid, Failure if no files to vet.
+
+  Previously called error/exit, now returns Result for better composability."
   [files]
-  (if (empty? files) (error/exit file-type-msg)
-      files))
+  (if (empty? files)
+    (result/err file-type-msg {:reason :no-valid-files})
+    (result/ok files)))
 
-;;;; Dialogue detection
+;;;; Quoted text detection
 
-;; Regex patterns for detecting quoted dialogue
+;; Regex patterns for detecting quoted text
 (def ^:private double-quote-pattern
-  "Matches double-quoted text: \"...\""
-  #"\"[^\"]*\"")
+  "Matches double-quoted text with both straight and curly quotes."
+  #"(?:\"[^\"]*\"|\u201C[^\u201D]*\u201D)")
 
 (def ^:private single-quote-pattern
-  "Matches single-quoted dialogue, excluding apostrophes and possessives.
+  "Matches single-quoted text with both straight and curly quotes.
    Requires whitespace or punctuation before/after to distinguish from
    contractions like \"it's\" or possessives like \"dog's\"."
-  #"(?:^|[\s,;:\.\!\?])'[^']*'(?:[\s,;:\.\!\?]|$)")
+  #"(?:(?:^|[\s,;:\.\!\?])'[^']*'(?:[\s,;:\.\!\?]|$)|(?:^|[\s,;:\.\!\?])\u2018[^\u2019]*\u2019(?:[\s,;:\.\!\?]|$))")
 
-(defn contains-dialogue?
-  "Detects if text contains dialogue (quoted text).
+(defn contains-quoted-text?
+  "Detects if text contains quoted text.
    Handles both double quotes and single quotes, but distinguishes
-   apostrophes/possessives from single-quote dialogue."
+   apostrophes/possessives from single-quote quoted text."
   [text]
   (or (re-find double-quote-pattern text)
       (re-find single-quote-pattern text)))
@@ -65,18 +71,27 @@
   [match]
   (string/join (repeat (count match) \space)))
 
-(defn strip-dialogue
-  "Removes dialogue from text while preserving character positions.
+(defn strip-quoted-text
+  "Removes quoted text from text while preserving character positions.
    Replaces quoted text with spaces so column numbers remain accurate."
   [text]
   (-> text
       (string/replace double-quote-pattern replace-with-spaces)
       (string/replace single-quote-pattern replace-with-spaces)))
 
-(defn mark-dialogue
-  "Marks a Line record with :dialogue? field based on dialogue detection."
+(defn mark-quoted-text
+  "Marks a Line record with :quoted? field based on quoted text detection."
   [line]
-  (assoc line :dialogue? (boolean (contains-dialogue? (:text line)))))
+  (assoc line :quoted? (boolean (contains-quoted-text? (:text line)))))
+
+(defn process-quoted-text
+  "Processes quoted text based on check-quoted-text flag.
+   If check-quoted-text is false, strips quoted text from the line.
+   If true, keeps the line unchanged."
+  [check-quoted-text line]
+  (if (or check-quoted-text (not (:quoted? line)))
+    line
+    (assoc line :text (strip-quoted-text (:text line)))))
 
 ;;;; Load text and create lines to vet.
 
@@ -96,7 +111,7 @@
   [idx text]
   {:line-num (inc idx)
    :text text
-   :dialogue? false
+   :quoted? false
    :issue? false
    :issues []})
 
@@ -108,47 +123,42 @@
 
 (defn fetch!
   "Takes a code-blocks boolean and a filepath string. It loads the file
-  and returns decorated lines. Code-blocks is false by default, but
-  if true, the lines inside code blocks are kept.
+  and returns a Result containing decorated lines. Code-blocks is false by default,
+  but if true, the lines inside code blocks are kept.
 
-  Optional check-dialogue parameter (default false): if true, dialogue lines
-  are included in the output; if false, dialogue lines are filtered out."
+  Optional check-quoted-text parameter (default false): if true, quoted text is
+  included in checks; if false, quoted portions are stripped from lines before checking.
+
+  Returns Result<vector<Line>> on success, Failure on file errors."
   ([code-blocks filepath]
    (fetch! code-blocks filepath false))
-  ([code-blocks filepath check-dialogue]
-   (try
-     (let [homepath (home-path filepath)
-           code (atom false) ;; Are we in a code block?
-           boundary "```" ;; assumes code blocks are delimited by triple backticks.
-           ;; If we see a boundry, we're either entering or exiting a code block.
-           code-fn (fn [line] (if (string/starts-with? (:text line) boundary)
-                                (assoc line :code? (swap! code not))
-                                (assoc line :code? @code)))]
-       (->> filepath
-            slurp
-            string/split-lines
-            (map-indexed number-lines)
-            (remove #(string/blank? (:text %)))
-            (map (comp
-                  map->Line
-                  #(assoc % :file homepath)
-                  code-fn))
-            (map mark-dialogue)
-            (remove #(or
-                      (= boundary (:text %))
-                      (and (not code-blocks)
-                           (:code? %))
-                      (and (not check-dialogue)
-                           (:dialogue? %))))))
-     (catch java.io.FileNotFoundException _e
-       (println (str "Error: File not found: " filepath))
-       [])
-     (catch java.io.IOException e
-       (println (str "Error: Could not read file '" filepath "': " (.getMessage e)))
-       [])
-     (catch Exception e
-       (println (str "Error: Unexpected error reading file '" filepath "': " (.getMessage e)))
-       []))))
+  ([code-blocks filepath check-quoted-text]
+   (result/try-result-with-context
+    (fn []
+      (let [homepath (home-path filepath)
+            code (atom false) ;; Are we in a code block?
+            boundary "```" ;; assumes code blocks are delimited by triple backticks.
+            ;; If we see a boundry, we're either entering or exiting a code block.
+            code-fn (fn [line] (if (string/starts-with? (:text line) boundary)
+                                 (assoc line :code? (swap! code not))
+                                 (assoc line :code? @code)))]
+        (vec
+         (->> filepath
+              slurp
+              string/split-lines
+              (map-indexed number-lines)
+              (remove #(string/blank? (:text %)))
+              (map (comp
+                    map->Line
+                    #(assoc % :file homepath)
+                    code-fn))
+              (map mark-quoted-text)
+              (map (partial process-quoted-text check-quoted-text))
+              (remove #(or
+                        (= boundary (:text %))
+                        (and (not code-blocks)
+                             (:code? %))))))))
+    {:filepath filepath :operation :fetch})))
 
 (defn get-lines
   "Read and decorate lines."
