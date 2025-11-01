@@ -66,13 +66,16 @@
 (defn find-manifest
   "Walks up the directory tree from start-dir to find .proserunner/config.edn.
    Stops at the first .git directory encountered (project boundary).
+   Skips the home directory (~/.proserunner/ is reserved for global config).
    Returns map with :manifest-path and :project-root, or nil if not found."
   [start-dir]
-  (loop [current-dir (io/file start-dir)]
-    (when current-dir
-      (or (manifest-in-dir current-dir)
-          (when-not (has-git-directory? current-dir)
-            (recur (.getParentFile current-dir)))))))
+  (let [home-dir (sys/home-dir)]
+    (loop [current-dir (io/file start-dir)]
+      (when (and current-dir
+                 (not= (.getAbsolutePath current-dir) home-dir))
+        (or (manifest-in-dir current-dir)
+            (when-not (has-git-directory? current-dir)
+              (recur (.getParentFile current-dir))))))))
 
 ;;; Error Message Builders
 
@@ -97,13 +100,52 @@
 
 ;;; Manifest Parsing and Validation
 
+(defn check-entry-references-checks?
+  "Returns true if entry references the 'checks' directory (string 'checks' or map with :directory 'checks').
+   Public helper for use in custom-checks namespace."
+  [entry]
+  (or (= entry "checks")
+      (and (map? entry) (= (:directory entry) "checks"))))
+
+(defn- valid-check-entry?
+  "Validates a single check entry (string reference or map definition)."
+  [entry]
+  (or (string? entry)
+      (and (map? entry)
+           (contains? entry :directory)
+           (string? (:directory entry))
+           (or (nil? (:files entry))
+               (and (vector? (:files entry))
+                    (every? string? (:files entry))))
+           (or (nil? (:name entry))
+               (string? (:name entry))))))
+
+(defn- validate-entries-format
+  "Validates that all entries in a check list are valid."
+  [field-name]
+  (fn [value]
+    (let [invalid-entries (remove valid-check-entry? value)]
+      (if (seq invalid-entries)
+        (v/validation-error value
+          (str field-name " contains invalid entries. Each entry must be either:\n"
+               "  - A string (reference to global check)\n"
+               "  - A map with :directory (required), and optional :files (vector) and :name (string)\n"
+               "Invalid entries: " (pr-str invalid-entries)))
+        (v/validation-ok value)))))
+
+(defn- validate-check-entries
+  "Custom validator for :checks field that validates all entries."
+  [field-name]
+  (v/chain
+    (v/required field-name)
+    (v/type-check field-name vector? "a vector")
+    (v/not-empty-check field-name)
+    (validate-entries-format field-name)))
+
 (def ^:private manifest-validators
   "Declarative validator specifications for project manifest fields."
-  {:check-sources
-   (v/chain
-     (v/required ":check-sources")
-     (v/type-check ":check-sources" vector? "a vector")
-     (v/not-empty-check ":check-sources"))
+  {:checks
+   (validate-check-entries ":checks")
 
    :ignore
    (v/with-default #{}
@@ -147,11 +189,12 @@
 ;;; 1. Load Global Config (load-global-config)
 ;;;    - Reads ~/.proserunner/config.edn → :checks (list of check definitions)
 ;;;    - Reads ~/.proserunner/ignore.edn → :ignore (set of ignored specimens)
+;;;    - Normalizes :checks entries (auto-discovers :files if missing)
 ;;;    - Global :checks contain directory paths relative to ~/.proserunner/
 ;;;
 ;;; 2. Parse Project Manifest (read-manifest → parse-manifest)
 ;;;    - Reads .proserunner/config.edn in project directory
-;;;    - Contains :check-sources (vector of source specs like ["default" "checks" "./path"])
+;;;    - Contains :checks (vector of string references or map definitions)
 ;;;    - Contains :ignore (set), :ignore-mode (:extend/:replace), :config-mode (:merged/:project-only)
 ;;;    - Validates all fields with helpful error messages
 ;;;
@@ -159,36 +202,36 @@
 ;;;    - If :config-mode is :project-only → use only project config
 ;;;    - If :config-mode is :merged:
 ;;;      - Merge :ignore sets based on :ignore-mode (:extend unions, :replace uses only project)
-;;;      - Preserve project's :check-sources for later resolution
-;;;      - Keep global :checks available for potential inclusion
+;;;      - Preserve project's :checks for later resolution
+;;;      - Keep global :checks available for reference resolution
 ;;;
-;;; 4. Resolve Check Sources (resolve-check-sources)
-;;;    - Converts abstract :check-sources specs into concrete check definitions
-;;;    - "default" → signals to include global checks
-;;;    - "checks" → resolves to .proserunner/checks/ in project root
-;;;    - "./path" or "/path" → resolves to local directory (with path traversal protection)
-;;;    - Each resolved source becomes a check definition with :directory and :files
+;;; 4. Resolve Check Entries (resolve-check-entries)
+;;;    - Converts check entries into concrete check definitions
+;;;    - String reference (e.g., "default") → looks up in global :checks by :directory name
+;;;    - Map definition → normalizes paths and auto-discovers :files if missing
+;;;    - Special: {:directory "checks"} → resolves to .proserunner/checks/ in project root
+;;;    - Path traversal protection for local directories
 ;;;
 ;;; 5. Build Final Config (build-project-config)
-;;;    - Takes resolved project checks and merges with global checks if "default" is specified
-;;;    - Global checks get their paths converted to absolute (make-global-checks-absolute)
+;;;    - Resolves all check entries from project config
+;;;    - String references are resolved to their global definitions (preserving disabled checks)
 ;;;    - Returns final config with :checks, :ignore, and :source metadata
 ;;;
 ;;; EXAMPLE FLOWS:
 ;;;
-;;; Example 1: Project with default checks + project checks
+;;; Example 1: Project references global checks
 ;;;   Global:  {:checks [{:directory "default" :files ["cliches"]}] :ignore #{"foo"}}
-;;;   Project: {:check-sources ["default" "checks"] :ignore #{"bar"} :ignore-mode :extend}
-;;;   Result:  {:checks [global-checks... project-checks...] :ignore #{"foo" "bar"}}
+;;;   Project: {:checks ["default" {:directory "checks"}] :ignore #{"bar"} :ignore-mode :extend}
+;;;   Result:  {:checks [global-default-check... project-checks...] :ignore #{"foo" "bar"}}
 ;;;
 ;;; Example 2: Project-only configuration
 ;;;   Global:  {:checks [...] :ignore #{"foo"}}
-;;;   Project: {:check-sources ["checks"] :ignore #{"bar"} :config-mode :project-only}
+;;;   Project: {:checks [{:directory "checks"}] :ignore #{"bar"} :config-mode :project-only}
 ;;;   Result:  {:checks [project-checks-only] :ignore #{"bar"}}
 ;;;
-;;; Example 3: Local check directory
-;;;   Project: {:check-sources ["./custom-checks"]}
-;;;   Result:  Resolves ./custom-checks relative to project root, includes those checks
+;;; Example 3: Local check directory with explicit files
+;;;   Project: {:checks [{:directory "./custom-checks" :files ["style"]}]}
+;;;   Result:  Resolves ./custom-checks relative to project root, uses only "style" check
 
 (defn- merge-ignores
   "Merges ignore sets based on ignore-mode."
@@ -204,18 +247,18 @@
    - If :config-mode is :merged:
      - If :ignore-mode is :extend, unions global and project ignores
      - If :ignore-mode is :replace, uses only project ignores
-     - Preserves project's :check-sources while keeping global :checks for later merging"
+     - Preserves project's :checks while keeping global :checks for later reference resolution"
   [global-config project-config]
   (if (= (:config-mode project-config) :project-only)
     project-config
-    ;; In merged mode, preserve project's :check-sources and merge ignores
-    ;; The :check-sources will be resolved later in build-project-config
+    ;; In merged mode, preserve project's :checks and merge ignores
+    ;; The :checks entries will be resolved later in build-project-config
     (assoc project-config
            :ignore (merge-ignores (:ignore global-config)
                                  (:ignore project-config)
                                  (:ignore-mode project-config)))))
 
-;;; Check Source Resolution
+;;; Check Entry Resolution
 
 (defn- relative-path?
   "Checks if path is relative."
@@ -227,6 +270,19 @@
   [path]
   (or (.isAbsolute (io/file path))
       (string/starts-with? path "~")))
+
+(defn- get-edn-files
+  "Gets all .edn files in a directory, returning their names without extension."
+  [directory]
+  (let [dir-file (io/file directory)]
+    (when (.exists dir-file)
+      (->> (.listFiles dir-file)
+           (filter #(.isFile ^File %))
+           (map #(.getName ^File %))
+           (filter #(string/ends-with? % ".edn"))
+           (map #(string/replace % #"\.edn$" ""))
+           sort
+           vec))))
 
 (defn- resolve-local-path
   "Resolves a local path to absolute path, validating it exists and is safe.
@@ -256,75 +312,84 @@
 
     canonical-path))
 
-(defn resolve-check-source
-  "Resolves a check source specification to a concrete source map.
+(defn- make-directory-absolute
+  "Converts a directory path to absolute, relative to base-dir if needed."
+  [dir base-dir]
+  (if (absolute-path? dir)
+    dir
+    (str (io/file base-dir dir))))
 
-   Sources can be:
-   - 'default' -> built-in default checks
-   - 'checks' -> .proserunner/checks/ directory (project-local checks)
-   - './path' or '/path' -> local directory
+(defn- find-global-check-by-directory
+  "Finds a global check entry that matches the given directory name.
+   Returns the check entry with absolute paths, or nil if not found."
+  [dir-name global-checks]
+  (let [global-proserunner-dir (sys/filepath ".proserunner" "")]
+    (when-let [check (first (filter #(= (:directory %) dir-name) global-checks))]
+      (update check :directory #(make-directory-absolute % global-proserunner-dir)))))
 
-   Returns a map with :type and source-specific fields."
-  [source project-root]
-  (cond
-    (= source "default")
-    {:type :built-in :source "default"}
-
-    (= source "checks")
-    {:type :local
-     :path (.getAbsolutePath (project-checks-dir-path project-root))}
-
-    :else
-    {:type :local
-     :path (resolve-local-path source project-root)}))
-
-;;; Check Source to Config Conversion
-
-(defn- get-edn-files
-  "Gets all .edn files in a directory, returning their names without extension."
+(defn- generate-check-name
+  "Generates a check name from a directory path."
   [directory]
-  (let [dir-file (io/file directory)]
-    (when (.exists dir-file)
-      (->> (.listFiles dir-file)
-           (filter #(.isFile ^File %))
-           (map #(.getName ^File %))
-           (filter #(string/ends-with? % ".edn"))
-           (map #(string/replace % #"\.edn$" ""))
-           sort
-           vec))))
+  (str "Project checks: " (last (string/split directory (re-pattern (str File/separator))))))
 
-(defn- resolve-check-source-to-config
-  "Converts a resolved check source into a check config entry.
-   Returns a map with :name, :directory, and :files."
-  [resolved-source]
-  (case (:type resolved-source)
-    :built-in
-    ;; For built-in default, we'll use the global config's default checks
-    nil
+(defn- resolve-check-directory
+  "Resolves a check directory path, handling the special 'checks' shorthand."
+  [directory project-root]
+  (if (= directory "checks")
+    (.getAbsolutePath (project-checks-dir-path project-root))
+    (resolve-local-path directory project-root)))
 
-    :local
-    (let [path (:path resolved-source)
-          name (last (string/split path (re-pattern (str File/separator))))
-          files (get-edn-files path)]
-      (when (seq files)
-        {:name (str "Project checks: " name)
-         :directory path
-         :files files}))))
+(defn- normalize-project-check-entry
+  "Normalizes a project check map entry.
+   - Resolves :directory to absolute path
+   - Auto-discovers :files if not present
+   - Generates :name if not present"
+  [check-entry project-root]
+  (let [directory (resolve-check-directory (:directory check-entry) project-root)
+        files (if (contains? check-entry :files)
+               (:files check-entry)
+               (get-edn-files directory))
+        name (or (:name check-entry)
+                (generate-check-name directory))]
+    (when (seq files)
+      {:name name
+       :directory directory
+       :files files})))
 
-(defn resolve-check-sources
-  "Resolves all check sources from a project config into check definitions.
+(defn- resolve-check-entry
+  "Resolves a check entry (string reference or map) to concrete check config.
+   - String: looks up in global-checks by directory name
+   - Map: normalizes and resolves paths
+   Returns check config map or nil if resolution fails."
+  [entry global-checks project-root]
+  (if (string? entry)
+    ;; String reference - find matching global check
+    (find-global-check-by-directory entry global-checks)
+    ;; Map - normalize and resolve
+    (normalize-project-check-entry entry project-root)))
+
+(defn resolve-check-entries
+  "Resolves all check entries from a project config into check definitions.
    Returns a vector of check configs ready for the checks system.
 
-   Sources that resolve to nil are filtered out. This happens when:
-   - Source is 'default' (handled via global config merge)
-   - Source is a local directory with no .edn files"
-  [check-sources project-root]
-  (->> check-sources
-       (map #(resolve-check-source % project-root))
-       (keep resolve-check-source-to-config)  ; keep filters nils
+   Entries that resolve to nil are filtered out (e.g., empty directories)."
+  [check-entries global-checks project-root]
+  (->> check-entries
+       (map #(resolve-check-entry % global-checks project-root))
+       (remove nil?)
        vec))
 
 ;;; Main Entry Point
+
+(defn- normalize-check-entry
+  "Adds :files to check entry if missing by auto-discovering .edn files.
+   For global config, resolves directory relative to ~/.proserunner/"
+  [global-proserunner-dir check-entry]
+  (if (contains? check-entry :files)
+    check-entry
+    (let [dir-path (io/file global-proserunner-dir (:directory check-entry))
+          files (get-edn-files (.getAbsolutePath dir-path))]
+      (assoc check-entry :files (or files [])))))
 
 (defn load-global-config
   "Loads the global configuration from ~/.proserunner/"
@@ -333,52 +398,26 @@
         config-file (io/file config-path)]
     (if (.exists config-file)
       (let [parsed-config (config/safe-load-config config-path)
+            global-proserunner-dir (sys/filepath ".proserunner" "")
+            ;; Normalize check entries (auto-discover :files if missing)
+            normalized-checks (mapv #(normalize-check-entry global-proserunner-dir %)
+                                   (:checks parsed-config))
             ;; Use dynamic require to avoid circular dependency
             _ (require 'proserunner.ignore)
             read-ignore-file (resolve 'proserunner.ignore/read-ignore-file)
             global-ignore (read-ignore-file)]
-        {:checks (:checks parsed-config)
+        {:checks normalized-checks
          :ignore global-ignore})
       ;; No global config exists
       {:ignore #{}})))
 
-(defn- absolutize-check-directory
-  "Converts a check's directory to absolute path if needed."
-  [global-check-dir check]
-  (update check :directory
-          (fn [dir]
-            (if (absolute-path? dir)
-              dir
-              (str global-check-dir dir)))))
-
-(defn- make-global-checks-absolute
-  "Converts global check directories to absolute paths."
-  [global-checks]
-  (let [global-check-dir (sys/filepath ".proserunner" "")]
-    (mapv (partial absolutize-check-directory global-check-dir) global-checks)))
-
-(defn- includes-default?
-  "Checks if 'default' is in the check sources."
-  [check-sources]
-  (some #(= "default" %) check-sources))
-
-(defn- merge-checks-with-defaults
-  "Merges project checks with global checks (default + custom) if 'default' is specified.
-   When 'default' is in check-sources, includes ALL global checks (both default and custom).
-   Returns only project checks if 'default' is not included."
-  [global-checks project-checks check-sources]
-  (if (includes-default? check-sources)
-    (let [absolute-globals (make-global-checks-absolute global-checks)]
-      (vec (concat absolute-globals project-checks)))
-    (vec project-checks)))
-
 (defn- build-project-config
   "Builds final project config from merged config and resolved checks."
   [merged-config global-config project-root]
-  (let [check-sources (:check-sources merged-config)
-        project-checks (resolve-check-sources check-sources project-root)
-        all-checks (merge-checks-with-defaults (:checks global-config) project-checks check-sources)]
-    {:checks all-checks
+  (let [check-entries (:checks merged-config)
+        ;; Resolve all check entries (string references and map definitions)
+        resolved-checks (resolve-check-entries check-entries (:checks global-config) project-root)]
+    {:checks resolved-checks
      :ignore (:ignore merged-config)
      :source :project}))
 
@@ -387,12 +426,12 @@
 
    Orchestrates the entire config merge pipeline (see 'Config Merging' section above):
 
-   1. Searches for .proserunner/config.edn starting from start-dir
+   1. Searches for .proserunner/config.edn starting from start-dir (skips home directory)
    2. If found, parses and validates it (parse-manifest)
    3. Loads global config from ~/.proserunner/ (load-global-config)
    4. Merges global and project configs based on project settings (merge-configs)
-   5. Resolves check sources into check definitions (resolve-check-sources)
-   6. Builds final configuration with merged checks (build-project-config)
+   5. Resolves check entries into check definitions (resolve-check-entries)
+   6. Builds final configuration with resolved checks (build-project-config)
    7. Returns the final configuration with :checks, :ignore, and :source
 
    If no project manifest is found, returns global config with :source :global.
@@ -473,7 +512,7 @@
 
 (def default-manifest-template
   "Default template for a new project manifest."
-  {:check-sources ["default"]
+  {:checks ["default"]
    :ignore #{}
    :ignore-mode :extend
    :config-mode :merged})

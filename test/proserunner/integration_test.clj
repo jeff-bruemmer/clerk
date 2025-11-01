@@ -50,7 +50,7 @@
           ;; Create manifest
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (spit manifest-path
-                  (pr-str {:check-sources ["checks"]
+                  (pr-str {:checks [{:directory "checks"}]
                           :ignore #{"example"}
                           :ignore-mode :replace}))
 
@@ -73,7 +73,7 @@
           _ (.mkdirs (io/file proserunner-dir))
           ;; Create manifest with default checks
           _ (spit manifest-path
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"TODO"}
                           :ignore-mode :extend}))
 
@@ -96,7 +96,7 @@
 
           ;; Create manifest at project root
           _ (spit manifest-path
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"TODO"}}))
 
           ;; Load config from nested directory
@@ -129,7 +129,7 @@
           ;; Create manifest using "checks" shorthand
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (spit manifest-path
-                  (pr-str {:check-sources ["checks"]
+                  (pr-str {:checks [{:directory "checks"}]
                           :ignore #{}
                           :config-mode :project-only}))
 
@@ -151,7 +151,7 @@
           ;; Step 1: Initialize project (simulating --init-project)
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{}
                           :ignore-mode :extend
                           :config-mode :merged}))
@@ -175,8 +175,10 @@
           ;; Step 4: Verify .proserunner/config.edn was updated with "checks"
           updated-config (edn/read-string (slurp manifest-path))]
 
-      (is (some #(= "checks" %) (:check-sources updated-config))
-          "config.edn should include 'checks' in :check-sources")
+      (is (some #(or (= "checks" %)
+                     (and (map? %) (= (:directory %) "checks")))
+                (:checks updated-config))
+          "config.edn should include 'checks' in :checks")
 
       ;; Step 5: Load config using config/fetch-or-create! (simulating --checks command)
       (let [_ (System/setProperty "user.dir" project-root)

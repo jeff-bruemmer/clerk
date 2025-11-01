@@ -168,7 +168,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           result (project-config/determine-target {} project-root)]
       (is (= :project result)))))
 
@@ -178,7 +178,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           ;; Even with project, --global forces global
           result (project-config/determine-target {:global true} project-root)]
       (is (= :global result)))))
@@ -189,7 +189,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           result (project-config/determine-target {:project true} project-root)]
       (is (= :project result)))))
 
@@ -216,7 +216,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file sub-dir))
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           result (project-config/determine-target {} sub-dir)]
       (is (= :project result)))))
 
@@ -229,7 +229,7 @@
           checks-dir (str proserunner-dir File/separator "checks")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file checks-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
           ;; Create source checks
           source-dir (str @test-home File/separator "source-checks")
@@ -252,7 +252,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
 
           ;; Create source checks
           source-dir (str @test-home File/separator "source-checks-global")
@@ -287,7 +287,7 @@
           checks-dir (str proserunner-dir File/separator "checks")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file checks-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
           ;; Create source checks
           source-dir (str @test-home File/separator "company-checks")
@@ -300,7 +300,9 @@
 
           ;; Verify project config updated
           config (edn/read-string (slurp manifest-path))]
-      (is (some #(= % "checks") (:check-sources config))))))
+      (is (some #(or (= % "checks")
+                     (and (map? %) (= (:directory %) "checks")))
+                (:checks config))))))
 
 (deftest add-checks-global-updates-global-config
   (testing "Global checks update ~/.proserunner/config.edn"
@@ -332,7 +334,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
           _ (ignore/add-to-ignore! "TODO" {:start-dir project-root})
 
@@ -346,7 +348,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
           _ (ignore/add-to-ignore! "FIXME" {:global true :start-dir project-root})
 
@@ -369,7 +371,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
 
           _ (ignore/remove-from-ignore! "TODO" {:start-dir project-root})
 
@@ -384,7 +386,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{\"TODO\"} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\"} :ignore-mode :extend :config-mode :merged}")
 
           ;; Add to global
           _ (ignore/add-to-ignore! "global-term" {:global true})
@@ -402,7 +404,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
 
           ;; Clear project ignores
           _ (ignore/clear-ignore! {:start-dir project-root})
@@ -422,7 +424,7 @@
           _ (.mkdirs (io/file checks-dir))
 
           ;; Create project with custom check
-          _ (spit manifest-path "{:check-sources [\"default\" \"checks\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
+          _ (spit manifest-path "{:checks [\"default\" {:directory \"checks\"}] :ignore #{} :ignore-mode :extend :config-mode :merged}")
           _ (spit (str checks-dir File/separator "custom-check.edn")
                   "{:name \"custom-test-check\" :kind \"existence\" :specimens [\"testword\"] :message \"Test\" :explanation \"Test check\"}")
 

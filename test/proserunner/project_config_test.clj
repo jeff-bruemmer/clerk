@@ -73,7 +73,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           found (project-config/find-manifest project-root)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
@@ -87,7 +87,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file sub-dir))
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           found (project-config/find-manifest sub-dir)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
@@ -109,7 +109,7 @@
           _ (.mkdirs (io/file git-dir))
           _ (.mkdirs (io/file sub-dir))
           _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
+          _ (spit manifest-path "{:checks [\"default\"]}")
           found (project-config/find-manifest sub-dir)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
@@ -119,58 +119,58 @@
 
 (deftest parse-minimal-manifest
   (testing "Parsing a minimal valid manifest"
-    (let [manifest {:check-sources ["default"]}
+    (let [manifest {:checks ["default"]}
           parsed (project-config/parse-manifest manifest)]
-      (is (= ["default"] (:check-sources parsed)))
+      (is (= ["default"] (:checks parsed)))
       (is (= :extend (:ignore-mode parsed))) ; default
       (is (= :merged (:config-mode parsed))) ; default
       (is (empty? (:ignore parsed))))))
 
 (deftest parse-full-manifest
   (testing "Parsing a complete manifest with all fields"
-    (let [manifest {:check-sources ["default" "./local" "/absolute/path"]
+    (let [manifest {:checks ["default" "./local" "/absolute/path"]
                     :ignore #{"TODO" "FIXME"}
                     :ignore-mode :replace
                     :config-mode :project-only}
           parsed (project-config/parse-manifest manifest)]
-      (is (= 3 (count (:check-sources parsed))))
+      (is (= 3 (count (:checks parsed))))
       (is (= #{"TODO" "FIXME"} (:ignore parsed)))
       (is (= :replace (:ignore-mode parsed)))
       (is (= :project-only (:config-mode parsed))))))
 
 (deftest parse-manifest-with-defaults
   (testing "Manifest parsing applies correct defaults"
-    (let [manifest {:check-sources ["default"]
+    (let [manifest {:checks ["default"]
                     :ignore #{"TODO"}}
           parsed (project-config/parse-manifest manifest)]
       (is (= :extend (:ignore-mode parsed)))
       (is (= :merged (:config-mode parsed))))))
 
-(deftest parse-manifest-validates-check-sources
-  (testing "Validation fails when :check-sources is missing"
+(deftest parse-manifest-validates-checks
+  (testing "Validation fails when :checks is missing"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"check-sources.*required"
+         #"checks.*required"
          (project-config/parse-manifest {}))))
 
-  (testing "Validation fails when :check-sources is not a vector"
+  (testing "Validation fails when :checks is not a vector"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"check-sources.*vector"
-         (project-config/parse-manifest {:check-sources "default"}))))
+         #"checks.*vector"
+         (project-config/parse-manifest {:checks "default"}))))
 
-  (testing "Validation fails when :check-sources is empty"
+  (testing "Validation fails when :checks is empty"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"check-sources.*empty"
-         (project-config/parse-manifest {:check-sources []})))))
+         #"checks.*empty"
+         (project-config/parse-manifest {:checks []})))))
 
 (deftest parse-manifest-validates-ignore-mode
   (testing "Validation fails for invalid :ignore-mode"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"ignore-mode.*:extend.*:replace"
-         (project-config/parse-manifest {:check-sources ["default"]
+         (project-config/parse-manifest {:checks ["default"]
                                          :ignore-mode :invalid})))))
 
 (deftest parse-manifest-validates-config-mode
@@ -178,7 +178,7 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"config-mode.*:merged.*:project-only"
-         (project-config/parse-manifest {:check-sources ["default"]
+         (project-config/parse-manifest {:checks ["default"]
                                          :config-mode :wrong})))))
 
 (deftest parse-manifest-validates-ignore-is-set
@@ -186,12 +186,12 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"ignore.*set"
-         (project-config/parse-manifest {:check-sources ["default"]
+         (project-config/parse-manifest {:checks ["default"]
                                          :ignore ["TODO" "FIXME"]})))))
 
 (deftest parse-manifest-multiple-errors
   (testing "Collects and reports all validation errors"
-    (let [bad-manifest {:check-sources nil          ; Error 1
+    (let [bad-manifest {:checks nil          ; Error 1
                         :ignore "not-a-set"         ; Error 2
                         :ignore-mode :invalid}]     ; Error 3
       ;; Should throw with a message containing multiple errors
@@ -207,9 +207,9 @@
           (let [error-data (ex-data e)]
             (is (= 3 (count (:errors error-data)))
                 "Should collect all 3 validation errors")
-            (is (some #(re-find #":check-sources is required" %)
+            (is (some #(re-find #":checks is required" %)
                       (:errors error-data))
-                "Should include check-sources error")
+                "Should include checks error")
             (is (some #(re-find #":ignore must be a set" %)
                       (:errors error-data))
                 "Should include ignore error")
@@ -243,11 +243,10 @@
                   :checks [{:name "global-checks"}]}
           project {:ignore #{"project-1"}
                    :config-mode :project-only
-                   :check-sources ["default"]}
+                   :checks ["default"]}
           merged (project-config/merge-configs global project)]
       (is (= #{"project-1"} (:ignore merged)))
-      (is (= ["default"] (:check-sources merged)))
-      (is (nil? (:checks merged))))))
+      (is (= ["default"] (:checks merged))))))
 
 (deftest merge-configs-merged-mode
   (testing "Config mode :merged combines global and project"
@@ -258,11 +257,11 @@
           project {:ignore #{"project-1"}
                    :config-mode :merged
                    :ignore-mode :extend
-                   :check-sources ["default"]}
+                   :checks ["default"]}
           merged (project-config/merge-configs global project)]
       (is (= #{"global-1" "project-1"} (:ignore merged)))
-      (is (= ["default"] (:check-sources merged)))
-      ;; In merged mode, :check-sources is preserved (not :checks)
+      (is (= ["default"] (:checks merged)))
+      ;; In merged mode, :checks is preserved (not :checks)
       ;; Global :checks will be merged later in build-project-config
       (is (= :merged (:config-mode merged))))))
 
@@ -282,160 +281,6 @@
           merged (project-config/merge-configs global project)]
       (is (= #{"project-1"} (:ignore merged))))))
 
-;;; Check Source Resolution Tests
-
-(deftest resolve-check-source-default
-  (testing "Resolving 'default' check source"
-    (let [result (project-config/resolve-check-source "default" nil)]
-      (is (= :built-in (:type result)))
-      (is (= "default" (:source result))))))
-
-(deftest resolve-check-source-checks-shorthand
-  (testing "Resolving 'checks' shorthand to .proserunner/checks/"
-    (let [project-root @test-project-root
-          proserunner-dir (str project-root File/separator ".proserunner")
-          checks-dir (str proserunner-dir File/separator "checks")
-          _ (.mkdirs (io/file checks-dir))
-          result (project-config/resolve-check-source "checks" project-root)]
-      (is (= :local (:type result)))
-      (is (.endsWith (:path result) (str ".proserunner" File/separator "checks"))))))
-
-(deftest resolve-check-source-local-path
-  (testing "Resolving local relative path"
-    (let [project-root @test-project-root
-          checks-dir (str project-root File/separator "custom-checks")
-          _ (.mkdirs (io/file checks-dir))
-          result (project-config/resolve-check-source
-                  "./custom-checks"
-                  project-root)]
-      (is (= :local (:type result)))
-      (is (.endsWith (:path result) "custom-checks"))))
-
-  (testing "Resolving local absolute path"
-    (let [checks-dir (str @test-project-root File/separator "abs-checks")
-          _ (.mkdirs (io/file checks-dir))
-          result (project-config/resolve-check-source
-                  checks-dir
-                  nil)]
-      (is (= :local (:type result)))
-      (is (= checks-dir (:path result))))))
-
-(deftest resolve-check-source-validates-local-exists
-  (testing "Validation fails when local path doesn't exist"
-    (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo
-         #"does not exist"
-         (project-config/resolve-check-source
-          "./nonexistent"
-          @test-project-root)))))
-
-(deftest resolve-check-source-prevents-path-traversal
-  (testing "Prevents directory traversal with relative paths"
-    (let [project-root @test-project-root
-          ;; Create a directory outside project root
-          outside-dir (str (System/getProperty "java.io.tmpdir")
-                          File/separator
-                          "outside-project-"
-                          (System/currentTimeMillis))
-          _ (.mkdirs (io/file outside-dir))]
-      (try
-        ;; Try to reference a path outside project using ../
-        (is (thrown-with-msg?
-             clojure.lang.ExceptionInfo
-             #"Path traversal detected"
-             (project-config/resolve-check-source
-              "../../../outside-project"
-              project-root)))
-        (finally
-          (.delete (io/file outside-dir))))))
-
-  (testing "Allows absolute paths outside project root"
-    (let [outside-dir (str (System/getProperty "java.io.tmpdir")
-                          File/separator
-                          "absolute-outside-"
-                          (System/currentTimeMillis))
-          _ (.mkdirs (io/file outside-dir))]
-      (try
-        ;; Absolute paths should be allowed (not validated against project root)
-        (let [result (project-config/resolve-check-source outside-dir nil)]
-          (is (= :local (:type result)))
-          (is (some? (:path result))))
-        (finally
-          (.delete (io/file outside-dir)))))))
-
-(deftest resolve-check-source-handles-symlinks
-  (testing "Follows symlinks within project root"
-    (let [project-root @test-project-root
-          real-dir (str project-root File/separator "real-checks")
-          symlink-path (str project-root File/separator "symlink-checks")
-          _ (.mkdirs (io/file real-dir))]
-      (try
-        ;; Create symlink (skip test if symlinks not supported)
-        (try
-          (java.nio.file.Files/createSymbolicLink
-           (.toPath (io/file symlink-path))
-           (.toPath (io/file real-dir))
-           (into-array java.nio.file.attribute.FileAttribute []))
-          (let [result (project-config/resolve-check-source "./symlink-checks" project-root)]
-            (is (= :local (:type result)))
-            (is (some? (:path result))))
-          (catch UnsupportedOperationException _
-            ;; Symlinks not supported on this platform, skip test
-            (is true "Symlinks not supported, skipping test")))
-        (finally
-          (.delete (io/file symlink-path))
-          (.delete (io/file real-dir))))))
-
-  (testing "Prevents symlink escape outside project root"
-    (let [project-root @test-project-root
-          outside-dir (str (System/getProperty "java.io.tmpdir")
-                          File/separator
-                          "outside-symlink-"
-                          (System/currentTimeMillis))
-          symlink-path (str project-root File/separator "escape-link")
-          _ (.mkdirs (io/file outside-dir))]
-      (try
-        ;; Create symlink pointing outside project
-        (try
-          (java.nio.file.Files/createSymbolicLink
-           (.toPath (io/file symlink-path))
-           (.toPath (io/file outside-dir))
-           (into-array java.nio.file.attribute.FileAttribute []))
-          ;; Canonical path resolution should detect the escape
-          (is (thrown-with-msg?
-               clojure.lang.ExceptionInfo
-               #"Path traversal detected"
-               (project-config/resolve-check-source "./escape-link" project-root)))
-          (catch UnsupportedOperationException _
-            ;; Symlinks not supported, skip test
-            (is true "Symlinks not supported, skipping test")))
-        (finally
-          (.delete (io/file symlink-path))
-          (letfn [(delete-recursively [^java.io.File file]
-                    (when (.exists file)
-                      (when (.isDirectory file)
-                        (doseq [child (.listFiles file)]
-                          (delete-recursively child)))
-                      (.delete file)))]
-            (delete-recursively (io/file outside-dir))))))))
-
-(deftest read-manifest-handles-permissions
-  (testing "Handles permission-denied when reading manifest"
-    (let [project-root @test-project-root
-          proserunner-dir (str project-root File/separator ".proserunner")
-          manifest-path (str proserunner-dir File/separator "config.edn")
-          _ (.mkdirs (io/file proserunner-dir))
-          _ (spit manifest-path "{:check-sources [\"default\"]}")
-          manifest-file (io/file manifest-path)]
-      ;; Make file unreadable (may not work on all platforms)
-      (when (.setReadable manifest-file false false)
-        (try
-          (is (thrown? Exception
-                      (project-config/read-manifest manifest-path)))
-          (finally
-            ;; Restore permissions for cleanup
-            (.setReadable manifest-file true false)))))))
-
 ;;; Integration Tests
 
 (deftest load-project-config-full-workflow
@@ -445,13 +290,13 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"TODO"}
                           :ignore-mode :extend
                           :config-mode :merged}))
           config (project-config/load-project-config project-root)]
       (is (some? config))
-      ;; After resolution, check-sources becomes :checks
+      ;; After resolution, checks becomes :checks
       (is (some? (:checks config)))
       ;; Should have both global and project ignores
       (is (contains? (:ignore config) "TODO"))
@@ -473,7 +318,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"TODO"}
                           :config-mode :project-only}))
           config (project-config/load-project-config project-root)]
@@ -504,7 +349,7 @@
           manifest-path (project-config/init-project-config! project-root)
           content (slurp manifest-path)
           manifest (edn/read-string content)]
-      (is (= ["default"] (:check-sources manifest)))
+      (is (= ["default"] (:checks manifest)))
       (is (= #{} (:ignore manifest)))
       (is (= :extend (:ignore-mode manifest)))
       (is (= :merged (:config-mode manifest))))))
@@ -515,7 +360,7 @@
           proserunner-dir (str project-root File/separator ".proserunner")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit (str proserunner-dir File/separator "config.edn")
-                  (pr-str {:check-sources ["default"]}))]
+                  (pr-str {:checks ["default"]}))]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"already exists"
@@ -524,14 +369,14 @@
 (deftest init-project-config-custom-template
   (testing "Can initialize with custom template"
     (let [project-root @test-project-root
-          custom-template {:check-sources ["./custom-checks"]
+          custom-template {:checks ["./custom-checks"]
                           :ignore #{"TODO" "FIXME"}
                           :ignore-mode :replace
                           :config-mode :project-only}
           manifest-path (project-config/init-project-config! project-root custom-template)
           content (slurp manifest-path)
           manifest (edn/read-string content)]
-      (is (= ["./custom-checks"] (:check-sources manifest)))
+      (is (= ["./custom-checks"] (:checks manifest)))
       (is (= #{"TODO" "FIXME"} (:ignore manifest)))
       (is (= :replace (:ignore-mode manifest)))
       (is (= :project-only (:config-mode manifest))))))
@@ -553,7 +398,7 @@
           outer-manifest (str outer-proserunner File/separator "config.edn")
           _ (.mkdirs (io/file outer-proserunner))
           _ (spit outer-manifest
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"outer-ignore"}}))
 
           ;; Create nested subdirectory with its own project
@@ -562,7 +407,7 @@
           nested-manifest (str nested-proserunner File/separator "config.edn")
           _ (.mkdirs (io/file nested-proserunner))
           _ (spit nested-manifest
-                  (pr-str {:check-sources ["default"]
+                  (pr-str {:checks ["default"]
                           :ignore #{"nested-ignore"}}))
 
           ;; Search from deep within nested project
@@ -587,7 +432,7 @@
           outer-manifest (str outer-proserunner File/separator "config.edn")
           _ (.mkdirs (io/file outer-proserunner))
           _ (spit outer-manifest
-                  (pr-str {:check-sources ["default"]}))
+                  (pr-str {:checks ["default"]}))
 
           ;; Create nested directory without its own .proserunner
           nested-dir (str project-root File/separator "subdir")
@@ -611,7 +456,7 @@
           _ (.mkdirs (io/file checks-dir))
           ;; Create manifest that references the empty checks dir
           _ (spit manifest-path
-                  (pr-str {:check-sources ["checks"]
+                  (pr-str {:checks ["checks"]
                           :ignore #{}
                           :config-mode :project-only}))
 
@@ -623,3 +468,176 @@
       ;; Checks should be empty since the directory has no .edn files
       (is (empty? (:checks config)))
       (is (= :project (:source config))))))
+
+;;; Unified Schema Tests (Post-Migration)
+;;;
+;;; These tests verify the unified :checks schema that replaced :checks
+
+(deftest find-manifest-skips-home-directory
+  (testing "find-manifest skips home directory to avoid treating global config as project config"
+    (let [home-dir @test-home
+          proserunner-dir (str home-dir File/separator ".proserunner")
+          home-manifest (str proserunner-dir File/separator "config.edn")
+          ;; Global config already exists in home from setup-test-env
+          _ (is (.exists (io/file home-manifest)))
+          ;; Search from home directory should NOT find the global config
+          found (project-config/find-manifest home-dir)]
+      (is (nil? found) "Should not find manifest in home directory"))))
+
+(deftest find-manifest-finds-project-in-subdirectory
+  (testing "find-manifest finds project config in subdirectory but not home"
+    (let [home-dir @test-home
+          project-dir (str home-dir File/separator "projects" File/separator "myproject")
+          proserunner-dir (str project-dir File/separator ".proserunner")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          _ (.mkdirs (io/file proserunner-dir))
+          _ (spit manifest-path (pr-str {:checks ["default"]}))
+          found (project-config/find-manifest project-dir)]
+      (is (some? found) "Should find project manifest in subdirectory")
+      (is (= manifest-path (:manifest-path found)))
+      (is (= project-dir (:project-root found))))))
+
+(deftest parse-manifest-with-string-references
+  (testing "Parsing manifest with string references in :checks"
+    (let [manifest {:checks ["default" "custom"]}
+          parsed (project-config/parse-manifest manifest)]
+      (is (= ["default" "custom"] (:checks parsed)))
+      (is (= :extend (:ignore-mode parsed)))
+      (is (= :merged (:config-mode parsed))))))
+
+(deftest parse-manifest-with-map-entries
+  (testing "Parsing manifest with map entries in :checks"
+    (let [manifest {:checks [{:directory "checks"}
+                            {:directory "other" :files ["style"]}]}
+          parsed (project-config/parse-manifest manifest)]
+      (is (= 2 (count (:checks parsed))))
+      (is (map? (first (:checks parsed))))
+      (is (= "checks" (:directory (first (:checks parsed)))))
+      (is (= ["style"] (:files (second (:checks parsed))))))))
+
+(deftest parse-manifest-with-mixed-entries
+  (testing "Parsing manifest with mixed string and map entries"
+    (let [manifest {:checks ["default"
+                            {:directory "checks"}
+                            {:directory "./custom" :files ["style" "grammar"]}]}
+          parsed (project-config/parse-manifest manifest)]
+      (is (= 3 (count (:checks parsed))))
+      (is (string? (first (:checks parsed))))
+      (is (map? (second (:checks parsed))))
+      (is (map? (nth (:checks parsed) 2))))))
+
+(deftest parse-manifest-validates-checks-required
+  (testing "Validation fails when :checks is missing"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #":checks.*required"
+         (project-config/parse-manifest {})))))
+
+(deftest parse-manifest-validates-checks-is-vector
+  (testing "Validation fails when :checks is not a vector"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #":checks.*vector"
+         (project-config/parse-manifest {:checks "default"})))))
+
+(deftest parse-manifest-validates-checks-not-empty
+  (testing "Validation fails when :checks is empty"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #":checks.*empty"
+         (project-config/parse-manifest {:checks []})))))
+
+(deftest parse-manifest-validates-check-entry-format
+  (testing "Validation fails for invalid check entry format"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"invalid entries"
+         (project-config/parse-manifest {:checks [123]})))))
+
+(deftest parse-manifest-validates-map-entry-has-directory
+  (testing "Validation fails when map entry missing :directory"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"invalid entries"
+         (project-config/parse-manifest {:checks [{:files ["style"]}]})))))
+
+(deftest parse-manifest-validates-map-entry-files-is-vector
+  (testing "Validation fails when :files is not a vector"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"invalid entries"
+         (project-config/parse-manifest {:checks [{:directory "checks" :files "style"}]})))))
+
+(deftest load-project-config-resolves-string-references
+  (testing "String references in :checks resolve to global check definitions"
+    (let [project-root @test-project-root
+          proserunner-dir (str project-root File/separator ".proserunner")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          _ (.mkdirs (io/file proserunner-dir))
+          _ (spit manifest-path (pr-str {:checks ["default"]}))
+          config (project-config/load-project-config project-root)]
+      (is (some? config))
+      (is (= 1 (count (:checks config))))
+      ;; Should have resolved "default" to global check definition
+      (let [check (first (:checks config))]
+        (is (map? check))
+        (is (contains? check :directory))
+        (is (contains? check :files))
+        (is (= ["cliches" "redundancies"] (:files check)))))))
+
+(deftest load-project-config-with-auto-discovery
+  (testing "Map entries without :files auto-discover .edn files"
+    (let [project-root @test-project-root
+          proserunner-dir (str project-root File/separator ".proserunner")
+          checks-dir (str proserunner-dir File/separator "checks")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          _ (.mkdirs (io/file checks-dir))
+          ;; Create some test check files
+          _ (spit (str checks-dir File/separator "style.edn")
+                  (pr-str {:name "style" :message "test"}))
+          _ (spit (str checks-dir File/separator "grammar.edn")
+                  (pr-str {:name "grammar" :message "test"}))
+          _ (spit manifest-path (pr-str {:checks [{:directory "checks"}]
+                                        :config-mode :project-only}))
+          config (project-config/load-project-config project-root)]
+      (is (some? config))
+      (is (= 1 (count (:checks config))))
+      (let [check (first (:checks config))]
+        (is (= 2 (count (:files check))))
+        (is (= ["grammar" "style"] (:files check)))))))  ; sorted alphabetically
+
+(deftest load-project-config-cascading-disabled-checks
+  (testing "Disabled checks in global config cascade to projects via string references"
+    (let [project-root @test-project-root
+          proserunner-dir (str project-root File/separator ".proserunner")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          ;; Global config has :files ["cliches" "redundancies"] (set in setup-test-env)
+          _ (.mkdirs (io/file proserunner-dir))
+          _ (spit manifest-path (pr-str {:checks ["default"]}))
+          config (project-config/load-project-config project-root)]
+      (is (some? config))
+      ;; Project should inherit the global's file list (with disabled checks removed)
+      (let [check (first (:checks config))]
+        (is (= ["cliches" "redundancies"] (:files check)))
+        ;; If global had more checks disabled, they wouldn't appear here
+        ))))
+
+(deftest load-project-config-mixed-checks
+  (testing "Projects can mix string references and map definitions"
+    (let [project-root @test-project-root
+          proserunner-dir (str project-root File/separator ".proserunner")
+          checks-dir (str proserunner-dir File/separator "checks")
+          manifest-path (str proserunner-dir File/separator "config.edn")
+          _ (.mkdirs (io/file checks-dir))
+          _ (spit (str checks-dir File/separator "custom.edn")
+                  (pr-str {:name "custom" :message "test"}))
+          _ (spit manifest-path
+                  (pr-str {:checks ["default" {:directory "checks"}]}))
+          config (project-config/load-project-config project-root)]
+      (is (some? config))
+      ;; Should have both global default and project checks
+      (is (= 2 (count (:checks config))))
+      ;; First should be the resolved global check
+      (is (= ["cliches" "redundancies"] (:files (first (:checks config)))))
+      ;; Second should be the project check
+      (is (= ["custom"] (:files (second (:checks config))))))))

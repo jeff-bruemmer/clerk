@@ -86,9 +86,9 @@
    Stops at first failing predicate.
 
    Example:
-     (def check-sources-validator
+     (def checks-validator
        (validator
-         [nil? \":check-sources is required\"]
+         [nil? \":checks is required\"]
          [(complement vector?) \"must be a vector\"]
          [empty? \"cannot be empty\"]))"
   [& rules]

@@ -113,7 +113,7 @@
 
         ;; Create project config with specific ignore set
         (spit (str proserunner-dir File/separator "config.edn")
-              (pr-str {:check-sources ["default"]
+              (pr-str {:checks ["default"]
                        :ignore #{"test-ignore-specimen" "another-ignored-word"}
                        :ignore-mode :extend
                        :config-mode :merged}))
@@ -219,7 +219,7 @@
 
         ;; Create project config with project ignores and :ignore-mode :extend
         (spit (str proserunner-dir File/separator "config.edn")
-              (pr-str {:check-sources ["default"]
+              (pr-str {:checks ["default"]
                        :ignore #{"project-ignore-1" "project-ignore-2"}
                        :ignore-mode :extend  ; This should merge global + project
                        :config-mode :merged}))
@@ -268,7 +268,7 @@
         (.mkdirs (io/file temp-project ".git"))
         (.mkdirs (io/file proserunner-dir "checks"))
         (spit (str proserunner-dir File/separator "config.edn")
-              (pr-str {:check-sources ["default"]
+              (pr-str {:checks ["default"]
                        :ignore #{"project-ignore-only"}
                        :ignore-mode :replace  ; Should NOT include global ignores
                        :config-mode :merged}))
@@ -316,7 +316,7 @@
         (.mkdirs (io/file temp-project ".git"))
         (.mkdirs (io/file proserunner-dir "checks"))
         (spit (str proserunner-dir File/separator "config.edn")
-              (pr-str {:check-sources ["default"]
+              (pr-str {:checks ["default"]
                        :ignore #{"project-ignore"}
                        :ignore-mode :extend
                        :config-mode :merged}))

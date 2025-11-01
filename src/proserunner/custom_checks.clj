@@ -130,15 +130,15 @@
     (write-config! (assoc config :checks updated-checks))))
 
 (defn- update-project-config-with-checks!
-  "Add 'checks' to :check-sources in project config if not already present."
+  "Add checks directory reference to :checks in project config if not already present."
   [project-root]
   (let [config (project-config/read-project-config project-root)
-        check-sources (:check-sources config)
-        ;; Add "checks" if not already in the list
-        updated-sources (if (some #(= "checks" %) check-sources)
-                         check-sources
-                         (conj (vec check-sources) "checks"))]
-    (project-config/write-project-config! project-root (assoc config :check-sources updated-sources))))
+        checks (:checks config)
+        has-checks? (some project-config/check-entry-references-checks? checks)
+        updated-checks (if has-checks?
+                        checks
+                        (conj (vec checks) {:directory "checks"}))]
+    (project-config/write-project-config! project-root (assoc config :checks updated-checks))))
 
 (defn- import-from-source
   "Import checks from local directory.
