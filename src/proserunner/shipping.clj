@@ -23,13 +23,14 @@
 
 (defn prep
   "Prepares results for printing by merging line data with each issue."
-  [{:keys [line-num issues]}]
+  [{:keys [line-num issues text]}]
   (reduce (fn [l issue]
             (let [{:keys [file name specimen col-num message kind]} issue]
               (conj l {:file file
                        :line-num line-num
                        :col-num col-num
                        :specimen (string/trim specimen)
+                       :line-text (string/trim text)
                        :name (string/capitalize (string/replace name "-" " "))
                        :message (fmt/sentence-dress message)
                        :kind kind})))
@@ -188,7 +189,7 @@
 
 (defn format-verbose-issue
   "Formats a single issue as markdown for verbose output."
-  [issue-num {:keys [file line-num col-num specimen name message kind]}]
+  [issue-num {:keys [file line-num col-num specimen line-text name message kind]}]
   (let [kind-lower (string/lower-case kind)
         guidance (get check-kind-guidance kind-lower "Follow the guidance in the message.")
         ;; Convert to absolute path
@@ -198,6 +199,7 @@
                      .getAbsolutePath)]
     (str "### " issue-num ". " name " (" kind-lower ")\n\n"
          "`" abs-file ":" line-num ":" col-num "`\n\n"
+         "**Line:** " line-text "\n\n"
          "**Problem:** `" specimen "`"
          (when (and (or (= kind-lower "recommender")
                        (= kind-lower "case-recommender"))
