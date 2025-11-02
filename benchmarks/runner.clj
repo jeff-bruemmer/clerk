@@ -68,7 +68,7 @@
 (defn -main
   "Main entry point for benchmark runner."
   [& args]
-  (let [{:keys [options arguments errors summary]} (parse-opts args cli-options)]
+  (let [{:keys [options errors summary]} (parse-opts args cli-options)]
 
     (cond
       (:help options)

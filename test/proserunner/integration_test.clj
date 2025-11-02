@@ -46,7 +46,7 @@
                           :ignore-mode :replace}))
 
           ;; Load config
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
 
       ;; Verify config was loaded
       (is (some? config))
@@ -69,7 +69,7 @@
                           :ignore-mode :extend}))
 
           ;; Load config (will work even without actual default files)
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
 
       ;; Verify config structure
       (is (some? config))
@@ -91,7 +91,7 @@
                           :ignore #{"TODO"}}))
 
           ;; Load config from nested directory
-          config (project-config/load-project-config nested-dir)]
+          config (project-config/load nested-dir)]
 
       ;; Should find manifest from parent
       (is (some? config))
@@ -125,7 +125,7 @@
                           :config-mode :project-only}))
 
           ;; Load config
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
 
       ;; Verify config was loaded
       (is (some? config))

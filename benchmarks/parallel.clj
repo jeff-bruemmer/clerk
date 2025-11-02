@@ -2,6 +2,7 @@
   "Parallel benchmark runner - tests performance with parallel file processing."
   (:require [benchmarks.core :as bench]
             [proserunner.vet :as vet]
+            [proserunner.vet.input :as input]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [editors.registry :as registry]
@@ -22,7 +23,7 @@
   "Create a vet input map with standard benchmark settings.
    Disables caching and parallel processing to isolate file-level parallelism."
   [file config-path]
-  (vet/make-input {:file file
+  (input/make {:file file
                    :config config-path
                    :output "table"
                    :code-blocks false

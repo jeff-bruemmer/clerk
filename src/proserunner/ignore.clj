@@ -51,18 +51,18 @@
 (defn- add-ignore-to-project!
   "Adds a specimen to project .proserunner/config.edn :ignore set."
   [specimen project-root]
-  (let [config (project-config/read-project-config project-root)
+  (let [config (project-config/read project-root)
         current-ignore (or (:ignore config) #{})
         updated-ignore (add-to-set current-ignore specimen)]
-    (project-config/write-project-config! project-root (assoc config :ignore updated-ignore))))
+    (project-config/write! project-root (assoc config :ignore updated-ignore))))
 
 (defn- remove-ignore-from-project!
   "Removes a specimen from project .proserunner/config.edn :ignore set."
   [specimen project-root]
-  (let [config (project-config/read-project-config project-root)
+  (let [config (project-config/read project-root)
         current-ignore (or (:ignore config) #{})
         updated-ignore (remove-from-set current-ignore specimen)]
-    (project-config/write-project-config! project-root (assoc config :ignore updated-ignore))))
+    (project-config/write! project-root (assoc config :ignore updated-ignore))))
 
 ;;; Context-Aware Public API
 
@@ -119,7 +119,7 @@
        (if (= target :global)
          (sort (read-ignore-file))
          ;; List from project context (respecting merge mode)
-         (let [config (project-config/load-project-config start-dir)
+         (let [config (project-config/load start-dir)
                ;; The project-config loader already merges global and project ignores
                ;; based on :ignore-mode
                merged-ignore (:ignore config)]
@@ -135,5 +135,5 @@
        (if (= target :global)
          (write-ignore-file! #{})
          ;; Clear project ignores
-         (let [config (project-config/read-project-config project-root)]
-           (project-config/write-project-config! project-root (assoc config :ignore #{}))))))))
+         (let [config (project-config/read project-root)]
+           (project-config/write! project-root (assoc config :ignore #{}))))))))

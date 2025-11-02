@@ -2,7 +2,9 @@
   "Scaling benchmarks - tests performance across file sizes and counts."
   (:require [benchmarks.core :as bench]
             [proserunner.vet :as vet]
+            [proserunner.vet.input :as input]
             [clojure.java.io :as io]
+            [clojure.string :as string]
             [editors.registry :as registry]
             [editors.utilities :as util]
             [editors.repetition :as repetition]
@@ -27,7 +29,7 @@
       (bench/run-benchmark
        (format "%d lines (%s)" line-count mode)
        (format "Processing %s with %s line processing" file-name mode)
-       #(let [input (vet/make-input {:file file-name
+       #(let [input (input/make {:file file-name
                                       :config config-path
                                       :output "table"
                                       :code-blocks false
@@ -53,13 +55,13 @@
        (format "%d files (%d lines)" (count existing-files) total-lines)
        (format "Processing %d files in parallel" (count existing-files))
        #(doall (pmap (fn [file]
-                       (let [input (vet/make-input {:file file
-                                                    :config config-path
-                                                    :output "table"
-                                                    :code-blocks false
-                                                    :no-cache true
-                                                    :parallel-files false
-                                                    :parallel-lines true})]
+                       (let [input (input/make {:file file
+                                                :config config-path
+                                                :output "table"
+                                                :code-blocks false
+                                                :no-cache true
+                                                :parallel-files false
+                                                :parallel-lines true})]
                          (vet/compute input)))
                      existing-files))
        {:iterations 10
@@ -69,7 +71,7 @@
 
 (defn -main
   "Main entry point for scaling benchmarks."
-  [& args]
+  [& _args]
   (println "\n╔════════════════════════════════════════════════════════════════════════════╗")
   (println "║                  PROSERUNNER SCALING BENCHMARKS                            ║")
   (println "╚════════════════════════════════════════════════════════════════════════════╝\n")
@@ -77,9 +79,9 @@
   (setup-editors!)
 
   (let [config-path (str (System/getProperty "user.home")
-                        (java.io.File/separator)
+                        java.io.File/separator
                         ".proserunner"
-                        (java.io.File/separator)
+                        java.io.File/separator
                         "config.edn")]
 
     ;; Test 1: File Size Scaling (Sequential vs Parallel)
@@ -105,9 +107,9 @@
       (bench/print-summary par-results)
 
       ;; Calculate speedup at each size
-      (println "\n" (clojure.string/join "" (repeat 80 "=")))
+      (println "\n" (string/join "" (repeat 80 "=")))
       (println " PARALLEL SPEEDUP BY FILE SIZE")
-      (println (clojure.string/join "" (repeat 80 "=")))
+      (println (string/join "" (repeat 80 "=")))
       (doseq [[seq-r par-r] (map vector seq-results par-results)]
         (let [speedup (/ (:mean-ms seq-r) (:mean-ms par-r))]
           (println (format "%s: %.2fx speedup (seq: %.2f ms, par: %.2f ms)"

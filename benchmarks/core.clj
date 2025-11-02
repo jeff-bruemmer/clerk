@@ -1,6 +1,7 @@
 (ns benchmarks.core
   "Core benchmark utilities and data structures."
-  (:require [clojure.string :as string])
+  (:require [clojure.java.io :as io]
+            [clojure.string :as string])
   (:gen-class))
 
 (defrecord BenchmarkResult
@@ -103,7 +104,7 @@
 (defn load-baseline
   "Load baseline results from a file."
   [filepath]
-  (when (.exists (clojure.java.io/file filepath))
+  (when (.exists (io/file filepath))
     (-> filepath
         slurp
         read-string)))

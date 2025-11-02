@@ -70,7 +70,7 @@
   [[_]]
   (result/try-result-with-context
    #(let [cwd (System/getProperty "user.dir")
-          result (project-conf/init-project-config! cwd)]
+          result (project-conf/init! cwd)]
       {:cwd cwd :result result})
    {:effect :project/init}))
 

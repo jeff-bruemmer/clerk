@@ -1,7 +1,6 @@
 (ns proserunner.storage-test
   (:require [clojure.test :as t :refer [deftest is testing]]
-            [clojure.java.io :as io]
-            [proserunner.storage :as storage])
+            [clojure.java.io :as io])
   (:import java.io.File
            java.util.concurrent.CountDownLatch))
 

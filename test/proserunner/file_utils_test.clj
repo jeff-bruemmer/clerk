@@ -1,6 +1,7 @@
 (ns proserunner.file-utils-test
   (:require [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
+            [clojure.edn :as edn]
             [proserunner.file-utils :as file-utils]
             [proserunner.result :as result])
   (:import java.io.File))
@@ -67,7 +68,7 @@
           "File should be created")
 
       (let [content (slurp filepath)
-            parsed (clojure.edn/read-string content)]
+            parsed (edn/read-string content)]
         (is (= test-data parsed)
             "Written data should match input")))))
 

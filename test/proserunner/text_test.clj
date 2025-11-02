@@ -33,8 +33,8 @@
         (is (text/contains-quoted-text? line-mixed)
             "Mixed curly quotes should be detected as quoted text")))))
 
-(deftest file-validation-should-reject-directories
-  (testing "File validation should reject directories, not just check size"
+(deftest file-validation-should-accept-directories
+  (testing "File validation should accept both files and directories"
     (let [temp-dir (str (System/getProperty "java.io.tmpdir")
                        File/separator
                        "proserunner-dir-test-"
@@ -49,9 +49,9 @@
           (is (text/less-than-10-MB? temp-file)
               "Small files should pass validation"))
 
-        (testing "Validation should REJECT directories"
-          (is (not (text/less-than-10-MB? temp-dir))
-              "Directories should be rejected by file validation"))
+        (testing "Validation should accept directories"
+          (is (text/less-than-10-MB? temp-dir)
+              "Directories should pass validation"))
 
         (finally
           (when (.exists (io/file temp-dir))

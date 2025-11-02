@@ -4,23 +4,35 @@
   (:require [proserunner
              [checks :as checks]
              [error :as error]
-             [config :as conf]
              [edn-utils :as edn-utils]
              [file-utils :as file-utils]
              [result :as result]
              [text :as text]]
+            [proserunner.config.types :as types]
             [clojure.java.io :as io]))
 
 (set! *warn-on-reflection* true)
 
-(defrecord Result [lines
-                   lines-hash
-                   file-hash
-                   config
-                   config-hash
-                   check-hash
-                   output
-                   results])
+(defrecord Result
+  [lines
+   lines-hash
+   file-hash
+   config
+   config-hash
+   check-hash
+   output
+   results])
+
+;; Cached result structure for storing vetting outcomes.
+;; Fields:
+;; - lines: Vector of Line records that were vetted
+;; - lines-hash: Hash of lines for cache validation
+;; - file-hash: Hash of file path for cache identification
+;; - config: Config record used for vetting
+;; - config-hash: Hash of config for cache validation
+;; - check-hash: Hash of checks for cache validation
+;; - output: Output format specification
+;; - results: Vector of Line records with issues found
 
 (defn mk-tmp-dir!
   "Makes dir in tmp directory to store cached results."
@@ -56,7 +68,9 @@
                     'proserunner.text.Line text/map->Line
                     'proserunner.text.Issue text/map->Issue
                     'proserunner.checks.Check checks/map->Check
-                    'proserunner.config.Config conf/map->Config
+                    ;; Support both old and new Config locations for backward compatibility
+                    'proserunner.config.Config types/map->Config
+                    'proserunner.config.types.Config types/map->Config
                     'proserunner.checks.Recommendation checks/map->Recommendation
                     'proserunner.checks.Expression checks/map->Expression})})
 
@@ -94,18 +108,24 @@
   (hash (pr-str data)))
 
 (defn valid-checks?
-  [cached-result chs]
+  "Validates that cached checks match current checks by comparing hashes.
+  Returns true if the check hash in cached-result matches the hash of checks."
+  [cached-result checks]
   (=
    (:check-hash cached-result)
-   (stable-hash chs)))
+   (stable-hash checks)))
 
 (defn valid-lines?
+  "Validates that cached lines match current lines by comparing hashes.
+  Returns true if the lines hash in cached-result matches the hash of lines."
   [cached-result lines]
   (=
    (:lines-hash cached-result)
    (stable-hash lines)))
 
 (defn valid-config?
+  "Validates that cached config matches current config by comparing hashes.
+  Returns true if the config hash in cached-result matches the hash of config."
   [cached-result config]
   (=
    (:config-hash cached-result)

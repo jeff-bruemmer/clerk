@@ -1,7 +1,8 @@
 (ns proserunner.context
   "Unified context resolution utilities for project vs global scope operations.
    Provides a single source of truth for determining operation context."
-  (:require [proserunner.project-config :as project-config])
+  (:require [proserunner.project-config :as project-config]
+            [proserunner.config.manifest :as manifest])
   (:gen-class))
 
 (set! *warn-on-reflection* true)
@@ -34,5 +35,5 @@
         context (cond-> {:target target
                          :start-dir start-dir}
                   (= target :project)
-                  (assoc :project-root (:project-root (project-config/find-manifest start-dir))))]
+                  (assoc :project-root (:project-root (manifest/find start-dir))))]
     (f context)))

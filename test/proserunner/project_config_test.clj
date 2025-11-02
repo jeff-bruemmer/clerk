@@ -1,5 +1,7 @@
 (ns proserunner.project-config-test
   (:require [proserunner.project-config :as project-config]
+            [proserunner.config.manifest :as manifest]
+            [proserunner.config.merger :as merger]
             [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.io :as io]
@@ -63,7 +65,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"]}")
-          found (project-config/find-manifest project-root)]
+          found (manifest/find project-root)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
       (is (= project-root (:project-root found))))))
@@ -77,7 +79,7 @@
           _ (.mkdirs (io/file sub-dir))
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"]}")
-          found (project-config/find-manifest sub-dir)]
+          found (manifest/find sub-dir)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
       (is (= project-root (:project-root found))))))
@@ -85,7 +87,7 @@
 (deftest find-manifest-not-found
   (testing "Returns nil when no .proserunner/config.edn exists"
     (let [project-root @test-project-root
-          found (project-config/find-manifest project-root)]
+          found (manifest/find project-root)]
       (is (nil? found)))))
 
 (deftest find-manifest-stops-at-git-root
@@ -99,7 +101,7 @@
           _ (.mkdirs (io/file sub-dir))
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"]}")
-          found (project-config/find-manifest sub-dir)]
+          found (manifest/find sub-dir)]
       (is (some? found))
       (is (= manifest-path (:manifest-path found)))
       (is (= project-root (:project-root found))))))
@@ -109,7 +111,7 @@
 (deftest parse-minimal-manifest
   (testing "Parsing a minimal valid manifest"
     (let [manifest {:checks ["default"]}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= ["default"] (:checks parsed)))
       (is (= :extend (:ignore-mode parsed))) ; default
       (is (= :merged (:config-mode parsed))) ; default
@@ -121,7 +123,7 @@
                     :ignore #{"TODO" "FIXME"}
                     :ignore-mode :replace
                     :config-mode :project-only}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= 3 (count (:checks parsed))))
       (is (= #{"TODO" "FIXME"} (:ignore parsed)))
       (is (= :replace (:ignore-mode parsed)))
@@ -131,7 +133,7 @@
   (testing "Manifest parsing applies correct defaults"
     (let [manifest {:checks ["default"]
                     :ignore #{"TODO"}}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= :extend (:ignore-mode parsed)))
       (is (= :merged (:config-mode parsed))))))
 
@@ -140,26 +142,26 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"checks.*required"
-         (project-config/parse-manifest {}))))
+         (manifest/parse {}))))
 
   (testing "Validation fails when :checks is not a vector"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"checks.*vector"
-         (project-config/parse-manifest {:checks "default"}))))
+         (manifest/parse {:checks "default"}))))
 
   (testing "Validation fails when :checks is empty"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"checks.*empty"
-         (project-config/parse-manifest {:checks []})))))
+         (manifest/parse {:checks []})))))
 
 (deftest parse-manifest-validates-ignore-mode
   (testing "Validation fails for invalid :ignore-mode"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"ignore-mode.*:extend.*:replace"
-         (project-config/parse-manifest {:checks ["default"]
+         (manifest/parse {:checks ["default"]
                                          :ignore-mode :invalid})))))
 
 (deftest parse-manifest-validates-config-mode
@@ -167,7 +169,7 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"config-mode.*:merged.*:project-only"
-         (project-config/parse-manifest {:checks ["default"]
+         (manifest/parse {:checks ["default"]
                                          :config-mode :wrong})))))
 
 (deftest parse-manifest-validates-ignore-is-set
@@ -175,7 +177,7 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"ignore.*set"
-         (project-config/parse-manifest {:checks ["default"]
+         (manifest/parse {:checks ["default"]
                                          :ignore ["TODO" "FIXME"]})))))
 
 (deftest parse-manifest-multiple-errors
@@ -187,11 +189,11 @@
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"Validation errors"
-           (project-config/parse-manifest bad-manifest)))
+           (manifest/parse bad-manifest)))
 
       ;; Verify the ex-data contains all 3 errors
       (try
-        (project-config/parse-manifest bad-manifest)
+        (manifest/parse bad-manifest)
         (catch Exception e
           (let [error-data (ex-data e)]
             (is (= 3 (count (:errors error-data)))
@@ -213,7 +215,7 @@
     (let [global {:ignore #{"global-1" "global-2"}}
           project {:ignore #{"project-1" "project-2"}
                    :ignore-mode :extend}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"global-1" "global-2" "project-1" "project-2"}
              (:ignore merged))))))
 
@@ -222,7 +224,7 @@
     (let [global {:ignore #{"global-1" "global-2"}}
           project {:ignore #{"project-1" "project-2"}
                    :ignore-mode :replace}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"project-1" "project-2"}
              (:ignore merged))))))
 
@@ -233,7 +235,7 @@
           project {:ignore #{"project-1"}
                    :config-mode :project-only
                    :checks ["default"]}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"project-1"} (:ignore merged)))
       (is (= ["default"] (:checks merged))))))
 
@@ -247,7 +249,7 @@
                    :config-mode :merged
                    :ignore-mode :extend
                    :checks ["default"]}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"global-1" "project-1"} (:ignore merged)))
       (is (= ["default"] (:checks merged)))
       ;; In merged mode, :checks is preserved (not :checks)
@@ -259,7 +261,7 @@
     (let [global {:ignore #{"global-1" "global-2"}}
           project {:ignore #{}
                    :ignore-mode :extend}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"global-1" "global-2"} (:ignore merged))))))
 
 (deftest merge-configs-no-global-ignore
@@ -267,7 +269,7 @@
     (let [global {}
           project {:ignore #{"project-1"}
                    :ignore-mode :extend}
-          merged (project-config/merge-configs global project)]
+          merged (merger/merge-configs global project)]
       (is (= #{"project-1"} (:ignore merged))))))
 
 ;;; Integration Tests
@@ -283,7 +285,7 @@
                           :ignore #{"TODO"}
                           :ignore-mode :extend
                           :config-mode :merged}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       ;; After resolution, checks becomes :checks
       (is (some? (:checks config)))
@@ -294,7 +296,7 @@
 
 (deftest load-project-config-no-manifest
   (testing "Returns global config when no project manifest exists"
-    (let [config (project-config/load-project-config @test-project-root)]
+    (let [config (project-config/load @test-project-root)]
       ;; Should return global config
       (is (some? (:checks config)))
       (is (= #{"global-ignore-1" "global-ignore-2"} (:ignore config)))
@@ -310,7 +312,7 @@
                   (pr-str {:checks ["default"]
                           :ignore #{"TODO"}
                           :config-mode :project-only}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       (is (= #{"TODO"} (:ignore config)))
       (is (not (contains? (:ignore config) "global-ignore-1")))
@@ -321,7 +323,7 @@
 (deftest init-project-config-creates-manifest
   (testing "Initializing project config creates .proserunner/ directory structure"
     (let [project-root @test-project-root
-          manifest-path (project-config/init-project-config! project-root)
+          manifest-path (project-config/init! project-root)
           proserunner-dir (str project-root File/separator ".proserunner")
           checks-dir (str proserunner-dir File/separator "checks")]
       (is (some? manifest-path))
@@ -335,7 +337,7 @@
 (deftest init-project-config-default-template
   (testing "Default template has correct structure"
     (let [project-root @test-project-root
-          manifest-path (project-config/init-project-config! project-root)
+          manifest-path (project-config/init! project-root)
           content (slurp manifest-path)
           manifest (edn/read-string content)]
       (is (= ["default"] (:checks manifest)))
@@ -353,7 +355,7 @@
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"already exists"
-           (project-config/init-project-config! project-root))))))
+           (project-config/init! project-root))))))
 
 (deftest init-project-config-custom-template
   (testing "Can initialize with custom template"
@@ -362,7 +364,7 @@
                           :ignore #{"TODO" "FIXME"}
                           :ignore-mode :replace
                           :config-mode :project-only}
-          manifest-path (project-config/init-project-config! project-root custom-template)
+          manifest-path (project-config/init! project-root custom-template)
           content (slurp manifest-path)
           manifest (edn/read-string content)]
       (is (= ["./custom-checks"] (:checks manifest)))
@@ -373,9 +375,9 @@
 (deftest manifest-exists-check
   (testing "manifest-exists? correctly detects presence of manifest"
     (let [project-root @test-project-root]
-      (is (false? (project-config/manifest-exists? project-root)))
-      (project-config/init-project-config! project-root)
-      (is (true? (project-config/manifest-exists? project-root))))))
+      (is (false? (manifest/exists? project-root)))
+      (project-config/init! project-root)
+      (is (true? (manifest/exists? project-root))))))
 
 ;;; Nested Project Tests
 
@@ -404,7 +406,7 @@
           _ (.mkdirs (io/file deep-dir))
 
           ;; Find manifest from deep directory
-          found (project-config/find-manifest deep-dir)]
+          found (manifest/find deep-dir)]
 
       ;; Should find the nested manifest, not the outer one
       (is (some? found))
@@ -428,7 +430,7 @@
           _ (.mkdirs (io/file nested-dir))
 
           ;; Search from nested directory
-          found (project-config/find-manifest nested-dir)]
+          found (manifest/find nested-dir)]
 
       ;; Should still find the outer manifest
       (is (some? found))
@@ -450,7 +452,7 @@
                           :config-mode :project-only}))
 
           ;; Load config
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
 
       ;; Should load successfully with empty checks
       (is (some? config))
@@ -470,7 +472,7 @@
           ;; Global config already exists in home from setup-test-env
           _ (is (.exists (io/file home-manifest)))
           ;; Search from home directory should NOT find the global config
-          found (project-config/find-manifest home-dir)]
+          found (manifest/find home-dir)]
       (is (nil? found) "Should not find manifest in home directory"))))
 
 (deftest find-manifest-finds-project-in-subdirectory
@@ -481,7 +483,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path (pr-str {:checks ["default"]}))
-          found (project-config/find-manifest project-dir)]
+          found (manifest/find project-dir)]
       (is (some? found) "Should find project manifest in subdirectory")
       (is (= manifest-path (:manifest-path found)))
       (is (= project-dir (:project-root found))))))
@@ -489,7 +491,7 @@
 (deftest parse-manifest-with-string-references
   (testing "Parsing manifest with string references in :checks"
     (let [manifest {:checks ["default" "custom"]}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= ["default" "custom"] (:checks parsed)))
       (is (= :extend (:ignore-mode parsed)))
       (is (= :merged (:config-mode parsed))))))
@@ -498,7 +500,7 @@
   (testing "Parsing manifest with map entries in :checks"
     (let [manifest {:checks [{:directory "checks"}
                             {:directory "other" :files ["style"]}]}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= 2 (count (:checks parsed))))
       (is (map? (first (:checks parsed))))
       (is (= "checks" (:directory (first (:checks parsed)))))
@@ -509,7 +511,7 @@
     (let [manifest {:checks ["default"
                             {:directory "checks"}
                             {:directory "./custom" :files ["style" "grammar"]}]}
-          parsed (project-config/parse-manifest manifest)]
+          parsed (manifest/parse manifest)]
       (is (= 3 (count (:checks parsed))))
       (is (string? (first (:checks parsed))))
       (is (map? (second (:checks parsed))))
@@ -520,42 +522,42 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #":checks.*required"
-         (project-config/parse-manifest {})))))
+         (manifest/parse {})))))
 
 (deftest parse-manifest-validates-checks-is-vector
   (testing "Validation fails when :checks is not a vector"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #":checks.*vector"
-         (project-config/parse-manifest {:checks "default"})))))
+         (manifest/parse {:checks "default"})))))
 
 (deftest parse-manifest-validates-checks-not-empty
   (testing "Validation fails when :checks is empty"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #":checks.*empty"
-         (project-config/parse-manifest {:checks []})))))
+         (manifest/parse {:checks []})))))
 
 (deftest parse-manifest-validates-check-entry-format
   (testing "Validation fails for invalid check entry format"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"invalid entries"
-         (project-config/parse-manifest {:checks [123]})))))
+         (manifest/parse {:checks [123]})))))
 
 (deftest parse-manifest-validates-map-entry-has-directory
   (testing "Validation fails when map entry missing :directory"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"invalid entries"
-         (project-config/parse-manifest {:checks [{:files ["style"]}]})))))
+         (manifest/parse {:checks [{:files ["style"]}]})))))
 
 (deftest parse-manifest-validates-map-entry-files-is-vector
   (testing "Validation fails when :files is not a vector"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"invalid entries"
-         (project-config/parse-manifest {:checks [{:directory "checks" :files "style"}]})))))
+         (manifest/parse {:checks [{:directory "checks" :files "style"}]})))))
 
 (deftest load-project-config-resolves-string-references
   (testing "String references in :checks resolve to global check definitions"
@@ -564,7 +566,7 @@
           manifest-path (str proserunner-dir File/separator "config.edn")
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path (pr-str {:checks ["default"]}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       (is (= 1 (count (:checks config))))
       ;; Should have resolved "default" to global check definition
@@ -588,7 +590,7 @@
                   (pr-str {:name "grammar" :message "test"}))
           _ (spit manifest-path (pr-str {:checks [{:directory "checks"}]
                                         :config-mode :project-only}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       (is (= 1 (count (:checks config))))
       (let [check (first (:checks config))]
@@ -603,7 +605,7 @@
           ;; Global config has :files ["cliches" "redundancies"] (set in setup-test-env)
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path (pr-str {:checks ["default"]}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       ;; Project should inherit the global's file list (with disabled checks removed)
       (let [check (first (:checks config))]
@@ -622,7 +624,7 @@
                   (pr-str {:name "custom" :message "test"}))
           _ (spit manifest-path
                   (pr-str {:checks ["default" {:directory "checks"}]}))
-          config (project-config/load-project-config project-root)]
+          config (project-config/load project-root)]
       (is (some? config))
       ;; Should have both global default and project checks
       (is (= 2 (count (:checks config))))
@@ -649,7 +651,7 @@
 
         (testing "Loading config with absolute path outside project should fail"
           (try
-            (let [loaded-config (project-config/load-project-config temp-project)]
+            (let [loaded-config (project-config/load temp-project)]
               (is (or (empty? (:checks loaded-config))
                      (not-any? #(string/includes? (str (:directory %)) "/etc")
                               (:checks loaded-config)))

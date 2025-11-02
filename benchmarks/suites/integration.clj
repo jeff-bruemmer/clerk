@@ -2,6 +2,7 @@
   "End-to-end integration benchmarks using real files."
   (:require [benchmarks.core :as bench]
             [proserunner.vet :as vet]
+            [proserunner.vet.input :as input]
             [clojure.java.io :as io]
             [editors.registry :as registry]
             [editors.utilities :as util]
@@ -27,7 +28,7 @@
   [file-path config-path description]
   (when (.exists (io/file file-path))
     (let [line-count (count-lines-in-file file-path)
-          input (vet/make-input {:file file-path
+          input (input/make {:file file-path
                                 :config config-path
                                 :output "table"
                                 :code-blocks false
@@ -79,7 +80,7 @@
   [config-path]
   (when (.exists (io/file "resources/benchmark-data/large.md"))
     (let [file-path "resources/benchmark-data/large.md"
-          input (vet/make-input {:file file-path
+          input (input/make {:file file-path
                                 :config config-path
                                 :output "table"
                                 :code-blocks false
@@ -103,9 +104,9 @@
   []
   (setup-editors!)
   (let [config-path (str (System/getProperty "user.home")
-                        (java.io.File/separator)
+                        java.io.File/separator
                         ".proserunner"
-                        (java.io.File/separator)
+                        java.io.File/separator
                         "config.edn")]
     (remove nil?
             [(benchmark-small-file config-path)

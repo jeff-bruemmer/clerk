@@ -2,18 +2,39 @@
   "Functions for slurping and processing the text files."
   (:gen-class)
   (:require [clojure.java.io :as io]
-            [proserunner.error :as error]
             [proserunner.result :as result]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
 
-(defrecord Line [file text line-num code? quoted? issue? issues])
-(defrecord Issue [file name kind specimen col-num message])
+(defrecord Line
+  [file text line-num code? quoted? issue? issues])
+
+(defrecord Issue
+  [file name kind specimen col-num message])
+
+;; Line represents a line of text to be vetted.
+;; Fields:
+;; - file: Path to source file (abbreviated with ~ for home)
+;; - text: Text content of the line
+;; - line-num: Line number in the source file
+;; - code?: Boolean indicating if line is within a code block
+;; - quoted?: Boolean indicating if line contains quoted text
+;; - issue?: Boolean indicating if any issues were found
+;; - issues: Vector of Issue records found on this line
+
+;; Issue represents a prose issue found during vetting.
+;; Fields:
+;; - file: Path to source file where issue was found
+;; - name: Name of the check that identified this issue
+;; - kind: Kind of check (e.g., existence, substitution, conditional)
+;; - specimen: The problematic text that triggered the issue
+;; - col-num: Column number where issue starts (0-indexed)
+;; - message: Human-readable message describing the issue
 
 (def supported-files (sorted-set "txt" "tex" "md" "markdown" "org"))
 (def file-error-msg "file must exist.")
-(def file-size-msg "file size must be less than 10MB.")
+(def file-size-msg "individual files must be less than 10MB.")
 (def file-type-msg "file must be a txt, md, tex, or org file.")
 
 ;;;; File validators
@@ -23,11 +44,11 @@
   (.exists (io/file filepath)))
 
 (defn less-than-10-MB?
-  "Is the file less than 10 MB and actually a file (not a directory)?"
+  "Validates file/directory size. Directories always pass, individual files limited to 10MB."
   [filepath]
   (let [f (io/file filepath)]
-    (and (.isFile f)
-         (< (.length f) 10000001))))
+    (or (.isDirectory f)
+        (< (.length f) 10000001))))
 
 (defn supported-file-type?
   "File should be a text, markdown, tex, or org file."

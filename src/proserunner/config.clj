@@ -6,86 +6,19 @@
              [file-utils :as file-utils]
              [result :as result]
              [system :as sys]]
+            [proserunner.config.loader :as loader]
+            [proserunner.config.manifest :as manifest]
+            [proserunner.config.types :refer [map->Config]]
+            [proserunner.project-config :as project-config]
             [clj-http.lite.client :as client]
-            [clojure
-             [edn :as edn]
-             [string :as string]]
+            [clojure.string :as string]
             [clojure.java.io :as io]
-            [jsonista.core :as json])
-  (:import java.io.File))
+            [jsonista.core :as json]))
 
 (set! *warn-on-reflection* true)
 
 (def remote-address "https://github.com/jeff-bruemmer/proserunner-default-checks/archive/main.zip")
 (def remote-api "https://api.github.com/repos/jeff-bruemmer/proserunner-default-checks/commits/main")
-
-(defrecord Config [checks ignore])
-
-(defn load-config-from-file
-  "Loads and parses a config file, returning Result<Config>.
-
-  This is the primary config loading function that handles all error cases:
-  - File not found
-  - File read errors
-  - EDN parse errors
-
-  Returns Success<Config> or Failure with error details."
-  [filepath]
-  (result/try-result-with-context
-   (fn []
-     (let [content (slurp filepath)
-           parsed (edn/read-string content)
-           ;; Provide default value for :ignore if not present
-           with-defaults (if (contains? parsed :ignore)
-                           parsed
-                           (assoc parsed :ignore "ignore"))]
-       (map->Config with-defaults)))
-   {:filepath filepath :operation :load-config}))
-
-(defn safe-load-config
-  "Loads and parses config file, exiting on error (for backwards compatibility).
-
-  Prefer using load-config-from-file for better error handling."
-  [filepath]
-  (let [result (load-config-from-file filepath)]
-    (if (result/success? result)
-      (:value result)
-      (error/exit (str "Proserunner could not load config file '" filepath "':\n"
-                      (:error result) "\n")))))
-
-(defn load-config
-  "Parse config EDN string and return Config record.
-  Throws exception on parse error."
-  [edn-string]
-  (try
-    (let [parsed (edn/read-string edn-string)
-          ;; Provide default value for :ignore if not present
-          with-defaults (if (contains? parsed :ignore)
-                          parsed
-                          (assoc parsed :ignore "ignore"))]
-      (map->Config with-defaults))
-    (catch Exception e
-      (throw (ex-info "Failed to parse config EDN"
-                      {:error (.getMessage e)})))))
-
-(defn default
-  "If current config isn't valid, use the default."
-  [options]
-  (let [cur-config (:config options)
-        new-config (sys/filepath ".proserunner" "config.edn")]
-    (if (or (nil? cur-config)
-            (not (.exists (io/file cur-config))))
-      (assoc options :config new-config)
-      options)))
-
-(def invalid-msg "config must be an edn file.")
-
-(defn valid?
-  "File should be an edn file."
-  [filepath]
-  (contains?
-   #{"edn"}
-   (peek (string/split filepath #"\."))))
 
 (defn ^:private get-remote-zip!
   "Retrieves default checks, or times out after 5 seconds.
@@ -192,7 +125,7 @@
 
 (defn ^:private backup-directory!
   "Create a timestamped backup of a directory."
-  [dir-path _backup-name]
+  [dir-path]
   (let [timestamp (.format (java.text.SimpleDateFormat. "yyyyMMdd-HHmmss")
                            (java.util.Date.))
         backup-dir (file-utils/join-path (sys/home-dir) (str ".proserunner-backup-" timestamp))]
@@ -232,7 +165,7 @@
          (do
            ;; Backup existing checks
            (println "Backing up existing checks...")
-           (backup-directory! default-dir "default")
+           (backup-directory! default-dir)
 
            ;; Preserve config and ignore files
            (let [config-backup (when (.exists (io/file config-file))
@@ -260,19 +193,6 @@
        nil))
    {:operation :restore-defaults}))
 
-(defn using-default-config?
-  "Determines if automatic check updates should be performed."
-  [config-filepath default-config]
-  (or (nil? config-filepath)
-      (= config-filepath default-config)))
-
-(defn backfill-version-if-needed
-  "Supports upgrades from older Proserunner versions that lacked version tracking."
-  [version-exists?]
-  (when-not version-exists?
-    (when-let [version (get-remote-version)]
-      (write-local-version! version))))
-
 (defn initialize-proserunner
   "Sets up ~/.proserunner directory and downloads default checks for first-time users."
   [default-config]
@@ -283,7 +203,7 @@
       (do
         (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
         (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
-        (safe-load-config default-config)))))
+        (loader/safe-load-config default-config)))))
 
 (defn update-default-checks
   "Refreshes default checks when remote version is newer than local cache."
@@ -294,31 +214,38 @@
       (do
         (println "Warning: Failed to update checks:" (:error dl-result))
         (println "Continuing with existing checks...")
-        (safe-load-config default-config))
+        (loader/safe-load-config default-config))
       (do
         (println "Checks updated.")
-        (safe-load-config default-config)))))
+        (loader/safe-load-config default-config)))))
+
+(defn default
+  "If current config isn't valid, use the default."
+  [options]
+  (let [cur-config (:config options)
+        new-config (sys/filepath ".proserunner" "config.edn")]
+    (if (or (nil? cur-config)
+            (not (.exists (io/file cur-config))))
+      (assoc options :config new-config)
+      options)))
 
 (defn- load-custom-config
   "Loads a custom config file specified via -c flag."
   [config-filepath]
-  (safe-load-config config-filepath))
+  (loader/safe-load-config config-filepath))
 
 (defn- load-project-based-config
   "Loads project configuration, merging with global config as appropriate."
   [current-dir]
-  (let [_ (require 'proserunner.project-config)
-        load-project-config (resolve 'proserunner.project-config/load-project-config)]
-    (if-let [project-cfg (load-project-config current-dir)]
-      (map->Config {:checks (:checks project-cfg)
-                    :ignore (:ignore project-cfg)})
-      (error/exit "Failed to load project configuration. Check .proserunner/config.edn for errors.\n"))))
+  (if-let [project-cfg (project-config/load current-dir)]
+    (map->Config {:checks (:checks project-cfg)
+                  :ignore (:ignore project-cfg)})
+    (error/exit "Failed to load project configuration. Check .proserunner/config.edn for errors.\n")))
 
 (defn- load-existing-global-config
-  "Loads existing global config, backfilling version if needed."
-  [default-config version-exists?]
-  (backfill-version-if-needed version-exists?)
-  (safe-load-config default-config))
+  "Loads existing global config."
+  [default-config]
+  (loader/safe-load-config default-config))
 
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
@@ -331,15 +258,10 @@
     (throw (ex-info (str "fetch-or-create! expects a string filepath, got: " (type config-filepath))
                     {:config-filepath config-filepath})))
   (let [default-config (sys/filepath ".proserunner" "config.edn")
-        using-default? (using-default-config? config-filepath default-config)
+        using-default? (or (nil? config-filepath) (= config-filepath default-config))
         config-exists? (.exists (io/file default-config))
-        version-exists? (not (nil? (read-local-version)))
-
-        ;; Check if we're in a project directory
-        _ (require 'proserunner.project-config)
-        find-manifest (resolve 'proserunner.project-config/find-manifest)
         current-dir (System/getProperty "user.dir")
-        in-project? (find-manifest current-dir)]
+        in-project? (manifest/find current-dir)]
 
     (cond
       ;; Custom config file specified via -c flag
@@ -357,7 +279,7 @@
 
       ;; Global config exists
       config-exists?
-      (load-existing-global-config default-config version-exists?)
+      (load-existing-global-config default-config)
 
       ;; First-time initialization
       :else

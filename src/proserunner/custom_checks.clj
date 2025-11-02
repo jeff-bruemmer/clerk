@@ -4,6 +4,7 @@
   (:require [proserunner.context :as context]
             [proserunner.edn-utils :as edn-utils]
             [proserunner.project-config :as project-config]
+            [proserunner.config.manifest :as manifest]
             [proserunner.file-utils :as file-utils]
             [proserunner.result :as result]
             [proserunner.system :as sys]
@@ -88,7 +89,7 @@
 (defn- add-checks-to-project-dir
   "Copy .edn files from a local directory to project .proserunner/checks/ directory."
   [source-dir _target-name project-root]
-  (let [target-dir (project-config/project-checks-dir project-root)]
+  (let [target-dir (manifest/project-checks-dir project-root)]
     (copy-checks-to-directory source-dir target-dir)))
 
 (defn- read-config
@@ -135,13 +136,13 @@
 (defn- update-project-config-with-checks!
   "Add checks directory reference to :checks in project config if not already present."
   [project-root]
-  (let [config (project-config/read-project-config project-root)
+  (let [config (project-config/read project-root)
         checks (:checks config)
-        has-checks? (some project-config/check-entry-references-checks? checks)
+        has-checks? (some manifest/check-entry-references-checks? checks)
         updated-checks (if has-checks?
                         checks
                         (conj (vec checks) {:directory "checks"}))]
-    (project-config/write-project-config! project-root (assoc config :checks updated-checks))))
+    (project-config/write! project-root (assoc config :checks updated-checks))))
 
 (defn- import-from-source
   "Import checks from local directory.
@@ -190,7 +191,7 @@
 
           ;; Project scope
           (let [result (import-from-source source target-name project-root)
-                config-path (project-config/project-config-path project-root)]
+                config-path (manifest/project-config-path project-root)]
             (update-project-config-with-checks! project-root)
             (print-success-message target result config-path)
             (assoc result :target :project)))))))
