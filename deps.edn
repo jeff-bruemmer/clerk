@@ -4,14 +4,18 @@
   org.clojure/core.specs.alpha #:mvn{:version "0.2.44"},
   org.clojure/spec.alpha #:mvn{:version "0.2.187"},
   org.clojure/core.async #:mvn{:version "1.3.610"},
-;;  com.github.clj-easy/graal-build-time {:mvn/version "0.1.4"},
   commons-validator/commons-validator #:mvn{:version "1.7"},
-  org.martinklepsch/clj-http-lite #:mvn{:version "0.4.3"},
-  metosin/jsonista #:mvn{:version "0.2.7"}},
+  org.babashka/http-client #:mvn{:version "0.4.22"},
+  cheshire/cheshire #:mvn{:version "5.13.0"}},
  :paths ["src" "classes" "resources"],
  :aliases
  {:run
   {:main-opts ["-m" "proserunner.core"]}
+
+  ;; Native image build aliases
+  ;; Note: These aliases share common configuration but deps.edn doesn't support
+  ;; alias composition, so some duplication is necessary for clarity.
+
   :build
   {:main-opts
    ["-m" "clj.native-image" "proserunner.core"
@@ -20,20 +24,55 @@
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
     "-H:EnableURLProtocols=http,https"
-;;    "-H:ReflectionConfigurationFiles=reflect-config.json"
     "--native-image-info"
     "--enable-http"
     "--enable-https"
-;;    "-J-Xmx3G"
     "--no-fallback"
-;;    "--no-server"
+    ;; Performance optimizations
+    "-H:+UnlockExperimentalVMOptions"
+    "-O3"                              ;; Maximum optimization level
+    "-march=x86-64-v2"                 ;; Compatible with most modern CPUs (2009+)
+    "--gc=serial"                          ;; Better for larger heaps
+    "-R:MaxHeapSize=4g"                ;; Adequate runtime heap
+    "--strict-image-heap"
+    ;; Build-time memory (faster builds)
+    "-J-Xmx8G"
+    "-J-XX:+UseParallelGC"
     ],
    :extra-deps
    #:clj.native-image{clj-native-image
                       {:git/url
                        "https://github.com/taylorwood/clj.native-image.git",
                        :sha
-                       "7708e7fd4572459c81f6a6b8e44c96f41cdd92d4"}}},
+                       "4604ae76855e09cdabc0a2ecc5a7de2cc5b775d6"}}},
+  :build-macos-arm64
+  {:main-opts
+   ["-m" "clj.native-image" "proserunner.core"
+    "--initialize-at-build-time"
+    "-H:Name=proserunner"
+    "--report-unsupported-elements-at-runtime"
+    "-Dclojure.compiler.direct-linking=true"
+    "-H:EnableURLProtocols=http,https"
+    "--native-image-info"
+    "--enable-http"
+    "--enable-https"
+    "--no-fallback"
+    ;; Performance optimizations for ARM64
+    "-H:+UnlockExperimentalVMOptions"
+    "-O3"
+    "-march=armv8-a"                   ;; ARM64 baseline (Apple Silicon compatible)
+    "--gc=serial"
+    "-R:MaxHeapSize=4g"
+    "--strict-image-heap"
+    "-J-Xmx8G"
+    "-J-XX:+UseParallelGC"
+    ],
+   :extra-deps
+   #:clj.native-image{clj-native-image
+                      {:git/url
+                       "https://github.com/taylorwood/clj.native-image.git",
+                       :sha
+                       "4604ae76855e09cdabc0a2ecc5a7de2cc5b775d6"}}},
   :test
   {:extra-paths ["test"],
    :extra-deps

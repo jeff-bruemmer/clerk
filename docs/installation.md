@@ -1,23 +1,41 @@
 # Installation
 
-## Download binary
-
-1. Download [latest release](https://github.com/jeff-bruemmer/proserunner/releases) (Linux, macOS, WSL)
-2. Make executable: `chmod +x proserunner`
-3. Move to PATH: `sudo cp proserunner /usr/local/bin`
-
-## Build from source
+## Quick Install
 
 ```bash
 git clone https://github.com/jeff-bruemmer/proserunner.git
 cd proserunner
-./tools/install.sh
+./install.sh
 ```
 
-See [building.md](building.md) for prerequisites and [tools.md](tools.md) for script details.
+This installs the adaptive wrapper that auto-selects between Clojure and Babashka based on workload size.
 
-## Run with Clojure
+Requires: Java and Clojure CLI (installer will guide you if missing)
+
+## Optional: Install Babashka
+
+For faster startup on small workloads (~9ms vs ~600ms):
 
 ```bash
-clj -M:run -f /path/to/file
+# macOS
+brew install babashka
+
+# Linux
+curl -s https://raw.githubusercontent.com/babashka/babashka/master/install | bash
 ```
+
+The wrapper automatically uses bb when available for ≤50 files.
+
+## Optional: Build Native Binary
+
+For fastest startup (~50ms):
+
+```bash
+bb build && bb install
+```
+
+Requires: GraalVM with native-image. See [building.md](building.md).
+
+## Pre-built Binaries
+
+Download from [releases](https://github.com/jeff-bruemmer/proserunner/releases), make executable, move to PATH.

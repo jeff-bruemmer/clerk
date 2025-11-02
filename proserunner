@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Proserunner wrapper - adaptive runtime selection
+# Uses bb for small workloads (≤50 files), clojure for larger workloads
+
+set -e
+
+# Resolve symlinks with depth protection
+SOURCE="${BASH_SOURCE[0]}"
+SYMLINK_DEPTH=0
+MAX_SYMLINK_DEPTH=40
+
+while [ -L "$SOURCE" ]; do
+    SYMLINK_DEPTH=$((SYMLINK_DEPTH + 1))
+    if [ $SYMLINK_DEPTH -gt $MAX_SYMLINK_DEPTH ]; then
+        echo "ERROR: Too many symlink levels (possible circular symlink)" >&2
+        exit 1
+    fi
+    DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+# Estimate workload size
+estimate_files() {
+    local count=0
+
+    # Check arguments for directories or file patterns
+    for arg in "$@"; do
+        if [ -d "$arg" ]; then
+            # Count markdown files in directory (max depth 10 to avoid deep traversal)
+            count=$((count + $(find "$arg" -maxdepth 10 -type f -name "*.md" 2>/dev/null | wc -l)))
+        elif [ -f "$arg" ]; then
+            # Single file
+            count=$((count + 1))
+        fi
+    done
+
+    # If no files specified, check current directory (max depth 10)
+    if [ $count -eq 0 ] && [ $# -eq 0 ]; then
+        count=$(find . -maxdepth 10 -type f -name "*.md" 2>/dev/null | wc -l)
+    fi
+
+    echo $count
+}
+
+# Determine runtime based on workload
+FILE_COUNT=$(estimate_files "$@")
+THRESHOLD=50
+
+if command -v bb &> /dev/null && [ $FILE_COUNT -le $THRESHOLD ]; then
+    # Use babashka for small workloads
+    exec bb -cp "$DIR/src:$DIR/resources" -m proserunner.core "$@"
+elif command -v clojure &> /dev/null; then
+    # Use clojure for large workloads or when bb unavailable
+    exec clojure -Sdeps "{:paths [\"$DIR/src\" \"$DIR/resources\"] :deps {org.clojure/tools.cli {:mvn/version \"0.4.1\"} commons-validator/commons-validator {:mvn/version \"1.7\"} org.babashka/http-client {:mvn/version \"0.4.22\"} cheshire/cheshire {:mvn/version \"5.13.0\"}}}" -M -m proserunner.core "$@"
+else
+    echo "ERROR: Neither bb nor clojure found in PATH" >&2
+    echo "Install Clojure: https://clojure.org/guides/install_clojure" >&2
+    echo "Or install Babashka: https://github.com/babashka/babashka#installation" >&2
+    exit 1
+fi
