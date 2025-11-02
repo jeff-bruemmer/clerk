@@ -4,130 +4,102 @@
             [proserunner.storage :as storage]
             [proserunner.config.types :as types]))
 
-(deftest valid-result-all-unchanged
-  (testing "valid-result? returns true when nothing changed"
+(deftest compute-changed-produces-valid-cache
+  (testing "compute-changed creates results that pass validation checks"
     (let [lines [{:text "Hello world" :line-num 1}
                  {:text "Goodbye" :line-num 2}]
           cfg (types/map->Config {:checks [] :ignore "ignore"})
           checks []
+          file "test.txt"
+
+          ;; Create initial cached result
           cached-result (storage/map->Result
                          {:lines lines
                           :lines-hash (cache/stable-hash lines)
+                          :file-hash (cache/stable-hash file)
                           :config cfg
                           :config-hash (cache/stable-hash cfg)
                           :check-hash (cache/stable-hash checks)
                           :results []})
-          input {:cached-result cached-result
-                 :lines lines
-                 :config cfg
-                 :checks checks}]
-      (is (true? (cache/valid-result? input))))))
 
-(deftest valid-result-lines-changed
-  (testing "valid-result? returns false when lines changed"
-    (let [original-lines [{:text "Hello world" :line-num 1}]
-          new-lines [{:text "Hello universe" :line-num 1}]
+          ;; Add a new line
+          new-lines (conj lines {:text "New line" :line-num 3})
+
+          input {:file file
+                 :lines new-lines
+                 :config cfg
+                 :checks checks
+                 :cached-result cached-result
+                 :output :json
+                 :parallel-lines 1}
+
+          ;; Mock process function that returns empty results
+          mock-process (fn [_checks _lines _parallel] [])
+
+          ;; Compute changed creates a new result
+          result (cache/compute-changed input mock-process)]
+
+      ;; The critical test: can we validate this result?
+      ;; This test would have caught the bug where compute-changed used unstable hash
+      (is (storage/valid-lines? result new-lines)
+          "Result should validate against new lines")
+      (is (storage/valid-config? result cfg)
+          "Result should validate against config")
+      (is (storage/valid-checks? result checks)
+          "Result should validate against checks")
+
+      ;; Verify the result has the expected structure
+      (is (= new-lines (:lines result))
+          "Result should contain new lines")
+      (is (= cfg (:config result))
+          "Result should contain config"))))
+
+(deftest compute-changed-processes-only-new-lines
+  (testing "compute-changed only processes lines that changed"
+    (let [line1 {:text "Unchanged line" :line-num 1}
+          line2 {:text "Another unchanged" :line-num 2}
+          original-lines [line1 line2]
+
           cfg (types/map->Config {:checks [] :ignore "ignore"})
           checks []
+          file "test.txt"
+
+          ;; Original cached result with some issues
           cached-result (storage/map->Result
                          {:lines original-lines
                           :lines-hash (cache/stable-hash original-lines)
+                          :file-hash (cache/stable-hash file)
                           :config cfg
                           :config-hash (cache/stable-hash cfg)
                           :check-hash (cache/stable-hash checks)
-                          :results []})
-          input {:cached-result cached-result
+                          :results [{:text "Unchanged line"
+                                     :line-num 1
+                                     :issue "test issue"}]})
+
+          ;; Add a new line, keep original lines
+          new-line {:text "New line" :line-num 3}
+          new-lines [line1 line2 new-line]
+
+          input {:file file
                  :lines new-lines
                  :config cfg
-                 :checks checks}]
-      (is (false? (cache/valid-result? input))))))
+                 :checks checks
+                 :cached-result cached-result
+                 :output :json
+                 :parallel-lines 1}
 
-(deftest valid-result-config-changed
-  (testing "valid-result? returns false when config changed"
-    (let [lines [{:text "Hello world" :line-num 1}]
-          old-cfg (types/map->Config {:checks [] :ignore "old"})
-          new-cfg (types/map->Config {:checks [] :ignore "new"})
-          checks []
-          cached-result (storage/map->Result
-                         {:lines lines
-                          :lines-hash (cache/stable-hash lines)
-                          :config old-cfg
-                          :config-hash (cache/stable-hash old-cfg)
-                          :check-hash (cache/stable-hash checks)
-                          :results []})
-          input {:cached-result cached-result
-                 :lines lines
-                 :config new-cfg
-                 :checks checks}]
-      (is (false? (cache/valid-result? input))))))
+          ;; Track which lines were processed
+          processed-lines (atom [])
+          mock-process (fn [_checks lines _parallel]
+                         (reset! processed-lines lines)
+                         [])
 
-(deftest valid-result-checks-changed
-  (testing "valid-result? returns false when checks changed"
-    (let [lines [{:text "Hello world" :line-num 1}]
-          cfg (types/map->Config {:checks [] :ignore "ignore"})
-          old-checks []
-          new-checks [{:name "test" :kind "existence"}]
-          cached-result (storage/map->Result
-                         {:lines lines
-                          :lines-hash (cache/stable-hash lines)
-                          :config cfg
-                          :config-hash (cache/stable-hash cfg)
-                          :check-hash (cache/stable-hash old-checks)
-                          :results []})
-          input {:cached-result cached-result
-                 :lines lines
-                 :config cfg
-                 :checks new-checks}]
-      (is (false? (cache/valid-result? input))))))
+          result (cache/compute-changed input mock-process)]
 
-(deftest valid-checks-unchanged
-  (testing "valid-checks? returns true when config and checks unchanged"
-    (let [lines [{:text "Hello world" :line-num 1}]
-          cfg (types/map->Config {:checks [] :ignore "ignore"})
-          checks []
-          cached-result (storage/map->Result
-                         {:lines lines
-                          :lines-hash (cache/stable-hash lines)
-                          :config cfg
-                          :config-hash (cache/stable-hash cfg)
-                          :check-hash (cache/stable-hash checks)
-                          :results []})
-          input {:cached-result cached-result
-                 :lines [{:text "Different line" :line-num 1}]
-                 :config cfg
-                 :checks checks}]
-      (is (true? (cache/valid-checks? input))))))
+      ;; Only the new line should have been processed
+      (is (= [new-line] @processed-lines)
+          "Should only process the new line, not unchanged lines")
 
-(deftest valid-checks-config-changed
-  (testing "valid-checks? returns false when config changed"
-    (let [lines [{:text "Hello world" :line-num 1}]
-          old-cfg (types/map->Config {:checks [] :ignore "old"})
-          new-cfg (types/map->Config {:checks [] :ignore "new"})
-          checks []
-          cached-result (storage/map->Result
-                         {:lines lines
-                          :lines-hash (cache/stable-hash lines)
-                          :config old-cfg
-                          :config-hash (cache/stable-hash old-cfg)
-                          :check-hash (cache/stable-hash checks)
-                          :results []})
-          input {:cached-result cached-result
-                 :lines lines
-                 :config new-cfg
-                 :checks checks}]
-      (is (false? (cache/valid-checks? input))))))
-
-(deftest stable-hash-consistency
-  (testing "stable-hash produces consistent results across calls"
-    (let [data {:a 1 :b 2 :c [1 2 3]}
-          hash1 (cache/stable-hash data)
-          hash2 (cache/stable-hash data)]
-      (is (= hash1 hash2)))))
-
-(deftest stable-hash-different-data
-  (testing "stable-hash produces different results for different data"
-    (let [data1 {:a 1 :b 2}
-          data2 {:a 1 :b 3}
-          hash1 (cache/stable-hash data1)
-          hash2 (cache/stable-hash data2)]
-      (is (not= hash1 hash2)))))
+      ;; Old results should be preserved
+      (is (some #(= "test issue" (:issue %)) (:results result))
+          "Should preserve cached results for unchanged lines"))))

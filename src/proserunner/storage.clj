@@ -74,6 +74,11 @@
                     'proserunner.checks.Recommendation checks/map->Recommendation
                     'proserunner.checks.Expression checks/map->Expression})})
 
+(defn stable-hash
+  "Computes a stable hash that persists across JVM restarts."
+  [data]
+  (hash (pr-str data)))
+
 (defn inventory
   "Checks the storage directory for revelant cached results.
    Returns false if cache doesn't exist or is corrupted."
@@ -81,7 +86,7 @@
   (let [fp (str (file-utils/join-path (System/getProperty "java.io.tmpdir")
                                        "proserunner-storage"
                                        "file")
-                (hash file) ".edn")
+                (stable-hash file) ".edn")
         cache-file (io/file fp)
         use-cache? (.exists cache-file)]
     (if use-cache?
@@ -101,11 +106,6 @@
       false)))
 
 ;;;; Predicate functions for validating cached results by comparing hashes.
-
-(defn- stable-hash
-  "Computes a stable hash that persists across JVM restarts."
-  [data]
-  (hash (pr-str data)))
 
 (defn valid-checks?
   "Validates that cached checks match current checks by comparing hashes.

@@ -70,11 +70,11 @@
         updated-results (update-line-number line-num-map (:results cached-result))]
     (storage/->Result
      lines
-     (hash lines)
-     (hash file)
+     (stable-hash lines)
+     (stable-hash file)
      config
-     (hash config)
-     (hash checks)
+     (stable-hash config)
+     (stable-hash checks)
      output
      (let [changed-lines (changed cached-line-map lines)]
        (->> (process-fn checks changed-lines parallel-lines)
