@@ -20,25 +20,30 @@
   :build
   {:main-opts
    ["-m" "clj.native-image" "proserunner.core"
+    ;; Future compatibility
+    "--future-defaults=all"
+    ;; Unlock experimental VM options (required for -H:Name and -H:EnableURLProtocols)
+    "-H:+UnlockExperimentalVMOptions"
     ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
     "--features=clj_easy.graal_build_time.InitClojureClasses"
     ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
     "--initialize-at-build-time=com.fasterxml.jackson"
+    ;; Binary name (experimental option)
     "-H:Name=proserunner"
-    "--report-unsupported-elements-at-runtime"
+    ;; Clojure compiler optimization
     "-Dclojure.compiler.direct-linking=true"
+    ;; Network protocols (experimental option)
     "-H:EnableURLProtocols=http,https"
-    "--native-image-info"
     "--enable-http"
     "--enable-https"
+    ;; Build options
+    "--native-image-info"
     "--no-fallback"
     ;; Performance optimizations
-    "-H:+UnlockExperimentalVMOptions"
     "-O3"                              ;; Maximum optimization level
     "-march=x86-64-v2"                 ;; Compatible with most modern CPUs (2009+)
-    "--gc=serial"                          ;; Better for larger heaps
+    "--gc=serial"                      ;; Better for larger heaps
     "-R:MaxHeapSize=4g"                ;; Adequate runtime heap
-    "--strict-image-heap"
     ;; Build-time memory (faster builds)
     "-J-Xmx8G"
     "-J-XX:+UseParallelGC"
@@ -52,25 +57,31 @@
   :build-macos-arm64
   {:main-opts
    ["-m" "clj.native-image" "proserunner.core"
+    ;; Future compatibility
+    "--future-defaults=all"
+    ;; Unlock experimental VM options (required for -H:Name and -H:EnableURLProtocols)
+    "-H:+UnlockExperimentalVMOptions"
     ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
     "--features=clj_easy.graal_build_time.InitClojureClasses"
     ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
     "--initialize-at-build-time=com.fasterxml.jackson"
+    ;; Binary name (experimental option)
     "-H:Name=proserunner"
-    "--report-unsupported-elements-at-runtime"
+    ;; Clojure compiler optimization
     "-Dclojure.compiler.direct-linking=true"
+    ;; Network protocols (experimental option)
     "-H:EnableURLProtocols=http,https"
-    "--native-image-info"
     "--enable-http"
     "--enable-https"
+    ;; Build options
+    "--native-image-info"
     "--no-fallback"
     ;; Performance optimizations for ARM64
-    "-H:+UnlockExperimentalVMOptions"
-    "-O3"
+    "-O3"                              ;; Maximum optimization level
     "-march=armv8-a"                   ;; ARM64 baseline (Apple Silicon compatible)
-    "--gc=serial"
-    "-R:MaxHeapSize=4g"
-    "--strict-image-heap"
+    "--gc=serial"                      ;; Better for larger heaps
+    "-R:MaxHeapSize=4g"                ;; Adequate runtime heap
+    ;; Build-time memory (faster builds)
     "-J-Xmx8G"
     "-J-XX:+UseParallelGC"
     ],

@@ -11,8 +11,10 @@
           (load-file "tasks/util.clj")
           (load-file "tasks/build.clj")
           (load-file "tasks/baseline.clj")
+          (load-file "tasks/install.clj")
           (alias 'build 'tasks.build)
-          (alias 'base 'tasks.baseline))
+          (alias 'base 'tasks.baseline)
+          (alias 'install-helper 'tasks.install))
 
   ;; Main proserunner task (named 'lint' to avoid conflict with proserunner file)
   lint {:doc "Run proserunner linter on markdown files"
@@ -45,30 +47,10 @@
            :task (do
                    (println "=== Building proserunner ===\n")
                    (build/build)
-                   (println "\n=== Installing to ~/.local/bin ===\n")
-                   (when-not (fs/exists? "proserunner")
-                     (println "ERROR: proserunner not found. Build may have failed.")
-                     (System/exit 1))
-                   (fs/create-dirs (str (System/getProperty "user.home") "/.local/bin"))
-                   (let [target (str (System/getProperty "user.home") "/.local/bin/proserunner")]
-                     (fs/copy "proserunner" target {:replace-existing true})
-                     (fs/set-posix-file-permissions target "rwxr-xr-x")
-                     (println "✓ Installed to" target)
-                     (println "\nMake sure ~/.local/bin is in your PATH:")
-                     (println "  export PATH=\"$HOME/.local/bin:$PATH\"")
-                     (println "\nVerify installation:")
-                     (println "  proserunner --version")))}
+                   (install-helper/install-to-local-bin!))}
 
   install-system {:doc "Build native binary and install to /usr/local/bin (needs sudo)"
                   :task (do
                           (println "=== Building proserunner ===\n")
                           (build/build)
-                          (println "\n=== Installing to /usr/local/bin (requires sudo) ===\n")
-                          (when-not (fs/exists? "proserunner")
-                            (println "ERROR: proserunner not found. Build may have failed.")
-                            (System/exit 1))
-                          (shell "sudo cp proserunner /usr/local/bin/proserunner")
-                          (shell "sudo chmod +x /usr/local/bin/proserunner")
-                          (println "✓ Installed to /usr/local/bin/proserunner")
-                          (println "\nVerify installation:")
-                          (println "  proserunner --version"))}}}
+                          (install-helper/install-to-system-bin!))}}}
