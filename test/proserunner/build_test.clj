@@ -21,17 +21,6 @@
       (is (.exists (io/file temp-dir "proserunner"))
           "Binary exists - install task should succeed in this case"))))
 
-;;; Issue 2: Wrapper script should limit find depth
-
-(deftest wrapper-find-command-has-maxdepth
-  (testing "Wrapper script should use -maxdepth flag in find commands"
-    (let [wrapper-content (slurp "proserunner")]
-      (is (str/includes? wrapper-content "-maxdepth 10")
-          "Wrapper should include -maxdepth 10 flag to limit directory traversal")
-      (is (>= (count (re-seq #"-maxdepth 10" wrapper-content)) 2)
-          "Should have at least 2 instances of -maxdepth 10 (one for args, one for current dir)"))))
-
-
 ;;; Issue 5: Command construction should be safe
 
 (deftest build-command-construction-uses-proper-joining

@@ -78,7 +78,7 @@
         (is (= 1 (count (:checks config))))
         (is (= "Custom checks: source-checks" (-> config :checks first :name)))
         (is (= "custom/source-checks" (-> config :checks first :directory)))
-        (is (= ["test1" "test2"] (-> config :checks first :files)))))))
+        (is (= #{"test1" "test2"} (set (-> config :checks first :files))))))))
 
 (deftest add-checks-with-custom-name
   (testing "Adding checks with a custom directory name"

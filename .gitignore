@@ -8,16 +8,11 @@ proserunner.build_artifacts.txt
 .clj-kondo
 .lsp
 .calva
+proserunner
 
 # Build artifacts
-proserunner-instrumented
 default.iprof
-
-# Native binary (ignore if built, wrapper script is checked in)
-proserunner
 
 # Benchmark baseline backup files
 benchmark-baseline*.edn.bak
 
-# Legacy bash build scripts (replaced by bb tasks)
-tools/

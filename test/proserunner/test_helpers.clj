@@ -44,16 +44,15 @@
 (defn temp-dir-path
   "Generate a unique temporary directory path with the given prefix.
 
-  Does not create the directory - just returns the path string.
+  Does not create the directory - just returns the normalized path string.
 
   Example:
     (temp-dir-path \"test-project\")
     ;; => \"/tmp/test-project-1234567890\""
   [prefix]
-  (str (System/getProperty "java.io.tmpdir")
-       File/separator
-       prefix "-"
-       (System/currentTimeMillis)))
+  (.getAbsolutePath
+    (io/file (System/getProperty "java.io.tmpdir")
+             (str prefix "-" (System/currentTimeMillis)))))
 
 (defn create-temp-dir!
   "Create a temporary directory with the given prefix.
