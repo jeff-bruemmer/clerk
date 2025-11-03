@@ -2,29 +2,23 @@
   "Tests for build system tasks and wrapper script behavior."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [clojure.string :as str]
-            [proserunner.test-helpers :refer [with-temp-dir]])
-  (:import java.io.File))
+            [proserunner.test-helpers :refer [with-temp-dir]]))
 
-;;; Issue 1: bb.edn install task should check for proserunner-binary
+;;; Issue 1: bb.edn install task should check for proserunner
 
 (deftest file-check-logic
   (testing "Install task file existence check logic"
     (with-temp-dir [temp-dir "build-test"]
-      ;; Test 1: Only wrapper exists, no binary
-      (spit (str temp-dir "/proserunner") "#!/bin/bash\necho wrapper")
+      ;; Test: Binary doesn't exist initially
+      (is (not (.exists (io/file temp-dir "proserunner")))
+          "Binary does not exist initially - install task should fail in this case")
+
+      ;; Test: Binary exists after creation
+      (spit (str temp-dir "/proserunner") "fake binary")
 
       (is (.exists (io/file temp-dir "proserunner"))
-          "Wrapper script exists")
-      (is (not (.exists (io/file temp-dir "proserunner-binary")))
-          "Binary does not exist - install task should fail in this case")
-
-      ;; Test 2: Both exist
-      (spit (str temp-dir "/proserunner-binary") "fake binary")
-
-      (is (.exists (io/file temp-dir "proserunner"))
-          "Wrapper script exists")
-      (is (.exists (io/file temp-dir "proserunner-binary"))
           "Binary exists - install task should succeed in this case"))))
 
 ;;; Issue 2: Wrapper script should limit find depth
@@ -37,24 +31,71 @@
       (is (>= (count (re-seq #"-maxdepth 10" wrapper-content)) 2)
           "Should have at least 2 instances of -maxdepth 10 (one for args, one for current dir)"))))
 
-;;; Issue 3: Install script should warn before overwriting
-
-(deftest install-script-has-overwrite-warning
-  (testing "Install script should check for existing installation"
-    (let [install-content (slurp "install.sh")]
-      (is (str/includes? install-content "Overwriting")
-          "Install script should contain overwrite warning message")
-      (is (or (str/includes? install-content "[ -L \"$TARGET\" ]")
-              (str/includes? install-content "[ -f \"$TARGET\" ]"))
-          "Install script should check if target exists before warning"))))
 
 ;;; Issue 5: Command construction should be safe
 
 (deftest build-command-construction-uses-proper-joining
-  (testing "Build command construction should use explicit string joining"
-    ;; Check that tasks/build.clj uses str/join for command construction
+  (testing "Build command construction should properly concatenate alias"
+    ;; Check that tasks/build.clj constructs command correctly (no space before colon)
     (let [build-content (slurp "tasks/build.clj")]
-      (is (str/includes? build-content "str/join")
-          "Build tasks should use str/join for command construction")
-      (is (str/includes? build-content "[\"clojure\"")
-          "Build command should use vector of command parts"))))
+      (is (str/includes? build-content "(str \"clojure -M\" build-alias)")
+          "Build command should concatenate 'clojure -M' with build-alias")
+      (is (not (str/includes? build-content "\"clojure -M \""))
+          "Build command should not have space before alias colon"))))
+
+;;; Native Image Build Verification Tests (graal-build-time integration)
+
+(def ^:dynamic *binary-path* "./proserunner")
+(def ^:dynamic *build-output* nil)
+
+(deftest test-binary-exists
+  (testing "Native image binary exists"
+    (is (.exists (io/file *binary-path*))
+        "Binary should exist after build")))
+
+(deftest test-binary-executable
+  (testing "Native image binary is executable"
+    (is (.canExecute (io/file *binary-path*))
+        "Binary should have executable permissions")))
+
+(deftest test-binary-runs
+  (testing "Native image binary executes successfully"
+    (let [{:keys [exit]} (shell/sh *binary-path* "--version")]
+      (is (= 0 exit)
+          "Binary should exit with status 0"))))
+
+(deftest test-version-flag
+  (testing "Binary responds to --version flag"
+    (let [{:keys [exit out]} (shell/sh *binary-path* "--version")]
+      (is (= 0 exit) "Version command should succeed")
+      (is (not (str/blank? out)) "Version output should not be empty")
+      (is (re-find #"\d+\.\d+\.\d+" out)
+          "Version output should contain version number"))))
+
+(deftest test-help-flag
+  (testing "Binary responds to --help flag"
+    (let [{:keys [exit out]} (shell/sh *binary-path* "--help")]
+      (is (= 0 exit) "Help command should succeed")
+      (is (or (str/includes? out "Usage:") (str/includes? out "USAGE:"))
+          "Help output should contain usage information"))))
+
+(deftest test-no-classloader-errors
+  (testing "Binary doesn't fail with ClassLoader errors"
+    (let [{:keys [exit err]} (shell/sh *binary-path* "--version")]
+      (is (= 0 exit) "Command should succeed")
+      (is (not (str/includes? err "Could not locate clojure/core__init.class"))
+          "Should not have Clojure init class errors")
+      (is (not (str/includes? err "FileNotFoundException"))
+          "Should not have FileNotFoundException"))))
+
+(deftest test-basic-functionality
+  (testing "Binary can process a simple markdown file"
+    (let [test-file "resources/benchmark-data/small.md"
+          result (shell/sh *binary-path* "check" test-file)
+          {:keys [exit err]} result]
+      (is (contains? #{0 1} exit)
+          "Check command should exit with 0 (pass) or 1 (fail), not crash")
+      (is (not (str/includes? err "Could not locate"))
+          "Should not have class loading errors")
+      (is (not (str/includes? err "Exception"))
+          "Should not have unhandled exceptions"))))

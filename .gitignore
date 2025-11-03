@@ -14,7 +14,7 @@ proserunner-instrumented
 default.iprof
 
 # Native binary (ignore if built, wrapper script is checked in)
-proserunner-binary
+proserunner
 
 # Benchmark baseline backup files
 benchmark-baseline*.edn.bak

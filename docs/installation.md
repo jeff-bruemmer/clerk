@@ -1,40 +1,43 @@
 # Installation
 
-## Quick Install
+## Native binary (recommended)
+
+Build and install the native binary for fastest startup (~50ms):
 
 ```bash
 git clone https://github.com/jeff-bruemmer/proserunner.git
 cd proserunner
-./install.sh
+bb install  # Builds and installs to ~/.local/bin
 ```
 
-This installs the adaptive wrapper that auto-selects between Clojure and Babashka based on workload size.
+**Requirements:**
 
-Requires: Java and Clojure CLI (installer will guide you if missing)
+- Babashka
+- GraalVM 25+ with native-image
+- Minimum 8GB RAM
 
-## Optional: Install Babashka
+See [building.md](building.md) for detailed setup instructions.
 
-For faster startup on small workloads (~9ms vs ~600ms):
+**System-wide installation**
 
 ```bash
-# macOS
-brew install babashka
-
-# Linux
-curl -s https://raw.githubusercontent.com/babashka/babashka/master/install | bash
+bb install-system  # Installs to /usr/local/bin (requires sudo)
 ```
 
-The wrapper automatically uses bb when available for ≤50 files.
+## Run without installing
 
-## Optional: Build Native Binary
-
-For fastest startup (~50ms):
+Use Clojure CLI directly:
 
 ```bash
-bb build && bb install
+git clone https://github.com/jeff-bruemmer/proserunner.git
+cd proserunner
+clojure -M:run -f /path/to/file.md
 ```
 
-Requires: GraalVM with native-image. See [building.md](building.md).
+**Requirements:**
+
+- Java
+- Clojure CLI
 
 ## Pre-built Binaries
 

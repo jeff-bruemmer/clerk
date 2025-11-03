@@ -27,7 +27,7 @@ proserunner --init-project
 ## Features
 
 - **Customizable** - Add your own checks as EDN data files. Toggle checks on/off without modifying source code.
-- **Fast** - Parallel processing with intelligent caching. See [benchmarks](docs/benchmarks.md).
+- **Fast** - Parallel processing with intelligent caching.
 - **Flexible** - Multiple output formats: table, JSON, EDN, verbose.
 
 Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as data in [separate repo](https://github.com/jeff-bruemmer/proserunner-default-checks).
@@ -57,10 +57,9 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 
 ## Documentation
 
-- [Installation](docs/installation.md) - Download or build from source
+- [Installation](docs/installation.md) - Build and install native binary
 - [Usage](docs/checks.md) - Configuring checks, custom checks, ignoring specimens
 - [Benchmarks](docs/benchmarks.md) - Performance testing
-- [Tools](docs/tools.md) - Build, install, and testing scripts
 
 ## Basic usage
 
@@ -78,4 +77,4 @@ proserunner -f document.md --quoted-text
 proserunner -f docs/ --exclude "drafts/*"
 ```
 
-See [full documentation](docs/checks.md) for advanced features.
+See [full checks documentation](docs/checks.md).

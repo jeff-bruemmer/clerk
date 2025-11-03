@@ -6,7 +6,8 @@
   org.clojure/core.async #:mvn{:version "1.3.610"},
   commons-validator/commons-validator #:mvn{:version "1.7"},
   org.babashka/http-client #:mvn{:version "0.4.22"},
-  cheshire/cheshire #:mvn{:version "5.13.0"}},
+  cheshire/cheshire #:mvn{:version "5.13.0"},
+  com.github.clj-easy/graal-build-time #:mvn{:version "1.0.5"}},
  :paths ["src" "classes" "resources"],
  :aliases
  {:run
@@ -19,7 +20,10 @@
   :build
   {:main-opts
    ["-m" "clj.native-image" "proserunner.core"
-    "--initialize-at-build-time"
+    ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
+    "--features=clj_easy.graal_build_time.InitClojureClasses"
+    ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
+    "--initialize-at-build-time=com.fasterxml.jackson"
     "-H:Name=proserunner"
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
@@ -48,7 +52,10 @@
   :build-macos-arm64
   {:main-opts
    ["-m" "clj.native-image" "proserunner.core"
-    "--initialize-at-build-time"
+    ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
+    "--features=clj_easy.graal_build_time.InitClojureClasses"
+    ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
+    "--initialize-at-build-time=com.fasterxml.jackson"
     "-H:Name=proserunner"
     "--report-unsupported-elements-at-runtime"
     "-Dclojure.compiler.direct-linking=true"
@@ -73,6 +80,7 @@
                        "https://github.com/taylorwood/clj.native-image.git",
                        :sha
                        "4604ae76855e09cdabc0a2ecc5a7de2cc5b775d6"}}},
+
   :test
   {:extra-paths ["test"],
    :extra-deps

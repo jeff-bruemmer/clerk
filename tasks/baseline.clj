@@ -1,7 +1,6 @@
 (ns tasks.baseline
   (:require [babashka.fs :as fs]
             [babashka.process :refer [shell]]
-            [clojure.string :as str]
             [tasks.util :refer [print-lines]]))
 
 ;; Pure functions

@@ -28,6 +28,10 @@
   "List of build artifacts to clean."
   ["classes" ".cpcache"])
 
+(def binary-name
+  "Binary name for native image build."
+  "proserunner")
+
 (def test-content
   "Test markdown content for benchmarking."
   "# Test Document
@@ -135,7 +139,7 @@ More regular prose.")
   [build-alias]
   (println "\nBuilding native image...")
   (println "This could take 30-60 seconds...\n")
-  (let [cmd (str/join " " ["clojure" "-M" build-alias])
+  (let [cmd (str "clojure -M" build-alias)
         result (shell {:continue true} cmd)]
     (when-not (zero? (:exit result))
       (println "\nERROR: Native image build failed")
@@ -156,9 +160,7 @@ More regular prose.")
 (defn build
   "Build native binary with GraalVM."
   []
-  (print-lines ["=== Proserunner Build ===\n"
-                "Note: For maximum performance, use bb build-pgo instead."
-                "      PGO builds are 20-40% faster but take longer to compile.\n"])
+  (println "=== Proserunner Build ===\n")
 
   (check-prerequisites!)
   (let [platform (detect-platform!)]
@@ -168,15 +170,15 @@ More regular prose.")
 
     (run-build-command! (:build-alias platform))
 
-    (verify-binary! "proserunner")
-    (make-executable! "proserunner")
+    (verify-binary! binary-name)
+    (make-executable! binary-name)
 
     (println "\nCleaning up build artifacts...")
     (cleanup-artifacts! build-artifacts)
 
     (println "\n✓ Build successful!\n")
-    (test-binary! "./proserunner")
-    (show-build-info "proserunner")))
+    (test-binary! (str "./" binary-name))
+    (show-build-info binary-name)))
 
 ;; Benchmark
 
@@ -201,12 +203,12 @@ More regular prose.")
   []
   (println "=== Build Performance Comparison ===\n")
 
-  (when-not (fs/exists? "proserunner")
-    (println "ERROR: proserunner binary not found. Run bb build first.")
+  (when-not (fs/exists? binary-name)
+    (println (str "ERROR: " binary-name " not found. Run bb build first."))
     (System/exit 1))
 
   (let [test-file (str (fs/create-temp-file {:prefix "benchmark-test" :suffix ".md"}))
-        binary "./proserunner"
+        binary (str "./" binary-name)
         iterations 10]
 
     (spit test-file test-content)
@@ -225,5 +227,5 @@ More regular prose.")
       (fs/delete test-file)
 
       (print-lines ["Binary info:"
-                    (str "  Size: " (get-file-size "proserunner"))
-                    (str "  Build: " (run-shell "./proserunner --version"))]))))
+                    (str "  Size: " (get-file-size binary-name))
+                    (str "  Build: " (run-shell (str "./" binary-name " --version")))]))))

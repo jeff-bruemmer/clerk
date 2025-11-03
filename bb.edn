@@ -23,6 +23,9 @@
   test {:doc "Run Clojure test suite"
         :task (shell "clojure -M:test")}
 
+  test-build {:doc "Run build verification tests"
+              :task (shell "clojure -M:test -n proserunner.build-test")}
+
   ;; Baseline tasks (from tasks/baseline.clj)
   baseline {:doc "Run benchmarks and compare against saved baseline"
             :task (apply base/baseline *command-line-args*)}
@@ -43,12 +46,12 @@
                    (println "=== Building proserunner ===\n")
                    (build/build)
                    (println "\n=== Installing to ~/.local/bin ===\n")
-                   (when-not (fs/exists? "proserunner-binary")
-                     (println "ERROR: proserunner-binary not found. Build may have failed.")
+                   (when-not (fs/exists? "proserunner")
+                     (println "ERROR: proserunner not found. Build may have failed.")
                      (System/exit 1))
                    (fs/create-dirs (str (System/getProperty "user.home") "/.local/bin"))
                    (let [target (str (System/getProperty "user.home") "/.local/bin/proserunner")]
-                     (fs/copy "proserunner-binary" target {:replace-existing true})
+                     (fs/copy "proserunner" target {:replace-existing true})
                      (fs/set-posix-file-permissions target "rwxr-xr-x")
                      (println "✓ Installed to" target)
                      (println "\nMake sure ~/.local/bin is in your PATH:")
@@ -56,32 +59,15 @@
                      (println "\nVerify installation:")
                      (println "  proserunner --version")))}
 
-  install-wrapper {:doc "Install wrapper script to ~/.local/bin (no build required)"
-                   :task (do
-                           (println "=== Installing proserunner wrapper ===\n")
-                           (when-not (fs/exists? "proserunner")
-                             (println "ERROR: proserunner wrapper script not found.")
-                             (println "Make sure you are running this from the proserunner directory.")
-                             (System/exit 1))
-                           (fs/create-dirs (str (System/getProperty "user.home") "/.local/bin"))
-                           (let [target (str (System/getProperty "user.home") "/.local/bin/proserunner")]
-                             (fs/copy "proserunner" target {:replace-existing true})
-                             (fs/set-posix-file-permissions target "rwxr-xr-x")
-                             (println "✓ Installed wrapper to" target)
-                             (println "\nMake sure ~/.local/bin is in your PATH:")
-                             (println "  export PATH=\"$HOME/.local/bin:$PATH\"")
-                             (println "\nThe wrapper will use clojure or bb automatically.")
-                             (println "No native compilation required!")))}
-
   install-system {:doc "Build native binary and install to /usr/local/bin (needs sudo)"
                   :task (do
                           (println "=== Building proserunner ===\n")
                           (build/build)
                           (println "\n=== Installing to /usr/local/bin (requires sudo) ===\n")
-                          (when-not (fs/exists? "proserunner-binary")
-                            (println "ERROR: proserunner-binary not found. Build may have failed.")
+                          (when-not (fs/exists? "proserunner")
+                            (println "ERROR: proserunner not found. Build may have failed.")
                             (System/exit 1))
-                          (shell "sudo cp proserunner-binary /usr/local/bin/proserunner")
+                          (shell "sudo cp proserunner /usr/local/bin/proserunner")
                           (shell "sudo chmod +x /usr/local/bin/proserunner")
                           (println "✓ Installed to /usr/local/bin/proserunner")
                           (println "\nVerify installation:")
