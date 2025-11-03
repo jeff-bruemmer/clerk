@@ -1,12 +1,12 @@
 # Baseline management
 
-Track performance and detect regressions. See [tools.md](tools.md) for script details.
+Track performance and detect regressions.
 
 ## Create baseline
 
 ```bash
-# Convenience script
-./tools/update-baseline.sh
+# Using bb task (recommended)
+bb update-baseline
 
 # Or manually
 clojure -M:benchmark --save benchmark-baseline.edn
@@ -16,10 +16,10 @@ clojure -M:benchmark --editors-only --save baseline-editors.edn
 ## Compare against baseline
 
 ```bash
-# Default 10% threshold
-clojure -M:benchmark --baseline benchmark-baseline.edn
+# Using bb task (default 10% threshold)
+bb baseline
 
-# Custom threshold
+# Or manually with custom threshold
 clojure -M:benchmark --baseline benchmark-baseline.edn --threshold 15
 
 # Editors only
@@ -29,14 +29,14 @@ clojure -M:benchmark --editors-only --baseline baseline-editors.edn
 ## Workflow
 
 ```bash
-# Save baseline
+# 1. Save initial baseline
 clojure -M:benchmark --editors-only --save before.edn
 
-# Make changes...
+# 2. Make performance improvements...
 
-# Compare
+# 3. Compare
 clojure -M:benchmark --editors-only --baseline before.edn
 
-# Save new baseline if improved
-clojure -M:benchmark --editors-only --save after.edn
+# 4. Save new baseline if improved
+bb update-baseline
 ```

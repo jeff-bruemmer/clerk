@@ -1,23 +1,44 @@
 # Installation
 
-## Download binary
+## Native binary (recommended)
 
-1. Download [latest release](https://github.com/jeff-bruemmer/proserunner/releases) (Linux, macOS, WSL)
-2. Make executable: `chmod +x proserunner`
-3. Move to PATH: `sudo cp proserunner /usr/local/bin`
-
-## Build from source
+Build and install the native binary for fastest startup (~50ms):
 
 ```bash
 git clone https://github.com/jeff-bruemmer/proserunner.git
 cd proserunner
-./tools/install.sh
+bb install  # Builds and installs to ~/.local/bin
 ```
 
-See [building.md](building.md) for prerequisites and [tools.md](tools.md) for script details.
+**Requirements:**
 
-## Run with Clojure
+- Babashka
+- GraalVM 25+ with native-image
+- Minimum 8GB RAM
+
+See [building.md](building.md) for detailed setup instructions.
+
+**System-wide installation**
 
 ```bash
-clj -M:run -f /path/to/file
+bb install-system  # Installs to /usr/local/bin (requires sudo)
 ```
+
+## Run without installing
+
+Use Clojure CLI directly:
+
+```bash
+git clone https://github.com/jeff-bruemmer/proserunner.git
+cd proserunner
+clojure -M:run -f /path/to/file.md
+```
+
+**Requirements:**
+
+- Java
+- Clojure CLI
+
+## Pre-built Binaries
+
+Download from [releases](https://github.com/jeff-bruemmer/proserunner/releases), make executable, move to PATH.

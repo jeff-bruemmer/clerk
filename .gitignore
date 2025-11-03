@@ -7,7 +7,12 @@ reports
 proserunner.build_artifacts.txt
 .clj-kondo
 .lsp
-/proserunner
+.calva
+proserunner
+
+# Build artifacts
+default.iprof
 
 # Benchmark baseline backup files
 benchmark-baseline*.edn.bak
+

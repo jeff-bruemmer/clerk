@@ -1,0 +1,56 @@
+{:paths ["src" "resources" "tasks"]
+ :deps {org.clojure/tools.cli {:mvn/version "0.4.1"}
+        commons-validator/commons-validator {:mvn/version "1.7"}
+        org.babashka/http-client {:mvn/version "0.4.22"}
+        cheshire/cheshire {:mvn/version "5.13.0"}}
+ :tasks
+ {:requires ([babashka.process :refer [shell]]
+             [babashka.fs :as fs])
+  :init (do
+          (def cli-args *command-line-args*)
+          (load-file "tasks/util.clj")
+          (load-file "tasks/build.clj")
+          (load-file "tasks/baseline.clj")
+          (load-file "tasks/install.clj")
+          (alias 'build 'tasks.build)
+          (alias 'base 'tasks.baseline)
+          (alias 'install-helper 'tasks.install))
+
+  ;; Main proserunner task (named 'lint' to avoid conflict with proserunner file)
+  lint {:doc "Run proserunner linter on markdown files"
+        :requires ([proserunner.core :as core])
+        :task (apply core/-main cli-args)}
+
+  ;; Test task
+  test {:doc "Run Clojure test suite"
+        :task (shell "clojure -M:test")}
+
+  test-build {:doc "Run build verification tests"
+              :task (shell "clojure -M:test -n proserunner.build-test")}
+
+  ;; Baseline tasks (from tasks/baseline.clj)
+  baseline {:doc "Run benchmarks and compare against saved baseline"
+            :task (apply base/baseline *command-line-args*)}
+
+  update-baseline {:doc "Run benchmarks and save as new baseline"
+                   :task (base/update-baseline)}
+
+  ;; Build tasks (from tasks/build.clj)
+  build {:doc "Build native binary (requires GraalVM native-image)"
+         :task (build/build)}
+
+  benchmark-build {:doc "Benchmark current native binary performance"
+                   :task (build/benchmark-build)}
+
+  ;; Installation tasks
+  install {:doc "Build native binary and install to ~/.local/bin"
+           :task (do
+                   (println "=== Building proserunner ===\n")
+                   (build/build)
+                   (install-helper/install-to-local-bin!))}
+
+  install-system {:doc "Build native binary and install to /usr/local/bin (needs sudo)"
+                  :task (do
+                          (println "=== Building proserunner ===\n")
+                          (build/build)
+                          (install-helper/install-to-system-bin!))}}}

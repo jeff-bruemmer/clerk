@@ -12,7 +12,7 @@
              [set :refer [rename-keys]]
              [string :as string]]
             [clojure.java.io :as io]
-            [jsonista.core :as json]))
+            [cheshire.core :as json]))
 
 (set! *warn-on-reflection* true)
 
@@ -146,7 +146,7 @@
   ([rows] (print-table (keys (first rows)) rows)))
 
 (defn print-opts
-  "Utiltiy for printing usage."
+  "Utility for printing usage."
   [summary title config]
   (println title)
   (print-options [:option :required :desc] summary)
@@ -291,7 +291,7 @@
   [results output]
   (case (string/lower-case output)
     "edn" (pp/pprint results)
-    "json" (json/write-value *out* results)
+    "json" (json/generate-stream results *out*)
     "group" (group-results results)
     "verbose" (verbose-results results)
     (results-table results)))

@@ -10,10 +10,10 @@
             [proserunner.config.manifest :as manifest]
             [proserunner.config.types :refer [map->Config]]
             [proserunner.project-config :as project-config]
-            [clj-http.lite.client :as client]
+            [babashka.http-client :as client]
             [clojure.string :as string]
             [clojure.java.io :as io]
-            [jsonista.core :as json]))
+            [cheshire.core :as json]))
 
 (set! *warn-on-reflection* true)
 
@@ -23,14 +23,15 @@
 (defn ^:private get-remote-zip!
   "Retrieves default checks, or times out after 5 seconds.
 
+  Note: :timeout applies to the entire HTTP request (connect + read).
+
   Returns Result<byte-array> - Success with ZIP bytes, or Failure on error."
   [address]
   (result/try-result-with-context
    (fn []
-     (let [resp (client/get address {:as :byte-array
-                                     :socket-timeout 5000
-                                     :connection-timeout 5000
-                                     :throw-exceptions false})]
+     (let [resp (client/get address {:as :bytes
+                                     :timeout 5000
+                                     :throw false})]
        (if (= 200 (:status resp))
          (:body resp)
          (throw (ex-info "Failed to fetch remote checks"
@@ -66,11 +67,10 @@
    Returns nil if unable to fetch (offline, rate limit, etc)."
   []
   (try
-    (let [resp (client/get remote-api {:socket-timeout 3000
-                                       :connection-timeout 3000
-                                       :throw-exceptions false})]
+    (let [resp (client/get remote-api {:timeout 3000
+                                       :throw false})]
       (when (= 200 (:status resp))
-        (let [body (json/read-value (:body resp) json/keyword-keys-object-mapper)]
+        (let [body (json/parse-string (:body resp) true)]
           (:sha body))))
     (catch Exception _ nil)))
 
