@@ -1,6 +1,6 @@
 (ns tasks.build
   (:require [babashka.fs :as fs]
-            [babashka.process :refer [shell]]
+            [babashka.process :refer [shell process]]
             [clojure.string :as str]
             [tasks.util :refer [run-shell run-shell-check print-lines get-file-size]]))
 
@@ -12,11 +12,7 @@
   (let [os-trimmed (str/trim os)
         arch-trimmed (str/trim arch)]
     {:os os-trimmed
-     :arch arch-trimmed
-     :build-alias (if (and (= os-trimmed "Darwin")
-                           (= arch-trimmed "arm64"))
-                    ":build-macos-arm64"
-                    ":build")}))
+     :arch arch-trimmed}))
 
 (defn format-version-info
   "Format version information map."
@@ -134,16 +130,69 @@ More regular prose.")
 
 ;; Build workflows
 
-(defn run-build-command!
-  "Execute native-image build command."
-  [build-alias]
+(defn get-classpath!
+  "Get the classpath for native-image build."
+  []
+  (println "Generating classpath...")
+  (let [result (shell {:out :string} "clojure -Spath -A:native-image")]
+    (str/trim (:out result))))
+
+(defn compile-clojure!
+  "AOT compile Clojure code to classes."
+  []
+  (println "Compiling Clojure code...")
+  ;; Ensure classes directory exists
+  (fs/create-dirs "classes")
+  (let [result (shell {:continue true} "clojure -M:native-image:compile")]
+    (when-not (zero? (:exit result))
+      (println "\nERROR: Compilation failed")
+      (System/exit (:exit result)))))
+
+(defn native-image-options
+  "Generate native-image options based on platform."
+  [platform]
+  (let [common-opts ["--future-defaults=all"
+                     "-H:+UnlockExperimentalVMOptions"
+                     "--features=clj_easy.graal_build_time.InitClojureClasses"
+                     ;; Initialize our namespaces and dependencies at build time
+                     "--initialize-at-build-time=com.fasterxml.jackson,proserunner,editors,babashka,cheshire"
+                     "-H:Name=proserunner"
+                     "-Dclojure.compiler.direct-linking=true"
+                     "-H:EnableURLProtocols=http,https"
+                     "--enable-http"
+                     "--enable-https"
+                     "--native-image-info"
+                     "--no-fallback"
+                     "-O3"
+                     "--gc=serial"
+                     "-R:MaxHeapSize=4g"
+                     "-J-Xmx8G"
+                     "-J-XX:+UseParallelGC"]
+        arch-opt (if (and (= (:os platform) "Darwin")
+                         (= (:arch platform) "arm64"))
+                  "-march=armv8-a"
+                  "-march=x86-64-v2")]
+    (conj common-opts arch-opt)))
+
+(defn run-native-image!
+  "Execute native-image build directly."
+  [platform classpath]
   (println "\nBuilding native image...")
   (println "This could take 30-60 seconds...\n")
-  (let [cmd (str "clojure -M" build-alias)
-        result (shell {:continue true} cmd)]
+  (let [opts (native-image-options platform)
+        ;; Build full command as a sequence for proper escaping
+        cmd (vec (concat ["native-image" "-cp" classpath] opts ["proserunner.core"]))
+        result @(process cmd {:inherit true :err :inherit :out :inherit :continue true})]
     (when-not (zero? (:exit result))
       (println "\nERROR: Native image build failed")
       (System/exit (:exit result)))))
+
+(defn run-build-command!
+  "Execute native-image build command."
+  [platform]
+  (let [classpath (get-classpath!)]
+    (compile-clojure!)
+    (run-native-image! platform classpath)))
 
 (defn test-binary!
   "Test binary by running help command."
@@ -168,7 +217,7 @@ More regular prose.")
     (println "\nCleaning build artifacts...")
     (cleanup-artifacts! build-artifacts)
 
-    (run-build-command! (:build-alias platform))
+    (run-build-command! platform)
 
     (verify-binary! binary-name)
     (make-executable! binary-name)

@@ -17,80 +17,13 @@
   ;; Note: These aliases share common configuration but deps.edn doesn't support
   ;; alias composition, so some duplication is necessary for clarity.
 
-  :build
-  {:main-opts
-   ["-m" "clj.native-image" "proserunner.core"
-    ;; Future compatibility
-    "--future-defaults=all"
-    ;; Unlock experimental VM options (required for -H:Name and -H:EnableURLProtocols)
-    "-H:+UnlockExperimentalVMOptions"
-    ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
-    "--features=clj_easy.graal_build_time.InitClojureClasses"
-    ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
-    "--initialize-at-build-time=com.fasterxml.jackson"
-    ;; Binary name (experimental option)
-    "-H:Name=proserunner"
-    ;; Clojure compiler optimization
-    "-Dclojure.compiler.direct-linking=true"
-    ;; Network protocols (experimental option)
-    "-H:EnableURLProtocols=http,https"
-    "--enable-http"
-    "--enable-https"
-    ;; Build options
-    "--native-image-info"
-    "--no-fallback"
-    ;; Performance optimizations
-    "-O3"                              ;; Maximum optimization level
-    "-march=x86-64-v2"                 ;; Compatible with most modern CPUs (2009+)
-    "--gc=serial"                      ;; Better for larger heaps
-    "-R:MaxHeapSize=4g"                ;; Adequate runtime heap
-    ;; Build-time memory (faster builds)
-    "-J-Xmx8G"
-    "-J-XX:+UseParallelGC"
-    ],
-   :extra-deps
-   #:clj.native-image{clj-native-image
-                      {:git/url
-                       "https://github.com/taylorwood/clj.native-image.git",
-                       :sha
-                       "4604ae76855e09cdabc0a2ecc5a7de2cc5b775d6"}}},
-  :build-macos-arm64
-  {:main-opts
-   ["-m" "clj.native-image" "proserunner.core"
-    ;; Future compatibility
-    "--future-defaults=all"
-    ;; Unlock experimental VM options (required for -H:Name and -H:EnableURLProtocols)
-    "-H:+UnlockExperimentalVMOptions"
-    ;; Use graal-build-time feature instead of deprecated --initialize-at-build-time
-    "--features=clj_easy.graal_build_time.InitClojureClasses"
-    ;; Initialize entire Jackson package at build time (required for Cheshire JSON library)
-    "--initialize-at-build-time=com.fasterxml.jackson"
-    ;; Binary name (experimental option)
-    "-H:Name=proserunner"
-    ;; Clojure compiler optimization
-    "-Dclojure.compiler.direct-linking=true"
-    ;; Network protocols (experimental option)
-    "-H:EnableURLProtocols=http,https"
-    "--enable-http"
-    "--enable-https"
-    ;; Build options
-    "--native-image-info"
-    "--no-fallback"
-    ;; Performance optimizations for ARM64
-    "-O3"                              ;; Maximum optimization level
-    "-march=armv8-a"                   ;; ARM64 baseline (Apple Silicon compatible)
-    "--gc=serial"                      ;; Better for larger heaps
-    "-R:MaxHeapSize=4g"                ;; Adequate runtime heap
-    ;; Build-time memory (faster builds)
-    "-J-Xmx8G"
-    "-J-XX:+UseParallelGC"
-    ],
-   :extra-deps
-   #:clj.native-image{clj-native-image
-                      {:git/url
-                       "https://github.com/taylorwood/clj.native-image.git",
-                       :sha
-                       "4604ae76855e09cdabc0a2ecc5a7de2cc5b775d6"}}},
+  ;; Compile alias - prepares classes for native-image
+  :compile
+  {:main-opts ["-e" "(do (require 'proserunner.core) (compile 'proserunner.core))"]}
+
+  ;; Native image build configuration (no wrapper needed)
+  :native-image
+  {:extra-deps {com.github.clj-easy/graal-build-time {:mvn/version "1.0.5"}}},
 
   :test
   {:extra-paths ["test"],
