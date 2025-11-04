@@ -41,23 +41,12 @@
   [result]
   (instance? Failure result))
 
-(defn failed?
-  "Alias for failure? - more natural for some contexts."
-  [result]
-  (failure? result))
-
 ;; Value extraction
 (defn get-value
   "Extracts value from Success, returns nil for Failure."
   [result]
   (when (success? result)
     (:value result)))
-
-(defn get-error
-  "Extracts error from Failure, returns nil for Success."
-  [result]
-  (when (failure? result)
-    result))
 
 (defn unwrap
   "Unwraps a Success value or throws on Failure."

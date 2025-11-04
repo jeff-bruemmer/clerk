@@ -229,11 +229,6 @@
       (assoc options :config new-config)
       options)))
 
-(defn- load-custom-config
-  "Loads a custom config file specified via -c flag."
-  [config-filepath]
-  (loader/safe-load-config config-filepath))
-
 (defn- load-project-based-config
   "Loads project configuration, merging with global config as appropriate."
   [current-dir]
@@ -241,11 +236,6 @@
     (map->Config {:checks (:checks project-cfg)
                   :ignore (:ignore project-cfg)})
     (error/exit "Failed to load project configuration. Check .proserunner/config.edn for errors.\n")))
-
-(defn- load-existing-global-config
-  "Loads existing global config."
-  [default-config]
-  (loader/safe-load-config default-config))
 
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
@@ -266,7 +256,7 @@
     (cond
       ;; Custom config file specified via -c flag
       (and (not using-default?) (.exists (io/file config-filepath)))
-      (load-custom-config config-filepath)
+      (loader/safe-load-config config-filepath)
 
       ;; In a project directory - load project config (merges with global)
       ;; This must come BEFORE the checks-stale? and config-exists? checks
@@ -279,7 +269,7 @@
 
       ;; Global config exists
       config-exists?
-      (load-existing-global-config default-config)
+      (loader/safe-load-config default-config)
 
       ;; First-time initialization
       :else

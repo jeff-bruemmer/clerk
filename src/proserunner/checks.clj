@@ -4,6 +4,7 @@
   (:require [proserunner
              [edn-utils :as edn-utils]
              [error :as error]
+             [file-utils :as file-utils]
              [result :as result]]
             [clojure
              [edn :as edn]
@@ -130,12 +131,6 @@
                           {:error (:error read-result)
                            :context (:context read-result)}))))))
 
-(defn- absolute-path?
-  "Check if a path is absolute."
-  [path]
-  (or (.isAbsolute (io/file path))
-      (clojure.string/starts-with? path "~")))
-
 (defn- filter-specimens
   "Filters specimens from a check, removing any that are in the ignore set.
    Returns the check with filtered specimens. Case-insensitive matching."
@@ -180,7 +175,7 @@
         checks (:checks config)
         all-checks (mapcat (fn
                              [{:keys [directory files]}]
-                             (let [base-path (if (absolute-path? directory)
+                             (let [base-path (if (file-utils/absolute-path? directory)
                                               directory
                                               (str check-dir directory))
                                    sep java.io.File/separator]

@@ -33,11 +33,11 @@
   running the configured checks on each line of text in the file."
   [{:keys [file lines config checks output parallel-lines]}]
   (store/map->Result {:lines lines
-                      :lines-hash (cache/stable-hash lines)
-                      :file-hash (cache/stable-hash file)
+                      :lines-hash (store/stable-hash lines)
+                      :file-hash (store/stable-hash file)
                       :config config
-                      :config-hash (cache/stable-hash config)
-                      :check-hash (cache/stable-hash checks)
+                      :config-hash (store/stable-hash config)
+                      :check-hash (store/stable-hash checks)
                       :output output
                       :results (processor/process checks lines parallel-lines)}))
 

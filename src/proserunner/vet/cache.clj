@@ -5,12 +5,6 @@
 
 (set! *warn-on-reflection* true)
 
-(defn stable-hash
-  "Computes a stable hash that persists across JVM restarts.
-  Uses hash of the string representation rather than JVM's hash."
-  [data]
-  (hash (pr-str data)))
-
 (defn valid-result?
   "If no changes to the file, checks, or config: reuse the cached results.
   Used to determine if we need to compute new results."
@@ -70,11 +64,11 @@
         updated-results (update-line-number line-num-map (:results cached-result))]
     (storage/->Result
      lines
-     (stable-hash lines)
-     (stable-hash file)
+     (storage/stable-hash lines)
+     (storage/stable-hash file)
      config
-     (stable-hash config)
-     (stable-hash checks)
+     (storage/stable-hash config)
+     (storage/stable-hash checks)
      output
      (let [changed-lines (changed cached-line-map lines)]
        (->> (process-fn checks changed-lines parallel-lines)

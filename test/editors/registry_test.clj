@@ -35,12 +35,12 @@
     (is (= mock-custom-editor (registry/get-editor "custom")))))
 
 (deftest test-unregister-editor
-  (testing "Can unregister an editor"
+  (testing "Can manually remove an editor from registry"
     (reset-registry!)
     (registry/register-editor! "existence" mock-existence-editor)
-    (registry/unregister-editor! "existence")
+    (swap! registry/editors dissoc "existence")
     (is (nil? (registry/get-editor "existence"))
-        "Should not find unregistered editor")))
+        "Should not find removed editor")))
 
 (deftest test-dispatch-to-registered-editor
   (testing "Dispatch works with registered editor"

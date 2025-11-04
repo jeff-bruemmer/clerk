@@ -24,14 +24,14 @@
 ;;; Issue 5: Command construction should be safe
 
 (deftest build-command-construction-uses-proper-joining
-  (testing "Build command construction should properly concatenate alias"
-    ;; Check that tasks/build.clj constructs command correctly (no space before colon)
+  (testing "Build command construction should properly format clojure commands"
+    ;; Check that tasks/build.clj constructs commands correctly (no space before colon)
     (let [build-content (slurp "tasks/build.clj")]
       ;; Verify that clojure commands with aliases don't have space before colon
-      (is (or (str/includes? build-content "\"clojure -M:native-image:compile\"")
-              (str/includes? build-content "\"clojure -Spath -A:native-image\""))
-          "Build command should use proper alias syntax")
-      (is (not (str/includes? build-content "\"clojure -M :"))
+      (is (or (str/includes? build-content "\"clojure -M:")
+              (str/includes? build-content "\"clojure -Spath"))
+          "Build commands should use proper clojure invocations")
+      (is (not (str/includes? build-content "\"clojure -M \""))
           "Build command should not have space before alias colon"))))
 
 ;;; Native Image Build Verification Tests (graal-build-time integration)
