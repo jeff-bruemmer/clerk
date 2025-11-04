@@ -33,9 +33,3 @@
     (if (empty? words)
       line
       (find-index line check words))))
-
-
-
-
-
-

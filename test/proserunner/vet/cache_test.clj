@@ -15,11 +15,11 @@
           ;; Create initial cached result
           cached-result (storage/map->Result
                          {:lines lines
-                          :lines-hash (cache/stable-hash lines)
-                          :file-hash (cache/stable-hash file)
+                          :lines-hash (storage/stable-hash lines)
+                          :file-hash (storage/stable-hash file)
                           :config cfg
-                          :config-hash (cache/stable-hash cfg)
-                          :check-hash (cache/stable-hash checks)
+                          :config-hash (storage/stable-hash cfg)
+                          :check-hash (storage/stable-hash checks)
                           :results []})
 
           ;; Add a new line
@@ -67,11 +67,11 @@
           ;; Original cached result with some issues
           cached-result (storage/map->Result
                          {:lines original-lines
-                          :lines-hash (cache/stable-hash original-lines)
-                          :file-hash (cache/stable-hash file)
+                          :lines-hash (storage/stable-hash original-lines)
+                          :file-hash (storage/stable-hash file)
                           :config cfg
-                          :config-hash (cache/stable-hash cfg)
-                          :check-hash (cache/stable-hash checks)
+                          :config-hash (storage/stable-hash cfg)
+                          :check-hash (storage/stable-hash checks)
                           :results [{:text "Unchanged line"
                                      :line-num 1
                                      :issue "test issue"}]})

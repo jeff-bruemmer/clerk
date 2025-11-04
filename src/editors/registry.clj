@@ -14,11 +14,6 @@
   [kind editor-fn]
   (swap! editors assoc kind editor-fn))
 
-(defn unregister-editor!
-  "Unregister an editor (useful for testing and customization)."
-  [kind]
-  (swap! editors dissoc kind))
-
 (defn get-editor
   "Get an editor function by kind."
   [kind]

@@ -6,10 +6,10 @@
 
 (deftest test-make-pattern
   (testing "Pattern creation with case sensitivity"
-    (let [pattern (util/make-pattern "test|example" false)]
+    (let [pattern (util/safe-make-pattern "test|example" false)]
       (is (instance? java.util.regex.Pattern pattern)))
 
-    (let [pattern (util/make-pattern "test|example" true)]
+    (let [pattern (util/safe-make-pattern "test|example" true)]
       (is (instance? java.util.regex.Pattern pattern)))))
 
 (deftest test-seek

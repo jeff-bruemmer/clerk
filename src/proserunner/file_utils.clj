@@ -5,6 +5,12 @@
             [proserunner.result :as result])
   (:gen-class))
 
+(defn absolute-path?
+  "Check if a path is absolute."
+  [path]
+  (or (.isAbsolute (io/file path))
+      (string/starts-with? path "~")))
+
 (defn join-path
   "Joins path components using the system's file separator.
 

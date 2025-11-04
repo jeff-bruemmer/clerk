@@ -4,6 +4,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
             [proserunner.config.manifest :as manifest]
+            [proserunner.file-utils :as file-utils]
             [proserunner.system :as sys])
   (:import java.io.File))
 
@@ -13,12 +14,6 @@
   "Checks if path is relative."
   [path]
   (not (.isAbsolute (io/file path))))
-
-(defn- absolute-path?
-  "Checks if path is already absolute."
-  [path]
-  (or (.isAbsolute (io/file path))
-      (string/starts-with? path "~")))
 
 (defn get-edn-files
   "Gets all .edn files in a directory, returning their names without extension."
@@ -69,7 +64,7 @@
 (defn- make-directory-absolute
   "Converts a directory path to absolute, relative to base-dir if needed."
   [dir base-dir]
-  (if (absolute-path? dir)
+  (if (file-utils/absolute-path? dir)
     dir
     (str (io/file base-dir dir))))
 

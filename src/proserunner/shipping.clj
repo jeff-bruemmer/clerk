@@ -249,14 +249,6 @@
          (map (make-key-printer {:name "Name" :kind "Kind" :explanation "Explanation"}))
          (print-table))))
 
-;;;; Utilities for generating checks README
-
-(defn print-explanation
-  "Prints line of table with check and explanation."
-  [{:keys [name explanation]}]
-  (let [heading (string/capitalize name)]
-    (str "| **" heading "** | " (fmt/sentence-dress explanation) " |")))
-
 ;;;; Main egress
 
 (defn ignore?

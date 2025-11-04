@@ -25,16 +25,11 @@
       (println (str "Warning: Invalid regex pattern '" re-payload "': " (.getMessage e)))
       nil)))
 
-(defn make-pattern
-  "Used to concat regex pattern to search for multiple specimens at once."
-  [re-payload case-sensitive?]
-  (safe-make-pattern re-payload case-sensitive?))
-
 (defn seek
   "Given a text, regex, and case sensitivity, returns a vector of regex matches.
    Returns empty vector if pattern is invalid."
   [text re-payload case-sensitive?]
-  (let [p (make-pattern re-payload case-sensitive?)]
+  (let [p (safe-make-pattern re-payload case-sensitive?)]
     (if (nil? p)
       []
       (let [matches (re-seq p text)]
