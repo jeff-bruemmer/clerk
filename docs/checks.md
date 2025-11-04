@@ -100,18 +100,48 @@ proserunner -f document.md --skip-ignore
 
 ### Contextual ignores (file and line specific)
 
-Contextual ignores let you ignore specific occurrences without ignoring the word everywhere:
+Contextual ignores let you ignore specific occurrences without ignoring the word everywhere.
+
+**Workflow: Numbered issues**
+
+All proserunner output includes issue numbers. You can use these numbers to selectively ignore issues:
 
 ```bash
-# Ignore all current findings in a file
-proserunner -f document.md --ignore-all
-# or shorthand:
-proserunner -f document.md -Z
+# Step 1: Run proserunner and see numbered issues
+proserunner -f document.md
 
-# Add to project ignore list instead of global
-proserunner -f document.md --ignore-all --project
+# Output:
+#  document.md
+# [1]  10:5   "utilize" -> Consider using "use" instead.
+# [2]  15:12  "leverage" -> Consider using "use" instead.
+# [3]  25:8   "utilize" -> Consider using "use" instead.
+
+# Step 2: Ignore specific issues by number
+proserunner -f document.md --ignore-issues 1,3
 # or shorthand:
-proserunner -f document.md -Z -P
+proserunner -f document.md -J 1,3
+
+# You can also use ranges:
+proserunner -f document.md -J 1-3,5,7-10
+```
+
+**Important:** 
+- Issue numbers are deterministic - same files and same arguments always produce the same numbering
+- **Smart defaults:** If `.proserunner/config.edn` exists, ignores are added to the project config (version controllable). Otherwise, they go to global config (`~/.proserunner/ignore.edn`)
+- Use `--global` to force global config, or `--project` to force project config
+
+**Other contextual ignore methods:**
+
+```bash
+# Ignore ALL current findings in a file
+proserunner -f document.md --ignore-all
+# (Uses smart default: project if .proserunner exists, else global)
+
+# Force global even if in a project
+proserunner -f document.md --ignore-all --global
+
+# Force project (creates .proserunner/config.edn if needed)
+proserunner -f document.md --ignore-issues 1,3 --project
 ```
 
 ### Maintaining ignore lists
@@ -128,6 +158,22 @@ proserunner -U
 proserunner --clean-ignores
 # or shorthand:
 proserunner -W
+```
+
+### Version control workflow
+
+Contextual ignores are stored as data in `.proserunner/config.edn` (project) or `~/.proserunner/ignore.edn` (global). You can commit these files to version control:
+
+```bash
+# Create project-specific ignores
+proserunner -f docs/ -J 2,5,7 --project
+
+# Commit to git
+git add .proserunner/config.edn
+git commit -m "Ignore specific prose issues in docs"
+
+# Team members will have the same ignores
+# and see the same issue numbers for the same files
 ```
 
 ### Manual editing

@@ -45,6 +45,11 @@
   [{:keys [line-num col-num specimen message]}]
   (string/join "\t" [(str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
 
+(defn issue-str-numbered
+  "Creates a simplified result string with issue number prefix."
+  [issue-num {:keys [line-num col-num specimen message]}]
+  (string/join "\t" [(str "[" issue-num "]") (str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
+
 (defn group-results
   "Groups results by file."
   [results]
@@ -52,6 +57,18 @@
     (println "\n" k)
     (doseq [issue (map issue-str v)]
       (println issue))))
+
+(defn group-results-numbered
+  "Groups results by file with issue numbers, preserving order."
+  [results]
+  (let [indexed-results (map-indexed (fn [idx issue] [(inc idx) issue]) results)
+        ;; Group by file but preserve order using partition-by
+        grouped (partition-by (fn [[_ issue]] (:file issue)) indexed-results)]
+    (doseq [file-group grouped]
+      (when-let [first-item (first file-group)]
+        (println "\n" (:file (second first-item)))
+        (doseq [[num issue] file-group]
+          (println (issue-str-numbered num issue)))))))
 
 ;;;; Formatters for command output
 
@@ -177,6 +194,21 @@
                                :message "Message"}))
        (print-table)))
 
+(defn results-table-numbered
+  "Takes results and prints them as a table with issue numbers."
+  [results]
+  (->> results
+       (map-indexed (fn [idx issue]
+                      (assoc issue :issue-num (inc idx))))
+       (map (make-key-printer {:issue-num "#"
+                               :file "File"
+                               :line-num "Line"
+                               :col-num "Col"
+                               :specimen "Specimen"
+                               :name "Name"
+                               :message "Message"}))
+       (print-table)))
+
 ;;;; Verbose output
 
 (def check-kind-guidance
@@ -278,14 +310,14 @@
        (sort-by (juxt :file :line-num :col-num))))
 
 (defn- format-output
-  "Formats results according to output format."
+  "Formats results according to output format with issue numbers."
   [results output]
   (case (string/lower-case output)
     "edn" (pp/pprint results)
     "json" (json/generate-stream results *out*)
-    "group" (group-results results)
+    "group" (group-results-numbered results)
     "verbose" (verbose-results results)
-    (results-table results)))
+    (results-table-numbered results)))
 
 (defn out
   "Takes results, preps them, removes specimens to ignore, and

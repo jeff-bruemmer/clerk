@@ -7,6 +7,8 @@
   To add effects: define a keyword, add defmethod for execute-effect."
   (:gen-class)
   (:require [proserunner
+             [checks :as checks]
+             [commands :as cmd]
              [config :as conf]
              [custom-checks :as custom]
              [ignore :as ignore]
@@ -15,7 +17,8 @@
              [project-config :as project-conf]
              [result :as result]
              [shipping :as ship]
-             [version :as ver]]))
+             [version :as ver]]
+            [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
 
@@ -96,14 +99,84 @@
            :target (if (:project opts) :project :global)})))
    {:effect :ignore/add-all}))
 
+(defmethod execute-effect :ignore/add-issues
+  [[_ issue-nums opts]]
+  (result/try-result-with-context
+   #(let [;; Import vet namespace
+          vet (requiring-resolve 'proserunner.vet/compute-or-cached)
+          ship-prep (requiring-resolve 'proserunner.shipping/prep)
+          ;; Re-run proserunner to get the issues with same numbering
+          vet-result (vet opts)]
+      (if (result/failure? vet-result)
+        vet-result
+        (let [;; Extract and process results exactly like the output pipeline does
+              payload (:value vet-result)
+              results-record (:results payload)
+              lines-with-issues (:results results-record)
+              ;; Flatten, prep, filter, and sort - same as shipping/process-results
+              all-prepped-issues (mapcat ship-prep lines-with-issues)
+              ;; Load ignore set for filtering (to match what user saw)
+              ignore-set (if (:skip-ignore opts)
+                           #{}
+                           (if-let [project-ignore (:project-ignore payload)]
+                             project-ignore
+                             (set (checks/load-ignore-set! (:check-dir payload) 
+                                                           (:ignore (:config payload))))))
+              ;; Filter and sort to get exact same issues user saw
+              filtered-issues (if (empty? ignore-set)
+                                all-prepped-issues
+                                (ignore/filter-issues all-prepped-issues ignore-set))
+              sorted-issues (sort-by (juxt :file :line-num :col-num) filtered-issues)
+              total-issues (count sorted-issues)
+              ;; Filter to only the requested issue numbers
+              selected-issues (cmd/filter-issues-by-numbers sorted-issues issue-nums)
+              ;; Check for out-of-range issue numbers
+              valid-nums (set (range 1 (inc total-issues)))
+              invalid-nums (remove valid-nums issue-nums)
+              ;; Convert to contextual ignore entries
+              ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
+              ;; Read current ignores
+              current-ignores (if (:project opts)
+                                (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                                      config (project-conf/read project-root)]
+                                  (or (:ignore config) #{}))
+                                (ignore/read-ignore-file))
+              ;; Merge new entries with existing
+              updated-ignores (into (or current-ignores #{}) ignore-entries)]
+          ;; Write updated ignores
+          (if (:project opts)
+            (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                  config (project-conf/read project-root)]
+              (project-conf/write! project-root (assoc config :ignore updated-ignores)))
+            (ignore/write-ignore-file! updated-ignores))
+          ;; Provide feedback
+          (when (seq invalid-nums)
+            (println (format "Warning: Issue numbers out of range (1-%d): %s"
+                            total-issues
+                            (str/join ", " invalid-nums))))
+          (if (empty? selected-issues)
+            (println "No valid issue numbers provided. Nothing was ignored.")
+            (println (format "Added %d contextual ignore(s) for issues %s to %s ignore list."
+                            (count ignore-entries)
+                            (str/join ", " (filter valid-nums issue-nums))
+                            (if (:project opts) "project" "global"))))
+          {:count (count ignore-entries)
+           :issues issue-nums
+           :selected (count selected-issues)
+           :invalid (vec invalid-nums)
+           :target (if (:project opts) :project :global)})))
+   {:effect :ignore/add-issues}))
+
+
+
 (defmethod execute-effect :ignore/audit
   [[_ opts]]
   (result/try-result-with-context
    #(let [ignores (if (:project opts)
-                   (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
-                         config (project-conf/read project-root)]
-                     (or (:ignore config) #{}))
-                   (ignore/read-ignore-file))
+                    (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                          config (project-conf/read project-root)]
+                      (or (:ignore config) #{}))
+                    (ignore/read-ignore-file))
           audit-result (ignore/audit-ignores ignores)]
       audit-result)
    {:effect :ignore/audit}))

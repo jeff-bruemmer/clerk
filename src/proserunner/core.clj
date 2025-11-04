@@ -50,6 +50,7 @@
    ["-L" "--list-ignored" "List all ignored specimens."]
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
    ["-Z" "--ignore-all" "Ignore all current findings (creates contextual ignores)."]
+   ["-J" "--ignore-issues NUMBERS" "Ignore specific issues by number (e.g., 1,3,5-7)."]
    ["-U" "--audit-ignores" "Check for stale ignore entries."]
    ["-W" "--clean-ignores" "Remove stale ignore entries."]
    ["-D" "--restore-defaults" "Restore default checks from GitHub."]

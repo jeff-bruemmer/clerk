@@ -26,10 +26,12 @@ proserunner --init-project
 
 ## Features
 
+- **Numbered issues** - Every issue gets a number. Ignore specific problems by number with `--ignore-issues 1,3,5`. Deterministic numbering ensures reproducibility.
 - **Customizable** - Add your own checks as EDN data files. Toggle checks on/off without modifying source code.
 - **Fast** - Parallel processing with intelligent caching.
 - **Flexible** - Multiple output formats: table, JSON, EDN, verbose.
-- **Smart ignores** - Ignore specific occurrences without ignoring words everywhere. Perfect workflow: run, fix what matters, ignore the rest.
+- **Smart ignores** - Contextual ignores remember file+line location. Perfect workflow: run, fix what matters, ignore the rest by number.
+- **Version control friendly** - Commit ignore files to share with your team. Everyone sees the same issue numbers.
 
 Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as data in [separate repo](https://github.com/jeff-bruemmer/proserunner-default-checks).
 
@@ -65,11 +67,21 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 ## Basic usage
 
 ```bash
-# Check files
+# Check files (output includes numbered issues)
 proserunner -f /path/to/file
+# Output:
+#  document.md
+# [1]  10:5   "utilize" -> Consider using "use" instead.
+# [2]  15:12  "leverage" -> Consider using "use" instead.
 
-# Ignore all current findings (contextual - remembers file and line)
+# Ignore specific issues by number (creates contextual ignores)
+proserunner -f document.md --ignore-issues 1,3
+proserunner -f document.md -J 1-3,5    # Supports ranges
+# Smart default: uses project config if .proserunner/ exists, else global
+
+# Ignore all current findings (also uses smart default)
 proserunner -f document.md --ignore-all
+proserunner -f document.md -Z --global  # Force global config
 
 # Ignore specific words globally
 proserunner --add-ignore "hopefully"
