@@ -66,7 +66,25 @@ Edit `~/.proserunner/config.edn` and comment out checks in the `:files` vector:
 
 ## Ignoring specimens
 
-Ignore specific words/phrases without disabling checks.
+Ignore specific words/phrases without disabling checks. Proserunner supports both **simple ignores** (ignore a word everywhere) and **contextual ignores** (ignore specific occurrences in specific files).
+
+### Quick start: Ignore all current findings
+
+The easiest way to ignore remaining issues after fixing the ones you care about:
+
+```bash
+# Run proserunner and see what it finds
+proserunner -f docs/
+
+# Fix the issues you want to fix, then ignore the rest
+proserunner -f docs/ --ignore-all
+```
+
+This creates contextual ignores that remember the exact file and line number of each issue, so the same word elsewhere won't be ignored.
+
+### Simple ignores (global)
+
+Ignore a word or phrase everywhere:
 
 ```bash
 # Add/remove from ignore list
@@ -76,8 +94,40 @@ proserunner --remove-ignore "hopefully"
 # List ignored items
 proserunner --list-ignored
 
-# Temporarily skip ignores
+# Temporarily skip all ignores
 proserunner -f document.md --skip-ignore
+```
+
+### Contextual ignores (file and line specific)
+
+Contextual ignores let you ignore specific occurrences without ignoring the word everywhere:
+
+```bash
+# Ignore all current findings in a file
+proserunner -f document.md --ignore-all
+# or shorthand:
+proserunner -f document.md -Z
+
+# Add to project ignore list instead of global
+proserunner -f document.md --ignore-all --project
+# or shorthand:
+proserunner -f document.md -Z -P
+```
+
+### Maintaining ignore lists
+
+Over time, files change and some ignores may become stale:
+
+```bash
+# Check for stale ignores (files that no longer exist)
+proserunner --audit-ignores
+# or shorthand:
+proserunner -U
+
+# Remove stale ignores
+proserunner --clean-ignores
+# or shorthand:
+proserunner -W
 ```
 
 ### Manual editing
@@ -85,15 +135,44 @@ proserunner -f document.md --skip-ignore
 Global ignore list (`~/.proserunner/ignore.edn`):
 
 ```clojure
-#{"hopefully" "TODO" "FIXME"}
+["hopefully"  ; Simple ignore - ignores "hopefully" everywhere
+ "TODO"
+ {:file "docs/api.md"          ; Contextual ignore
+  :line 42
+  :specimen "utilize"}
+ {:file "README.md"
+  :line 10
+  :specimen "leverage"}]
 ```
 
 Project ignore list (`.proserunner/config.edn`):
 
 ```clojure
-{:ignore #{"project-term"}
+{:ignore #{"project-term"      ; Can mix simple and contextual
+           {:file "docs/internal.md"
+            :line 5
+            :specimen "utilize"}}
  :ignore-mode :extend}  ; :extend or :replace
 ```
+
+**Ignore format:**
+
+- **Simple:** Just a string - ignores that word/phrase everywhere
+- **Contextual:** A map with:
+  - `:file` - Required. File path.
+  - `:specimen` - Required. The word/phrase to ignore.
+  - `:line` - Optional. Specific line number.
+  - `:check` - Optional. Only ignore for this specific check.
+
+**Ignore scopes:**
+
+- **Global** (`~/.proserunner/ignore.edn`): Applies to all projects
+- **Project** (`.proserunner/config.edn`): Applies only to this project
+
+**Ignore modes:**
+
+- `:extend` - Combine project and global ignores (default)
+- `:replace` - Use only project ignores, ignore global
 
 ## Project configuration
 

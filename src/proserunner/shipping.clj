@@ -5,6 +5,7 @@
              [version :as ver]
              [fmt :as fmt]
              [checks :as checks]
+             [ignore :as ignore]
              [system :as sys]
              [config :as conf]]
             [clojure
@@ -259,24 +260,22 @@
 
 ;;;; Main egress
 
-(defn ignore?
-  "Is the specimen in the ignore file?"
-  [ignore-set issue]
-  (contains? ignore-set (:specimen issue)))
-
 (defn- load-ignore-set
-  "Loads ignore set from project config or file."
+  "Loads ignore set from project config or file.
+   Returns a collection that may contain both simple specimens (strings)
+   and contextual ignores (maps)."
   [project-ignore check-dir config]
   (if (some? project-ignore)
     project-ignore
     (set (checks/load-ignore-set! check-dir (:ignore config)))))
 
 (defn- filter-ignored
-  "Removes ignored specimens from results."
+  "Removes ignored issues from results using contextual ignore matching.
+   Handles both simple specimen ignores and contextual ignores (file+line+specimen+check)."
   [results ignore-set]
   (if (empty? ignore-set)
     results
-    (remove (partial ignore? ignore-set) results)))
+    (ignore/filter-issues results ignore-set)))
 
 (defn- process-results
   "Preps, filters, and sorts results."

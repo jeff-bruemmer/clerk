@@ -57,6 +57,80 @@
       {:target (if (:project opts) :project :global)})
    {:effect :ignore/clear}))
 
+(defmethod execute-effect :ignore/add-all
+  [[_ opts]]
+  (result/try-result-with-context
+   #(let [;; Import vet namespace
+          vet (requiring-resolve 'proserunner.vet/compute-or-cached)
+          ship (requiring-resolve 'proserunner.shipping/prep)
+          ;; Process the file to get all current issues  
+          vet-result (vet opts)]
+      (if (result/failure? vet-result)
+        vet-result
+        (let [;; Extract results from the vet result
+              payload (:value vet-result)
+              results-record (:results payload)
+              lines-with-issues (:results results-record)
+              ;; Flatten all issues from all lines and prep them (adds line-num)
+              all-prepped-issues (mapcat ship lines-with-issues)
+              ;; Convert to contextual ignore entries
+              ignore-entries (ignore/issues->ignore-entries all-prepped-issues {:granularity :line})
+              ;; Read current ignores
+              current-ignores (if (:project opts)
+                               (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                                     config (project-conf/read project-root)]
+                                 (or (:ignore config) #{}))
+                               (ignore/read-ignore-file))
+              ;; Merge new entries with existing
+              updated-ignores (into (or current-ignores #{}) ignore-entries)]
+          ;; Write updated ignores
+          (if (:project opts)
+            (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                  config (project-conf/read project-root)]
+              (project-conf/write! project-root (assoc config :ignore updated-ignores)))
+            (ignore/write-ignore-file! updated-ignores))
+          (println (format "Added %d contextual ignore(s) to %s ignore list."
+                          (count ignore-entries)
+                          (if (:project opts) "project" "global")))
+          {:count (count ignore-entries)
+           :target (if (:project opts) :project :global)})))
+   {:effect :ignore/add-all}))
+
+(defmethod execute-effect :ignore/audit
+  [[_ opts]]
+  (result/try-result-with-context
+   #(let [ignores (if (:project opts)
+                   (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                         config (project-conf/read project-root)]
+                     (or (:ignore config) #{}))
+                   (ignore/read-ignore-file))
+          audit-result (ignore/audit-ignores ignores)]
+      audit-result)
+   {:effect :ignore/audit}))
+
+(defmethod execute-effect :ignore/clean
+  [[_ opts]]
+  (result/try-result-with-context
+   #(let [ignores (if (:project opts)
+                   (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+                         config (project-conf/read project-root)]
+                     (or (:ignore config) #{}))
+                   (ignore/read-ignore-file))
+          cleaned-ignores (ignore/remove-stale-ignores ignores)
+          removed-count (- (count ignores) (count cleaned-ignores))]
+      ;; Write cleaned ignores
+      (if (:project opts)
+        (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+              config (project-conf/read project-root)]
+          (project-conf/write! project-root (assoc config :ignore (set cleaned-ignores))))
+        (ignore/write-ignore-file! cleaned-ignores))
+      (println (format "Removed %d stale ignore(s) from %s ignore list."
+                      removed-count
+                      (if (:project opts) "project" "global")))
+      {:removed removed-count
+       :target (if (:project opts) :project :global)})
+   {:effect :ignore/clean}))
+
 ;; Configuration effects
 (defmethod execute-effect :config/restore-defaults
   [[_]]

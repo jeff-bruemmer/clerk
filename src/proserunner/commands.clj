@@ -12,7 +12,8 @@
 
   The effects namespace executes these descriptions."
   (:gen-class)
-  (:require [proserunner.result :as result]
+  (:require [proserunner.ignore :as ignore]
+            [proserunner.result :as result]
             [proserunner.shipping :as ship]))
 
 (set! *warn-on-reflection* true)
@@ -50,6 +51,27 @@
         msg-context (if (= target :project) "project" "global")]
     {:effects [[:ignore/clear opts]]
      :messages [(format "Cleared all %s ignored specimens." msg-context)]}))
+
+(defn handle-ignore-all
+  "Handler for ignoring all current findings.
+   Runs the file through proserunner, collects all issues, and adds them as contextual ignores."
+  [opts]
+  {:effects [[:ignore/add-all opts]]
+   :messages ["Adding all current findings to ignore list..."]})
+
+(defn handle-audit-ignores
+  "Handler for auditing ignore entries to find stale ones."
+  [opts]
+  {:effects [[:ignore/audit opts]]
+   :format-fn ignore/format-audit-report})
+
+(defn handle-clean-ignores
+  "Handler for cleaning stale ignore entries."
+  [{:keys [project] :as opts}]
+  (let [target (if project :project :global)
+        msg-context (if (= target :project) "project" "global")]
+    {:effects [[:ignore/clean opts]]
+     :messages [(format "Cleaning stale ignores from %s ignore list..." msg-context)]}))
 
 (defn handle-restore-defaults
   "Handler for restoring default checks from GitHub."
@@ -101,6 +123,9 @@
    :remove-ignore    handle-remove-ignore
    :list-ignored     handle-list-ignored
    :clear-ignored    handle-clear-ignored
+   :ignore-all       handle-ignore-all
+   :audit-ignores    handle-audit-ignores
+   :clean-ignores    handle-clean-ignores
    :restore-defaults handle-restore-defaults
    :init-project     handle-init-project
    :add-checks       handle-add-checks
@@ -114,7 +139,8 @@
 (defn determine-command
   "Determines which command to execute based on options.
   Returns a keyword identifying the command."
-  [{:keys [add-ignore remove-ignore list-ignored clear-ignored
+  [{:keys [add-ignore remove-ignore list-ignored clear-ignored ignore-all
+           audit-ignores clean-ignores
            restore-defaults init-project add-checks
            file checks help version]}]
   (cond
@@ -122,6 +148,9 @@
     remove-ignore    :remove-ignore
     list-ignored     :list-ignored
     clear-ignored    :clear-ignored
+    ignore-all       :ignore-all
+    audit-ignores    :audit-ignores
+    clean-ignores    :clean-ignores
     restore-defaults :restore-defaults
     init-project     :init-project
     add-checks       :add-checks

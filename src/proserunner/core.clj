@@ -10,6 +10,7 @@
              [result :as result]
              [shipping :as ship]
              [text :as text]]
+            [clojure.string :as str]
             [clojure.tools.cli :as cli]))
 
 (set! *warn-on-reflection* true)
@@ -21,9 +22,13 @@
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-q" "--quoted-text" "Include quoted text in checks." :default false]
-   ["-e" "--exclude PATTERN" "Exclude files/dirs matching pattern (glob). Can be specified multiple times."
+   ["-e" "--exclude PATTERN" "Exclude files/dirs matching pattern (glob). Can be specified multiple times or as comma-separated values."
     :default []
-    :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
+    :assoc-fn (fn [m k v]
+                (let [patterns (if (re-find #"," v)
+                                 (str/split v #",\s*")
+                                 [v])]
+                  (update m k (fnil into []) patterns)))]
    ["-f" "--file FILE" "File or dir to proofread."
     :default nil
     :validate [text/file-exists? text/file-error-msg
@@ -44,6 +49,9 @@
    ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
    ["-L" "--list-ignored" "List all ignored specimens."]
    ["-X" "--clear-ignored" "Clear all ignored specimens."]
+   ["-Z" "--ignore-all" "Ignore all current findings (creates contextual ignores)."]
+   ["-U" "--audit-ignores" "Check for stale ignore entries."]
+   ["-W" "--clean-ignores" "Remove stale ignore entries."]
    ["-D" "--restore-defaults" "Restore default checks from GitHub."]
    ["-a" "--add-checks SOURCE" "Import checks from local directory."]
    ["-N" "--name NAME" "Custom name for imported checks directory."]

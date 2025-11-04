@@ -29,6 +29,7 @@ proserunner --init-project
 - **Customizable** - Add your own checks as EDN data files. Toggle checks on/off without modifying source code.
 - **Fast** - Parallel processing with intelligent caching.
 - **Flexible** - Multiple output formats: table, JSON, EDN, verbose.
+- **Smart ignores** - Ignore specific occurrences without ignoring words everywhere. Perfect workflow: run, fix what matters, ignore the rest.
 
 Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as data in [separate repo](https://github.com/jeff-bruemmer/proserunner-default-checks).
 
@@ -67,18 +68,27 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 # Check files
 proserunner -f /path/to/file
 
-# Ignore specific words
+# Ignore all current findings (contextual - remembers file and line)
+proserunner -f document.md --ignore-all
+
+# Ignore specific words globally
 proserunner --add-ignore "hopefully"
+
+# Audit and clean up stale ignores
+proserunner --audit-ignores
+proserunner --clean-ignores
 
 # Check quoted text
 proserunner -f document.md --quoted-text
 
-# Exclude files and directories (can specify multiple times)
+# Exclude files and directories (can specify multiple times or use comma-separated values)
 proserunner -f docs/ --exclude "drafts/*"
 proserunner -f docs/ --exclude "drafts/*" --exclude "*.backup" --exclude "temp.md"
+proserunner -f docs/ --exclude "drafts/*,*.backup,temp.md"
 
 # Exclude multiple patterns with wildcards
 proserunner -f . --exclude "node_modules/*" --exclude "build/*" --exclude "*.log"
+proserunner -f . --exclude "node_modules/*,build/*,*.log"
 ```
 
 See [full checks documentation](docs/checks.md).
