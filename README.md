@@ -62,6 +62,7 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 
 - [Installation](docs/installation.md) - Build and install native binary
 - [Usage](docs/checks.md) - Configuring checks, custom checks, ignoring specimens
+- [Performance](docs/performance.md) - Performance characteristics and optimization tips
 - [Benchmarks](docs/benchmarks.md) - Performance testing
 
 ## Basic usage

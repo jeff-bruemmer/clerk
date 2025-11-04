@@ -44,34 +44,70 @@
 
 ;;;; Issue number parsing utilities
 
+(defn- parse-single-number
+  "Parses a single issue number string. Returns the number if valid (positive integer).
+  Throws ex-info if invalid."
+  [s]
+  (let [num (Integer/parseInt (str/trim s))]
+    (when (< num 1)
+      (throw (ex-info "Issue numbers must be positive" {:number num})))
+    num))
+
+(defn- parse-range
+  "Parses an issue number range like '1-5'. Returns sequence of numbers.
+  Throws ex-info if malformed or invalid."
+  [s]
+  (let [range-parts (str/split s #"-")]
+    (when (not= 2 (count range-parts))
+      (throw (ex-info "Malformed range - use format 'N-M'" {:part s})))
+    (let [[start end] range-parts
+          start-num (Integer/parseInt (str/trim start))
+          end-num (Integer/parseInt (str/trim end))]
+      (when (< start-num 1)
+        (throw (ex-info "Issue numbers must be positive" {:number start-num})))
+      (when (< end-num 1)
+        (throw (ex-info "Issue numbers must be positive" {:number end-num})))
+      (if (<= start-num end-num)
+        (range start-num (inc end-num))
+        []))))
+
+(defn- parse-part
+  "Parses a single part from comma-separated input. Returns sequence of numbers.
+  Handles both single numbers ('3') and ranges ('1-5')."
+  [part]
+  (let [trimmed (str/trim part)]
+    (when-not (str/blank? trimmed)
+      (if (str/includes? trimmed "-")
+        (parse-range trimmed)
+        [(parse-single-number trimmed)]))))
+
 (defn parse-issue-numbers
   "Parses a string of issue numbers and ranges into a sorted vector of unique numbers.
-  
+  Returns Result containing vector of numbers, or error if parsing fails.
+
   Examples:
-    \"1\" -> [1]
-    \"1,3,5\" -> [1 3 5]
-    \"1-5\" -> [1 2 3 4 5]
-    \"1-3,5,7-9\" -> [1 2 3 5 7 8 9]
-    
-  Returns nil for empty or nil input."
+    \"1\" -> (result/ok [1])
+    \"1,3,5\" -> (result/ok [1 3 5])
+    \"1-5\" -> (result/ok [1 2 3 4 5])
+    \"1-3,5,7-9\" -> (result/ok [1 2 3 5 7 8 9])
+    \"foo\" -> (result/err \"Invalid issue number format: ...\")
+    \"\" -> (result/err \"Issue numbers cannot be empty\")"
   [s]
-  (when (and s (not (str/blank? s)))
-    (->> (str/split s #",")
-         (mapcat (fn [part]
-                   (let [trimmed (str/trim part)]
-                     (when-not (str/blank? trimmed)
-                       (if (str/includes? trimmed "-")
-                         (let [[start end] (str/split trimmed #"-")
-                               start-num (Integer/parseInt (str/trim start))
-                               end-num (Integer/parseInt (str/trim end))]
-                           (if (<= start-num end-num)
-                             (range start-num (inc end-num))
-                             []))  ; Return empty for invalid range
-                         [(Integer/parseInt trimmed)])))))
-         (remove nil?)
-         (distinct)
-         (sort)
-         (vec))))
+  (if (or (nil? s) (str/blank? s))
+    (result/err "Issue numbers cannot be empty")
+    (try
+      (let [parts (str/split s #",")
+            numbers (->> parts
+                        (mapcat parse-part)
+                        (remove nil?)
+                        (distinct)
+                        (sort)
+                        (vec))]
+        (result/ok numbers))
+      (catch NumberFormatException e
+        (result/err (str "Invalid issue number format: " (.getMessage e))))
+      (catch Exception e
+        (result/err (.getMessage e))))))
 
 
 (defn filter-issues-by-numbers
@@ -141,12 +177,15 @@
   [{:keys [ignore-issues] :as opts}]
   (let [target (determine-target opts)
         msg-context (if (= target :project) "project" "global")
-        issue-nums (parse-issue-numbers ignore-issues)
-        opts-with-target (assoc opts :project (= target :project))]
-    {:effects [[:ignore/add-issues issue-nums opts-with-target]]
-     :messages [(format "Ignoring issues %s in %s ignore list..." 
-                        (str/join ", " issue-nums) 
-                        msg-context)]}))
+        parse-result (parse-issue-numbers ignore-issues)]
+    (if (result/success? parse-result)
+      (let [issue-nums (result/get-value parse-result)
+            opts-with-target (assoc opts :project (= target :project))]
+        {:effects [[:ignore/add-issues issue-nums opts-with-target]]
+         :messages [(format "Ignoring issues %s in %s ignore list..."
+                            (str/join ", " issue-nums)
+                            msg-context)]})
+      {:error (:error parse-result)})))
 
 (defn handle-audit-ignores
   "Handler for auditing ignore entries to find stale ones."
@@ -264,13 +303,19 @@
 (defn validate-options
   "Validates options for conflicts and errors.
   Returns Success with options or Failure with error messages."
-  [{:keys [parallel-files sequential-lines global project] :as opts}]
+  [{:keys [parallel-files sequential-lines global project ignore-issues ignore-all file] :as opts}]
   (cond
     (and parallel-files (not sequential-lines))
     (result/err "Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files.")
 
     (and global project)
     (result/err "Cannot specify both --global and --project flags.")
+
+    (and ignore-issues (not file))
+    (result/err "The --ignore-issues flag requires a --file argument to determine which issues to ignore.")
+
+    (and ignore-all (not file))
+    (result/err "The --ignore-all flag requires a --file argument to determine which issues to ignore.")
 
     :else
     (result/ok opts)))

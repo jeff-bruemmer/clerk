@@ -34,7 +34,7 @@ The quoted portion is replaced with spaces to preserve column positions for erro
 To check quoted text, use `--quoted-text`:
 
 ```bash
-proserunner -f document.md --quoted-text
+proserunner --file document.md --quoted-text
 ```
 
 This includes both straight quotes (`"..."`, `'...'`) and curly quotes (`"..."`, `'...'`).
@@ -64,161 +64,59 @@ Edit `~/.proserunner/config.edn` and comment out checks in the `:files` vector:
            "corporate-speak"]}]}
 ```
 
-## Ignoring specimens
+## Ignoring
 
-Ignore specific words/phrases without disabling checks. Proserunner supports both **simple ignores** (ignore a word everywhere) and **contextual ignores** (ignore specific occurrences in specific files).
+Two types of ignores: **simple** (ignore everywhere) and **contextual** (ignore specific occurrences).
 
-### Quick start: Ignore all current findings
-
-The easiest way to ignore remaining issues after fixing the ones you care about:
+### Simple ignores
 
 ```bash
-# Run proserunner and see what it finds
-proserunner -f docs/
-
-# Fix the issues you want to fix, then ignore the rest
-proserunner -f docs/ --ignore-all
-```
-
-This creates contextual ignores that remember the exact file and line number of each issue, so the same word elsewhere won't be ignored.
-
-### Simple ignores (global)
-
-Ignore a word or phrase everywhere:
-
-```bash
-# Add/remove from ignore list
 proserunner --add-ignore "hopefully"
 proserunner --remove-ignore "hopefully"
-
-# List ignored items
 proserunner --list-ignored
-
-# Temporarily skip all ignores
-proserunner -f document.md --skip-ignore
 ```
 
-### Contextual ignores (file and line specific)
+### Contextual ignores
 
-Contextual ignores let you ignore specific occurrences without ignoring the word everywhere.
-
-**Workflow: Numbered issues**
-
-All proserunner output includes issue numbers. You can use these numbers to selectively ignore issues:
+Ignore specific issues by number:
 
 ```bash
-# Step 1: Run proserunner and see numbered issues
-proserunner -f document.md
-
-# Output:
-#  document.md
+proserunner --file document.md
 # [1]  10:5   "utilize" -> Consider using "use" instead.
 # [2]  15:12  "leverage" -> Consider using "use" instead.
-# [3]  25:8   "utilize" -> Consider using "use" instead.
 
-# Step 2: Ignore specific issues by number
-proserunner -f document.md --ignore-issues 1,3
-# or shorthand:
-proserunner -f document.md -J 1,3
-
-# You can also use ranges:
-proserunner -f document.md -J 1-3,5,7-10
+proserunner --file document.md --ignore-issues 1,2  # Ignore issues 1 and 2
+proserunner --file document.md --ignore-issues 1-5,8  # Ranges supported
+proserunner --file document.md --ignore-all  # Ignore all current findings
 ```
 
-**Important:** 
-- Issue numbers are deterministic - same files and same arguments always produce the same numbering
-- **Smart defaults:** If `.proserunner/config.edn` exists, ignores are added to the project config (version controllable). Otherwise, they go to global config (`~/.proserunner/ignore.edn`)
-- Use `--global` to force global config, or `--project` to force project config
+**Scope:**
+- Default: project if `.proserunner/config.edn` exists, else global
+- Use `--global` or `--project` to force
 
-**Other contextual ignore methods:**
-
-```bash
-# Ignore ALL current findings in a file
-proserunner -f document.md --ignore-all
-# (Uses smart default: project if .proserunner exists, else global)
-
-# Force global even if in a project
-proserunner -f document.md --ignore-all --global
-
-# Force project (creates .proserunner/config.edn if needed)
-proserunner -f document.md --ignore-issues 1,3 --project
-```
-
-### Maintaining ignore lists
-
-Over time, files change and some ignores may become stale:
+### Maintaining ignores
 
 ```bash
-# Check for stale ignores (files that no longer exist)
-proserunner --audit-ignores
-# or shorthand:
-proserunner -U
-
-# Remove stale ignores
-proserunner --clean-ignores
-# or shorthand:
-proserunner -W
-```
-
-### Version control workflow
-
-Contextual ignores are stored as data in `.proserunner/config.edn` (project) or `~/.proserunner/ignore.edn` (global). You can commit these files to version control:
-
-```bash
-# Create project-specific ignores
-proserunner -f docs/ -J 2,5,7 --project
-
-# Commit to git
-git add .proserunner/config.edn
-git commit -m "Ignore specific prose issues in docs"
-
-# Team members will have the same ignores
-# and see the same issue numbers for the same files
+proserunner --audit-ignores  # Audit for stale ignores
+proserunner --clean-ignores  # Clean stale ignores
 ```
 
 ### Manual editing
 
-Global ignore list (`~/.proserunner/ignore.edn`):
-
+Global (`~/.proserunner/ignore.edn`):
 ```clojure
-["hopefully"  ; Simple ignore - ignores "hopefully" everywhere
- "TODO"
- {:file "docs/api.md"          ; Contextual ignore
-  :line 42
-  :specimen "utilize"}
- {:file "README.md"
-  :line 10
-  :specimen "leverage"}]
+["hopefully"  ; Simple ignore
+ {:file "docs/api.md" :line 42 :specimen "utilize"}]  ; Contextual
 ```
 
-Project ignore list (`.proserunner/config.edn`):
-
+Project (`.proserunner/config.edn`):
 ```clojure
-{:ignore #{"project-term"      ; Can mix simple and contextual
-           {:file "docs/internal.md"
-            :line 5
-            :specimen "utilize"}}
- :ignore-mode :extend}  ; :extend or :replace
+{:ignore #{"project-term"
+           {:file "docs/internal.md" :line 5 :specimen "utilize"}}
+ :ignore-mode :extend}  ; :extend (combine with global) or :replace
 ```
 
-**Ignore format:**
-
-- **Simple:** Just a string - ignores that word/phrase everywhere
-- **Contextual:** A map with:
-  - `:file` - Required. File path.
-  - `:specimen` - Required. The word/phrase to ignore.
-  - `:line` - Optional. Specific line number.
-  - `:check` - Optional. Only ignore for this specific check.
-
-**Ignore scopes:**
-
-- **Global** (`~/.proserunner/ignore.edn`): Applies to all projects
-- **Project** (`.proserunner/config.edn`): Applies only to this project
-
-**Ignore modes:**
-
-- `:extend` - Combine project and global ignores (default)
-- `:replace` - Use only project ignores, ignore global
+Contextual ignore keys: `:file` (required), `:specimen` (required), `:line` (optional), `:check` (optional)
 
 ## Project configuration
 

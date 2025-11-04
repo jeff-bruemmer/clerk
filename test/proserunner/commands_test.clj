@@ -63,6 +63,28 @@
   (testing "Parallel files with sequential lines is valid"
     (let [opts {:parallel-files true :sequential-lines true}
           result (cmd/validate-options opts)]
+      (is (result/success? result))))
+
+  (testing "ignore-issues without file fails"
+    (let [opts {:ignore-issues "1,2,3"}
+          result (cmd/validate-options opts)]
+      (is (result/failure? result))
+      (is (re-find #"ignore-issues.*file" (:error result)))))
+
+  (testing "ignore-issues with file is valid"
+    (let [opts {:ignore-issues "1,2,3" :file "test.md"}
+          result (cmd/validate-options opts)]
+      (is (result/success? result))))
+
+  (testing "ignore-all without file fails"
+    (let [opts {:ignore-all true}
+          result (cmd/validate-options opts)]
+      (is (result/failure? result))
+      (is (re-find #"ignore-all.*file" (:error result)))))
+
+  (testing "ignore-all with file is valid"
+    (let [opts {:ignore-all true :file "test.md"}
+          result (cmd/validate-options opts)]
       (is (result/success? result)))))
 
 (deftest handle-add-ignore-test
@@ -210,3 +232,60 @@
           (is (map? result))
           (is (or (:effects result) (:messages result) (:format-fn result))
               "Handler should return at least one of: effects, messages, or format-fn"))))))
+
+(deftest parse-issue-numbers-test
+  (testing "parses single number"
+    (let [result (cmd/parse-issue-numbers "1")]
+      (is (result/success? result))
+      (is (= [1] (:value result)))))
+
+  (testing "parses comma-separated numbers"
+    (let [result (cmd/parse-issue-numbers "1,3,5")]
+      (is (result/success? result))
+      (is (= [1 3 5] (:value result)))))
+
+  (testing "parses ranges"
+    (let [result (cmd/parse-issue-numbers "1-5")]
+      (is (result/success? result))
+      (is (= [1 2 3 4 5] (:value result)))))
+
+  (testing "parses mixed ranges and singles"
+    (let [result (cmd/parse-issue-numbers "1-3,5,7-9")]
+      (is (result/success? result))
+      (is (= [1 2 3 5 7 8 9] (:value result)))))
+
+  (testing "handles whitespace"
+    (let [result (cmd/parse-issue-numbers " 1 , 2 , 3 ")]
+      (is (result/success? result))
+      (is (= [1 2 3] (:value result)))))
+
+  (testing "deduplicates and sorts"
+    (let [result (cmd/parse-issue-numbers "3,1,2,1,5")]
+      (is (result/success? result))
+      (is (= [1 2 3 5] (:value result)))))
+
+  (testing "handles invalid range (end < start)"
+    (let [result (cmd/parse-issue-numbers "5-1")]
+      (is (result/success? result))
+      (is (= [] (:value result)))))
+
+  (testing "returns error for non-numeric input"
+    (let [result (cmd/parse-issue-numbers "1,foo,3")]
+      (is (result/failure? result))
+      (is (re-find #"Invalid" (:error result)))))
+
+  (testing "returns error for malformed range"
+    (let [result (cmd/parse-issue-numbers "1-2-3")]
+      (is (result/failure? result))))
+
+  (testing "returns error for empty string"
+    (let [result (cmd/parse-issue-numbers "")]
+      (is (result/failure? result))))
+
+  (testing "returns error for negative numbers"
+    (let [result (cmd/parse-issue-numbers "-1,2")]
+      (is (result/failure? result))))
+
+  (testing "returns error for zero"
+    (let [result (cmd/parse-issue-numbers "0,1,2")]
+      (is (result/failure? result)))))
