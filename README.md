@@ -73,8 +73,12 @@ proserunner --add-ignore "hopefully"
 # Check quoted text
 proserunner -f document.md --quoted-text
 
-# Exclude files
+# Exclude files and directories (can specify multiple times)
 proserunner -f docs/ --exclude "drafts/*"
+proserunner -f docs/ --exclude "drafts/*" --exclude "*.backup" --exclude "temp.md"
+
+# Exclude multiple patterns with wildcards
+proserunner -f . --exclude "node_modules/*" --exclude "build/*" --exclude "*.log"
 ```
 
 See [full checks documentation](docs/checks.md).

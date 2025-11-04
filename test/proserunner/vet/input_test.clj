@@ -4,6 +4,7 @@
             [proserunner.result :as result]
             [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
             [clojure.java.io :as io]
+            [clojure.string]
             [editors.registry :as registry]
             [editors.utilities :as util]
             [editors.repetition :as repetition]
@@ -122,3 +123,96 @@
                 :parallel-files false}
           input-result (input/make opts)]
       (is (result/success? input-result)))))
+
+(deftest make-input-with-multiple-exclude-patterns
+  (testing "make-input respects multiple exclude patterns"
+    (let [temp-dir @test-temp-dir
+          config-path (str (System/getProperty "user.home")
+                          File/separator ".proserunner"
+                          File/separator "config.edn")
+          _ (.mkdirs (io/file temp-dir))
+          _ (spit (str temp-dir File/separator "include.md") "Include this")
+          _ (spit (str temp-dir File/separator "exclude1.md") "Exclude this")
+          _ (spit (str temp-dir File/separator "exclude2.md") "Exclude this too")
+          _ (spit (str temp-dir File/separator "skip.txt") "Skip this")
+          opts {:file temp-dir
+                :config config-path
+                :output "table"
+                :code-blocks false
+                :quoted-text false
+                :exclude ["exclude1.md" "exclude2.md" "skip.txt"]
+                :parallel-files false}
+          input-result (input/make opts)]
+      (is (result/success? input-result))
+      (let [input (:value input-result)
+            lines (:lines input)]
+        ;; Should only contain lines from include.md
+        (is (pos? (count lines)))
+        (is (every? #(clojure.string/includes? (:file %) "include.md") lines))))))
+
+(deftest make-input-with-directory-and-file-excludes
+  (testing "make-input can exclude both directories and files"
+    (let [temp-dir @test-temp-dir
+          subdir (str temp-dir File/separator "drafts")
+          _ (.mkdirs (io/file subdir))
+          _ (spit (str temp-dir File/separator "keep.md") "Keep this")
+          _ (spit (str temp-dir File/separator "skip.md") "Skip this")
+          _ (spit (str subdir File/separator "draft.md") "Draft content")
+          opts {:file temp-dir
+                :config (str (System/getProperty "user.home")
+                            File/separator ".proserunner"
+                            File/separator "config.edn")
+                :output "table"
+                :code-blocks false
+                :quoted-text false
+                :exclude ["drafts/*" "skip.md"]
+                :parallel-files false}
+          input-result (input/make opts)]
+      (is (result/success? input-result))
+      (let [input (:value input-result)
+            lines (:lines input)]
+        ;; Should only contain lines from keep.md
+        (is (pos? (count lines)))
+        (is (every? #(clojure.string/includes? (:file %) "keep.md") lines))))))
+
+(deftest make-input-with-empty-exclude
+  (testing "make-input handles empty exclude list"
+    (let [temp-dir @test-temp-dir
+          _ (.mkdirs (io/file temp-dir))
+          _ (spit (str temp-dir File/separator "file.md") "Content")
+          opts {:file temp-dir
+                :config (str (System/getProperty "user.home")
+                            File/separator ".proserunner"
+                            File/separator "config.edn")
+                :output "table"
+                :code-blocks false
+                :quoted-text false
+                :exclude []
+                :parallel-files false}
+          input-result (input/make opts)]
+      (is (result/success? input-result))
+      (let [input (:value input-result)]
+        (is (seq (:lines input)))))))
+
+(deftest make-input-with-wildcard-excludes
+  (testing "make-input handles wildcard patterns in excludes"
+    (let [temp-dir @test-temp-dir
+          _ (.mkdirs (io/file temp-dir))
+          _ (spit (str temp-dir File/separator "keep.md") "Keep this")
+          _ (spit (str temp-dir File/separator "temp.backup") "Backup")
+          _ (spit (str temp-dir File/separator "draft.backup") "Draft backup")
+          opts {:file temp-dir
+                :config (str (System/getProperty "user.home")
+                            File/separator ".proserunner"
+                            File/separator "config.edn")
+                :output "table"
+                :code-blocks false
+                :quoted-text false
+                :exclude ["*.backup"]
+                :parallel-files false}
+          input-result (input/make opts)]
+      (is (result/success? input-result))
+      (let [input (:value input-result)
+            lines (:lines input)]
+        (is (pos? (count lines)))
+        (is (every? #(clojure.string/includes? (:file %) "keep.md") lines))))))

@@ -109,7 +109,11 @@
   Returns Result<Input> - Success with Input record, or Failure on error."
   [options]
   (let [{:keys [file config output code-blocks quoted-text exclude no-cache skip-ignore]} options
-        exclude-patterns (if exclude [exclude] [])
+        ;; Handle exclude as vector, single string, or nil for backward compatibility
+        exclude-patterns (cond
+                           (vector? exclude) exclude
+                           (string? exclude) [exclude]
+                           :else [])
         {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
 
         current-dir (System/getProperty "user.dir")

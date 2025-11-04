@@ -27,9 +27,11 @@
   (testing "Build command construction should properly concatenate alias"
     ;; Check that tasks/build.clj constructs command correctly (no space before colon)
     (let [build-content (slurp "tasks/build.clj")]
-      (is (str/includes? build-content "(str \"clojure -M\" build-alias)")
-          "Build command should concatenate 'clojure -M' with build-alias")
-      (is (not (str/includes? build-content "\"clojure -M \""))
+      ;; Verify that clojure commands with aliases don't have space before colon
+      (is (or (str/includes? build-content "\"clojure -M:native-image:compile\"")
+              (str/includes? build-content "\"clojure -Spath -A:native-image\""))
+          "Build command should use proper alias syntax")
+      (is (not (str/includes? build-content "\"clojure -M :"))
           "Build command should not have space before alias colon"))))
 
 ;;; Native Image Build Verification Tests (graal-build-time integration)

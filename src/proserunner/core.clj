@@ -21,7 +21,9 @@
    ["-C" "--checks" "List enabled checks."]
    ["-c" "--config CONFIG" "Set temporary configuration file." :default nil]
    ["-q" "--quoted-text" "Include quoted text in checks." :default false]
-   ["-e" "--exclude PATTERN" "Exclude files/dirs matching pattern (glob)." :default nil]
+   ["-e" "--exclude PATTERN" "Exclude files/dirs matching pattern (glob). Can be specified multiple times."
+    :default []
+    :assoc-fn (fn [m k v] (update m k (fnil conj []) v))]
    ["-f" "--file FILE" "File or dir to proofread."
     :default nil
     :validate [text/file-exists? text/file-error-msg
