@@ -34,7 +34,7 @@ The quoted portion is replaced with spaces to preserve column positions for erro
 To check quoted text, use `--quoted-text`:
 
 ```bash
-proserunner -f document.md --quoted-text
+proserunner --file document.md --quoted-text
 ```
 
 This includes both straight quotes (`"..."`, `'...'`) and curly quotes (`"..."`, `'...'`).
@@ -64,36 +64,59 @@ Edit `~/.proserunner/config.edn` and comment out checks in the `:files` vector:
            "corporate-speak"]}]}
 ```
 
-## Ignoring specimens
+## Ignoring
 
-Ignore specific words/phrases without disabling checks.
+Two types of ignores: **simple** (ignore everywhere) and **contextual** (ignore specific occurrences).
+
+### Simple ignores
 
 ```bash
-# Add/remove from ignore list
 proserunner --add-ignore "hopefully"
 proserunner --remove-ignore "hopefully"
-
-# List ignored items
 proserunner --list-ignored
+```
 
-# Temporarily skip ignores
-proserunner -f document.md --skip-ignore
+### Contextual ignores
+
+Ignore specific issues by number:
+
+```bash
+proserunner --file document.md
+# [1]  10:5   "utilize" -> Consider using "use" instead.
+# [2]  15:12  "leverage" -> Consider using "use" instead.
+
+proserunner --file document.md --ignore-issues 1,2  # Ignore issues 1 and 2
+proserunner --file document.md --ignore-issues 1-5,8  # Ranges supported
+proserunner --file document.md --ignore-all  # Ignore all current findings
+```
+
+**Scope:**
+- Default: project if `.proserunner/config.edn` exists, else global
+- Use `--global` or `--project` to force
+
+### Maintaining ignores
+
+```bash
+proserunner --audit-ignores  # Audit for stale ignores
+proserunner --clean-ignores  # Clean stale ignores
 ```
 
 ### Manual editing
 
-Global ignore list (`~/.proserunner/ignore.edn`):
-
+Global (`~/.proserunner/ignore.edn`):
 ```clojure
-#{"hopefully" "TODO" "FIXME"}
+["hopefully"  ; Simple ignore
+ {:file "docs/api.md" :line-num 42 :specimen "utilize"}]  ; Contextual
 ```
 
-Project ignore list (`.proserunner/config.edn`):
-
+Project (`.proserunner/config.edn`):
 ```clojure
-{:ignore #{"project-term"}
- :ignore-mode :extend}  ; :extend or :replace
+{:ignore #{"project-term"
+           {:file "docs/internal.md" :line-num 5 :specimen "utilize"}}
+ :ignore-mode :extend}  ; :extend (combine with global) or :replace
 ```
+
+Contextual ignore keys: `:file` (required), `:specimen` (required), `:line-num` (optional), `:check` (optional)
 
 ## Project configuration
 
@@ -108,16 +131,27 @@ Creates `.proserunner/` with `config.edn` and `checks/` directory.
 ### config.edn options
 
 ```clojure
-{:check-sources ["default" "checks"]  ; Check locations
- :ignore #{"TODO" "FIXME"}            ; Project ignores
- :ignore-mode :extend                 ; :extend or :replace
- :config-mode :merged}                ; :merged or :project-only
+{:check-sources ["default" "checks"]      ; Check locations
+ :ignore #{"TODO" "FIXME"}                ; Simple ignores (apply everywhere)
+ :ignore-issues [{:file "docs/guide.md"   ; Contextual ignores (specific locations)
+                  :line 42
+                  :specimen "very"}]
+ :ignore-mode :extend                     ; :extend or :replace
+ :config-mode :merged}                    ; :merged or :project-only
 ```
 
 **check-sources:**
 - `"default"` - Global checks from `~/.proserunner/default/`
 - `"checks"` - Project checks from `.proserunner/checks/`
 - Paths (relative or absolute)
+
+**ignore:**
+- Set of strings to ignore everywhere in your project
+- Case-insensitive matching
+
+**ignore-issues:**
+- Vector of maps specifying file/line/specimen to ignore
+- Created automatically with `--ignore-issues` command
 
 **ignore-mode:**
 - `:extend` - Combine with global ignores

@@ -12,28 +12,162 @@
 
   The effects namespace executes these descriptions."
   (:gen-class)
-  (:require [proserunner.result :as result]
-            [proserunner.shipping :as ship]))
+  (:require [proserunner.ignore :as ignore]
+            [proserunner.result :as result]
+            [proserunner.shipping :as ship]
+            [clojure.java.io :as io]
+            [clojure.string :as str]))
+
+(defn project-exists?
+  "Checks if a .proserunner/config.edn file exists in the current directory."
+  []
+  (let [project-root (System/getProperty "user.dir")
+        config-file (io/file project-root ".proserunner" "config.edn")]
+    (.exists config-file)))
+
+(defn determine-target
+  "Determines whether to use :project or :global based on flags and project existence.
+
+  Logic:
+  - If --global flag is explicitly set, use :global
+  - If --project flag is explicitly set, use :project
+  - If .proserunner/config.edn exists, default to :project
+  - Otherwise, default to :global"
+  [{:keys [global project]}]
+  (cond
+    global  :global
+    project :project
+    (project-exists?) :project
+    :else :global))
+
+(defn get-target-context
+  "Returns a map with target scope information for commands.
+
+  Options:
+  - :use-determine-target? - if true, uses determine-target logic (checks project existence)
+  - :include-alt-msg - if true, includes :alt-msg suggesting alternate scope
+  - :alt-msg-template - custom alternate message template
+
+  Returns:
+  - :target - either :project or :global keyword
+  - :msg-context - string for display (\"project\" or \"global\")
+  - :alt-msg - optional string suggesting the alternate scope
+  - :opts-with-target - opts map with :project key set correctly"
+  ([opts]
+   (get-target-context opts nil))
+  ([opts {:keys [include-alt-msg alt-msg-template use-determine-target?]}]
+   (let [target (if use-determine-target?
+                  (determine-target opts)
+                  (if (:project opts) :project :global))
+         msg-context (if (= target :project) "project" "global")
+         base-result {:target target
+                      :msg-context msg-context
+                      :opts-with-target (assoc opts :project (= target :project))}]
+     (if include-alt-msg
+       (assoc base-result :alt-msg
+              (or alt-msg-template
+                  (if (= target :project)
+                    "Use --global to add to global ignore list instead."
+                    "Use --project to add to project ignore list instead.")))
+       base-result))))
 
 (set! *warn-on-reflection* true)
 
+;;;; Issue number parsing utilities
+
+(defn- parse-single-number
+  "Parses a single issue number string. Returns the number if valid (positive integer).
+  Throws ex-info if invalid."
+  [s]
+  (let [num (Integer/parseInt (str/trim s))]
+    (when (< num 1)
+      (throw (ex-info "Issue numbers must be positive" {:number num})))
+    num))
+
+(defn- parse-range
+  "Parses an issue number range like '1-5'. Returns sequence of numbers.
+  Throws ex-info if malformed or invalid."
+  [s]
+  (let [range-parts (str/split s #"-")]
+    (when (not= 2 (count range-parts))
+      (throw (ex-info "Malformed range - use format 'N-M'" {:part s})))
+    (let [[start end] range-parts
+          start-num (Integer/parseInt (str/trim start))
+          end-num (Integer/parseInt (str/trim end))]
+      (when (< start-num 1)
+        (throw (ex-info "Issue numbers must be positive" {:number start-num})))
+      (when (< end-num 1)
+        (throw (ex-info "Issue numbers must be positive" {:number end-num})))
+      (when (> start-num end-num)
+        (throw (ex-info (str "Invalid range '" s "' - start must be less than or equal to end")
+                       {:start start-num :end end-num})))
+      (range start-num (inc end-num)))))
+
+(defn- parse-part
+  "Parses a single part from comma-separated input. Returns sequence of numbers.
+  Handles both single numbers ('3') and ranges ('1-5')."
+  [part]
+  (let [trimmed (str/trim part)]
+    (when-not (str/blank? trimmed)
+      (if (str/includes? trimmed "-")
+        (parse-range trimmed)
+        [(parse-single-number trimmed)]))))
+
+(defn parse-issue-numbers
+  "Parses a string of issue numbers and ranges into a sorted vector of unique numbers.
+  Returns Result containing vector of numbers, or error if parsing fails.
+
+  Examples:
+    \"1\" -> (result/ok [1])
+    \"1,3,5\" -> (result/ok [1 3 5])
+    \"1-5\" -> (result/ok [1 2 3 4 5])
+    \"1-3,5,7-9\" -> (result/ok [1 2 3 5 7 8 9])
+    \"foo\" -> (result/err \"Invalid issue number format: ...\")
+    \"\" -> (result/err \"Issue numbers cannot be empty\")"
+  [s]
+  (if (or (nil? s) (str/blank? s))
+    (result/err "Issue numbers cannot be empty")
+    (try
+      (let [parts (str/split s #",")
+            numbers (->> parts
+                        (mapcat parse-part)
+                        (remove nil?)
+                        (distinct)
+                        (sort)
+                        (vec))]
+        (result/ok numbers))
+      (catch NumberFormatException e
+        (result/err (str "Invalid issue number format: " (.getMessage e))))
+      (catch Exception e
+        (result/err (.getMessage e))))))
+
+
+(defn filter-issues-by-numbers
+  "Filters a sequence of issues to only those at the specified 1-based indices.
+  
+  Example:
+    (filter-issues-by-numbers [issue1 issue2 issue3] [1 3])
+    => [issue1 issue3]"
+  [issues numbers]
+  (let [number-set (set numbers)]
+    (->> issues
+         (map-indexed (fn [idx issue] [(inc idx) issue]))
+         (filter (fn [[num _]] (contains? number-set num)))
+         (map second)
+         (vec))))
+
 (defn handle-add-ignore
   "Handler for adding a specimen to ignore list."
-  [{:keys [add-ignore project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")
-        alt-msg (if (= target :project)
-                  "Use --global to add to global ignore list instead."
-                  "Use --project to add to project ignore list instead.")]
+  [{:keys [add-ignore] :as opts}]
+  (let [{:keys [msg-context alt-msg]} (get-target-context opts {:include-alt-msg true})]
     {:effects [[:ignore/add add-ignore opts]]
      :messages [(format "Added to %s ignore list: %s" msg-context add-ignore)
                 alt-msg]}))
 
 (defn handle-remove-ignore
   "Handler for removing a specimen from ignore list."
-  [{:keys [remove-ignore project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")]
+  [{:keys [remove-ignore] :as opts}]
+  (let [{:keys [msg-context]} (get-target-context opts)]
     {:effects [[:ignore/remove remove-ignore opts]]
      :messages [(format "Removed from %s ignore list: %s" msg-context remove-ignore)]}))
 
@@ -45,11 +179,48 @@
 
 (defn handle-clear-ignored
   "Handler for clearing all ignored specimens."
-  [{:keys [project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")]
+  [opts]
+  (let [{:keys [msg-context]} (get-target-context opts)]
     {:effects [[:ignore/clear opts]]
      :messages [(format "Cleared all %s ignored specimens." msg-context)]}))
+
+(defn handle-ignore-all
+  "Handler for ignoring all current findings.
+   Runs the file through proserunner, collects all issues, and adds them as contextual ignores.
+   Defaults to project if .proserunner/config.edn exists, otherwise global."
+  [opts]
+  (let [{:keys [msg-context opts-with-target]} (get-target-context opts {:use-determine-target? true})]
+    {:effects [[:ignore/add-all opts-with-target]]
+     :messages [(format "Adding all current findings to %s ignore list..." msg-context)]}))
+
+(defn handle-ignore-issues
+  "Handler for ignoring specific issues by number.
+  Re-runs proserunner to get the same issue numbering, then creates
+  contextual ignores for only the specified issue numbers.
+  Defaults to project if .proserunner/config.edn exists, otherwise global."
+  [{:keys [ignore-issues] :as opts}]
+  (let [{:keys [msg-context opts-with-target]} (get-target-context opts {:use-determine-target? true})
+        parse-result (parse-issue-numbers ignore-issues)]
+    (if (result/success? parse-result)
+      (let [issue-nums (result/get-value parse-result)]
+        {:effects [[:ignore/add-issues issue-nums opts-with-target]]
+         :messages [(format "Ignoring issues %s in %s ignore list..."
+                            (str/join ", " issue-nums)
+                            msg-context)]})
+      {:error (:error parse-result)})))
+
+(defn handle-audit-ignores
+  "Handler for auditing ignore entries to find stale ones."
+  [opts]
+  {:effects [[:ignore/audit opts]]
+   :format-fn ignore/format-audit-report})
+
+(defn handle-clean-ignores
+  "Handler for cleaning stale ignore entries."
+  [opts]
+  (let [{:keys [msg-context]} (get-target-context opts)]
+    {:effects [[:ignore/clean opts]]
+     :messages [(format "Cleaning stale ignores from %s ignore list..." msg-context)]}))
 
 (defn handle-restore-defaults
   "Handler for restoring default checks from GitHub."
@@ -101,6 +272,10 @@
    :remove-ignore    handle-remove-ignore
    :list-ignored     handle-list-ignored
    :clear-ignored    handle-clear-ignored
+   :ignore-all       handle-ignore-all
+   :ignore-issues    handle-ignore-issues
+   :audit-ignores    handle-audit-ignores
+   :clean-ignores    handle-clean-ignores
    :restore-defaults handle-restore-defaults
    :init-project     handle-init-project
    :add-checks       handle-add-checks
@@ -114,7 +289,8 @@
 (defn determine-command
   "Determines which command to execute based on options.
   Returns a keyword identifying the command."
-  [{:keys [add-ignore remove-ignore list-ignored clear-ignored
+  [{:keys [add-ignore remove-ignore list-ignored clear-ignored ignore-all ignore-issues
+           audit-ignores clean-ignores
            restore-defaults init-project add-checks
            file checks help version]}]
   (cond
@@ -122,6 +298,10 @@
     remove-ignore    :remove-ignore
     list-ignored     :list-ignored
     clear-ignored    :clear-ignored
+    ignore-all       :ignore-all
+    ignore-issues    :ignore-issues
+    audit-ignores    :audit-ignores
+    clean-ignores    :clean-ignores
     restore-defaults :restore-defaults
     init-project     :init-project
     add-checks       :add-checks
@@ -144,13 +324,19 @@
 (defn validate-options
   "Validates options for conflicts and errors.
   Returns Success with options or Failure with error messages."
-  [{:keys [parallel-files sequential-lines global project] :as opts}]
+  [{:keys [parallel-files sequential-lines global project ignore-issues ignore-all file] :as opts}]
   (cond
     (and parallel-files (not sequential-lines))
     (result/err "Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files.")
 
     (and global project)
     (result/err "Cannot specify both --global and --project flags.")
+
+    (and ignore-issues (not file))
+    (result/err "The --ignore-issues flag requires a --file argument to determine which issues to ignore.")
+
+    (and ignore-all (not file))
+    (result/err "The --ignore-all flag requires a --file argument to determine which issues to ignore.")
 
     :else
     (result/ok opts)))

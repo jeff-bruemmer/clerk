@@ -38,9 +38,10 @@
                             :directory "default"
                             :files ["cliches" "redundancies"]}]}))
 
-    ;; Create a mock global ignore.edn
+    ;; Create a mock global ignore.edn with new format
     (spit (str proserunner-dir File/separator "ignore.edn")
-          (pr-str #{"global-ignore-1" "global-ignore-2"}))
+          (pr-str {:ignore #{"global-ignore-1" "global-ignore-2"}
+                   :ignore-issues []}))
 
     ;; Run the test with suppressed output
     (try

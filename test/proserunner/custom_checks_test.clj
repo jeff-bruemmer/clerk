@@ -314,7 +314,7 @@
   (testing "Adding ignore to global when no project exists"
     (let [_ (ignore/add-to-ignore! "hopefully" {})
           ignored (ignore/read-ignore-file)]
-      (is (contains? ignored "hopefully")))))
+      (is (contains? (:ignore ignored) "hopefully")))))
 
 (deftest add-ignore-to-project-when-exists
   (testing "Adding ignore to project when .proserunner exists"
@@ -343,7 +343,7 @@
           ;; Verify added to global, not project
           global-ignored (ignore/read-ignore-file)
           config (edn/read-string (slurp manifest-path))]
-      (is (contains? global-ignored "FIXME"))
+      (is (contains? (:ignore global-ignored) "FIXME"))
       (is (not (contains? (:ignore config) "FIXME"))))))
 
 (deftest add-ignore-project-flag-requires-project
@@ -383,8 +383,8 @@
           result (ignore/list-ignored {:start-dir project-root})]
 
       ;; Should show both global and project ignores when in :extend mode
-      (is (some #(= "global-term" %) result))
-      (is (some #(= "TODO" %) result)))))
+      (is (contains? (:ignore result) "global-term"))
+      (is (contains? (:ignore result) "TODO")))))
 
 (deftest clear-ignored-context-aware
   (testing "Clearing ignores respects context"

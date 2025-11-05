@@ -27,6 +27,7 @@
   (testing "Build command construction should properly format clojure commands"
     ;; Check that tasks/build.clj constructs commands correctly (no space before colon)
     (let [build-content (slurp "tasks/build.clj")]
+      ;; Verify that clojure commands with aliases don't have space before colon
       (is (or (str/includes? build-content "\"clojure -M:")
               (str/includes? build-content "\"clojure -Spath"))
           "Build commands should use proper clojure invocations")

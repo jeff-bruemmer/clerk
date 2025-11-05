@@ -24,7 +24,8 @@
    output
    no-cache
    parallel-lines
-   project-ignore])
+   project-ignore
+   project-ignore-issues])
 
 ;; Input data structure for vetting operations.
 ;; Fields:
@@ -36,7 +37,8 @@
 ;; - output: Output format specification
 ;; - no-cache: Boolean flag to bypass cache
 ;; - parallel-lines: Boolean flag for parallel line processing
-;; - project-ignore: Set of project-specific ignore patterns
+;; - project-ignore: Set of project-specific simple ignore patterns
+;; - project-ignore-issues: Vector of contextual ignore maps
 
 (defn build-ignore-patterns
   "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
@@ -109,7 +111,11 @@
   Returns Result<Input> - Success with Input record, or Failure on error."
   [options]
   (let [{:keys [file config output code-blocks quoted-text exclude no-cache skip-ignore]} options
-        exclude-patterns (if exclude [exclude] [])
+        ;; Handle exclude as vector, single string, or nil for backward compatibility
+        exclude-patterns (cond
+                           (vector? exclude) exclude
+                           (string? exclude) [exclude]
+                           :else [])
         {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
 
         current-dir (System/getProperty "user.dir")
@@ -117,6 +123,7 @@
         {:keys [config check-dir]} (load-config-and-dir config project-config)
 
         project-ignore (if skip-ignore #{} (:ignore project-config))
+        project-ignore-issues (if skip-ignore [] (:ignore-issues project-config))
 
         updated-options (assoc options
                               :config config
@@ -136,4 +143,5 @@
          :output output
          :no-cache no-cache
          :parallel-lines parallel-lines?
-         :project-ignore project-ignore})))))
+         :project-ignore project-ignore
+         :project-ignore-issues project-ignore-issues})))))

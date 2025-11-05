@@ -52,10 +52,11 @@
                                    (:checks parsed-config-map))
             _ (require 'proserunner.ignore)
             read-ignore-file (resolve 'proserunner.ignore/read-ignore-file)
-            global-ignore (read-ignore-file)]
+            {:keys [ignore ignore-issues]} (read-ignore-file)]
         {:checks normalized-checks
-         :ignore global-ignore})
-      {:ignore #{}})))
+         :ignore ignore
+         :ignore-issues ignore-issues})
+      {:ignore #{} :ignore-issues []})))
 
 (defn- build-project-config
   "Builds final project config from merged config and resolved checks."
@@ -65,6 +66,7 @@
         resolved-checks (check-resolver/resolve-check-entries check-entries (:checks global-config) project-root)]
     {:checks resolved-checks
      :ignore (:ignore merged-config)
+     :ignore-issues (:ignore-issues merged-config)
      :source :project}))
 
 (defn load
@@ -162,6 +164,7 @@
   "Default template for a new project manifest."
   {:checks ["default"]
    :ignore #{}
+   :ignore-issues []
    :ignore-mode :extend
    :config-mode :merged})
 

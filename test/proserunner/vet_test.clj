@@ -222,9 +222,10 @@
         (.mkdirs (io/file temp-home-config "custom"))
         (spit (str temp-home-config File/separator "config.edn")
               (pr-str {:checks [{:name "default" :directory "default" :files []}]}))
-        ;; IMPORTANT: Add global ignores
+        ;; IMPORTANT: Add global ignores with new format
         (spit (str temp-home-config File/separator "ignore.edn")
-              (pr-str #{"global-ignore-1" "global-ignore-2"}))
+              (pr-str {:ignore #{"global-ignore-1" "global-ignore-2"}
+                       :ignore-issues []}))
 
         ;; Create project structure with .git directory
         (.mkdirs (io/file temp-project ".git"))
@@ -276,7 +277,8 @@
         (spit (str temp-home-config File/separator "config.edn")
               (pr-str {:checks [{:name "default" :directory "default" :files []}]}))
         (spit (str temp-home-config File/separator "ignore.edn")
-              (pr-str #{"global-ignore-1" "global-ignore-2"}))
+              (pr-str {:ignore #{"global-ignore-1" "global-ignore-2"}
+                       :ignore-issues []}))
 
         ;; Create project with :ignore-mode :replace
         (.mkdirs (io/file temp-project ".git"))
@@ -317,7 +319,8 @@
         (spit (str temp-home-config File/separator "config.edn")
               (pr-str {:checks [{:name "default" :directory "default" :files ["dummy"]}]}))
         (spit (str temp-home-config File/separator "ignore.edn")
-              (pr-str #{"global-ignore"}))
+              (pr-str {:ignore #{"global-ignore"}
+                       :ignore-issues []}))
         ;; Create a dummy check file
         (spit (str temp-home-config File/separator "default" File/separator "dummy.edn")
               (pr-str {:name "dummy-check"

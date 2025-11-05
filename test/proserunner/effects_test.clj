@@ -179,3 +179,25 @@
     (let [effect [:file/process {:file "test.md"}]]
       (is (= :file/process (first effect)))
       (is (map? (second effect))))))
+
+;; Integration tests for command error handling
+
+(deftest execute-command-result-error-handling-test
+  (testing "Command result with :error key returns failure"
+    (let [cmd-result {:error "Invalid range '5-1' - start must be less than or equal to end"}
+          result (effects/execute-command-result cmd-result)]
+      (is (result/failure? result))
+      (is (= "Invalid range '5-1' - start must be less than or equal to end"
+             (:error result)))))
+
+  (testing "Command result with empty effects succeeds"
+    (let [cmd-result {:effects []
+                     :messages ["test message"]}
+          result (silently (effects/execute-command-result cmd-result))]
+      (is (result/success? result))))
+
+  (testing "Command result with no error proceeds normally"
+    (let [cmd-result {:effects [[:help/print {:help true}]]
+                     :messages []}
+          result (silently (effects/execute-command-result cmd-result))]
+      (is (result/success? result)))))

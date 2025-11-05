@@ -5,6 +5,7 @@
              [version :as ver]
              [fmt :as fmt]
              [checks :as checks]
+             [ignore :as ignore]
              [system :as sys]
              [config :as conf]]
             [clojure
@@ -40,9 +41,15 @@
 ;;;; Default print option: group
 
 (defn issue-str
-  "Creates a simplified result string for grouped results."
-  [{:keys [line-num col-num specimen message]}]
-  (string/join "\t" [(str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
+  "Creates a simplified result string for grouped results.
+  Optional issue-num parameter adds a numbered prefix."
+  ([issue] (issue-str nil issue))
+  ([issue-num {:keys [line-num col-num specimen message]}]
+   (string/join "\t"
+     (cond-> []
+       issue-num (conj (str "[" issue-num "]"))
+       true (conj (str line-num ":" col-num))
+       true (conj (str "\"" specimen "\"" " -> " message))))))
 
 (defn group-results
   "Groups results by file."
@@ -52,15 +59,46 @@
     (doseq [issue (map issue-str v)]
       (println issue))))
 
+(defn group-results-numbered
+  "Groups results by file with issue numbers, preserving order."
+  [results]
+  (let [indexed-results (map-indexed (fn [idx issue] [(inc idx) issue]) results)
+        ;; Group by file but preserve order using partition-by
+        grouped (partition-by (fn [[_ issue]] (:file issue)) indexed-results)]
+    (doseq [file-group grouped]
+      (when-let [first-item (first file-group)]
+        (println "\n" (:file (second first-item)))
+        (doseq [[num issue] file-group]
+          (println (issue-str num issue)))))))
+
 ;;;; Formatters for command output
 
 (defn format-ignored-list
-  "Formats a list of ignored specimens for display."
-  [ignored]
-  (if (empty? ignored)
-    ["No ignored specimens."]
-    (cons "Ignored specimens:"
-          (map #(str "   " %) ignored))))
+  "Formats separated ignore lists for display.
+   Takes map with :ignore (set of strings) and :ignore-issues (vector of maps)."
+  [{:keys [ignore ignore-issues]}]
+  (let [has-simple? (seq ignore)
+        has-contextual? (seq ignore-issues)]
+    (cond
+      (and (not has-simple?) (not has-contextual?))
+      ["No ignored specimens or issues."]
+
+      :else
+      (concat
+        (when has-simple?
+          (cons "Simple ignores (apply everywhere):"
+                (concat
+                  (map #(str "  - " %) (sort ignore))
+                  [""])))
+        (when has-contextual?
+          (cons "Contextual ignores (specific locations):"
+                (map (fn [{:keys [file line-num line specimen]}]
+                       (format "  - %s:%s \"%s\""
+                               file
+                               (or line-num line "*")
+                               specimen))
+                     (sort-by (juxt :file #(or (:line-num %) (:line %) 0) :specimen)
+                              ignore-issues))))))))
 
 (defn format-init-project
   "Formats project initialization success message."
@@ -145,6 +183,76 @@
          (println (fmt-row "  " "   " "  " row))))))
   ([rows] (print-table (keys (first rows)) rows)))
 
+(defn- categorize-options
+  "Organizes command-line options into logical categories for better help output."
+  [summary]
+  (let [category-order ["Basic Usage"
+                        "Output Options"
+                        "Ignore Management"
+                        "Ignore Maintenance"
+                        "Configuration & Checks"
+                        "Scope Control"
+                        "Advanced Options"]
+        categories {"Basic Usage" #{"--file" "--help" "--version"}
+                    "Output Options" #{"--output" "--code-blocks" "--quoted-text"}
+                    "Ignore Management" #{"--add-ignore" "--remove-ignore" "--list-ignored"
+                                         "--clear-ignored" "--ignore-all" "--ignore-issues"}
+                    "Ignore Maintenance" #{"--audit-ignores" "--clean-ignores"}
+                    "Configuration & Checks" #{"--init-project" "--restore-defaults"
+                                               "--add-checks" "--checks" "--exclude"}
+                    "Scope Control" #{"--global" "--project"}
+                    "Advanced Options" #{"--config" "--ignore" "--no-cache" "--skip-ignore"
+                                        "--parallel-files" "--sequential-lines" "--timer" "--name"}}
+        ;; Group options by category
+        categorized (reduce (fn [acc opt]
+                             (let [long-opt (second (string/split (:option opt) #", "))
+                                   category (some (fn [[cat opts]] (when (opts long-opt) cat)) categories)
+                                   category (or category "Advanced Options")]
+                               (update acc category (fnil conj []) opt)))
+                           {}
+                           summary)]
+    ;; Return categories in the specified order
+    (map (fn [cat] [cat (get categorized cat)])
+         (filter #(get categorized %) category-order))))
+
+(defn- print-option-with-desc
+  "Prints a single option with description on separate line if long."
+  [{:keys [option required desc]}]
+  (let [opt-line (str "  " option (when required (str " " required)))]
+    (println opt-line)
+    (println (str "      " desc))))
+
+(defn- print-categorized-options
+  "Prints options organized by category with descriptions on separate lines."
+  [summary]
+  (let [categories (categorize-options summary)]
+    (doseq [[category options] categories]
+      (println (str "\n" category ":"))
+      (doseq [opt options]
+        (print-option-with-desc opt)))))
+
+(defn- print-examples
+  "Prints usage examples."
+  []
+  (println "\n\nEXAMPLES:")
+  (println "  Check a single file:")
+  (println "    proserunner --file document.md")
+  (println)
+  (println "  Check all markdown files in current directory:")
+  (println "    proserunner --file .")
+  (println)
+  (println "  Ignore specific issues by number:")
+  (println "    proserunner --file README.md --ignore-issues 1,3,5-7")
+  (println)
+  (println "  Check files excluding certain patterns:")
+  (println "    proserunner --file . --exclude \"*.log,temp/**\"")
+  (println)
+  (println "  Find stale ignores in configuration:")
+  (println "    proserunner --audit-ignores")
+  (println)
+  (println "  List all enabled checks:")
+  (println "    proserunner --checks"))
+
 (defn print-opts
   "Utility for printing usage."
   [summary title config]
@@ -156,19 +264,46 @@
 (defn print-usage
   "Prints usage, optionally with a message."
   ([{:keys [summary config]}]
-   (println "\nProserunner vets a text with the supplied checks.\n")
-   (print-opts summary "USAGE:" config))
+   (println "\nP R O S E R U N N E R\n")
+   (println "A prose linter with default checks for style, grammar, and clarity.\n")
+   (println "Proserunner analyzes text files (markdown, prose, documentation) using a curated")
+   (println "set of default checks. You can add custom checks to enforce your own style guide,")
+   (println "ignore specific findings, and configure both global and project-specific settings.\n")
+   (println "USAGE:")
+   (println "  proserunner [OPTIONS]\n")
+   (print-categorized-options summary)
+   (print-examples)
+   (println "\n\nCONFIGURATION:")
+   (println "  Global config: ~/.proserunner/config.edn")
+   (println "  Project config: .proserunner/config.edn")
+   (println "  Current config file: " config)
+   (println)
+   (print-version))
 
   ([opts message]
-   (let [{:keys [summary config]} opts]
-     (println (str "\n" message "\n"))
-     (print-opts summary "USAGE:" config))))
+   ;; When called with a message (e.g., from default handler), show full help
+   (print-usage opts)))
 
 (defn results-table
   "Takes results and prints them as a table."
   [results]
   (->> results
        (map (make-key-printer {:file "File"
+                               :line-num "Line"
+                               :col-num "Col"
+                               :specimen "Specimen"
+                               :name "Name"
+                               :message "Message"}))
+       (print-table)))
+
+(defn results-table-numbered
+  "Takes results and prints them as a table with issue numbers."
+  [results]
+  (->> results
+       (map-indexed (fn [idx issue]
+                      (assoc issue :issue-num (inc idx))))
+       (map (make-key-printer {:issue-num "#"
+                               :file "File"
                                :line-num "Line"
                                :col-num "Col"
                                :specimen "Specimen"
@@ -251,53 +386,51 @@
 
 ;;;; Main egress
 
-(defn ignore?
-  "Is the specimen in the ignore file?"
-  [ignore-set issue]
-  (contains? ignore-set (:specimen issue)))
-
 (defn- load-ignore-set
-  "Loads ignore set from project config or file."
-  [project-ignore check-dir config]
+  "Loads ignore map from project config or file.
+   Returns map with :ignore (set of strings) and :ignore-issues (vector of maps)."
+  [project-ignore project-ignore-issues check-dir config]
   (if (some? project-ignore)
-    project-ignore
-    (set (checks/load-ignore-set! check-dir (:ignore config)))))
+    {:ignore project-ignore
+     :ignore-issues (or project-ignore-issues [])}
+    (checks/load-ignore-set! check-dir (:ignore config))))
 
 (defn- filter-ignored
-  "Removes ignored specimens from results."
-  [results ignore-set]
-  (if (empty? ignore-set)
+  "Removes ignored issues from results using contextual ignore matching.
+   Handles both simple specimen ignores and contextual ignores (file+line+specimen+check)."
+  [results ignore-map]
+  (if (and (empty? (:ignore ignore-map)) (empty? (:ignore-issues ignore-map)))
     results
-    (remove (partial ignore? ignore-set) results)))
+    (ignore/filter-issues results ignore-map)))
 
 (defn- process-results
   "Preps, filters, and sorts results."
-  [results ignore-set]
+  [results ignore-map]
   (->> results
        (mapcat prep)
-       (#(filter-ignored % ignore-set))
+       (#(filter-ignored % ignore-map))
        (sort-by (juxt :file :line-num :col-num))))
 
 (defn- format-output
-  "Formats results according to output format."
+  "Formats results according to output format with issue numbers."
   [results output]
   (case (string/lower-case output)
     "edn" (pp/pprint results)
     "json" (json/generate-stream results *out*)
-    "group" (group-results results)
+    "group" (group-results-numbered results)
     "verbose" (verbose-results results)
-    (results-table results)))
+    (results-table-numbered results)))
 
 (defn out
   "Takes results, preps them, removes specimens to ignore, and
   prints them in the supplied output format."
   [payload]
-  (let [{:keys [results output check-dir config project-ignore]} payload]
+  (let [{:keys [results output check-dir config project-ignore project-ignore-issues]} payload]
     (cond
       (empty? results) nil
       (some? results)
-      (let [ignore-set (load-ignore-set project-ignore check-dir config)
-            final-results (process-results (:results results) ignore-set)]
+      (let [ignore-map (load-ignore-set project-ignore project-ignore-issues check-dir config)
+            final-results (process-results (:results results) ignore-map)]
         (format-output final-results output))
       :else nil)))
 
