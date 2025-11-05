@@ -7,7 +7,6 @@
   To add effects: define a keyword, add defmethod for execute-effect."
   (:gen-class)
   (:require [proserunner
-             [checks :as checks]
              [commands :as cmd]
              [config :as conf]
              [custom-checks :as custom]
@@ -62,21 +61,6 @@
             lines-with-issues (:results results-record)
             all-prepped-issues (mapcat ship lines-with-issues)]
         (result/ok (vec all-prepped-issues))))))
-
-(defn- get-filtered-sorted-issues
-  "Gets issues filtered and sorted exactly as user sees them.
-   Applies ignore filtering and sorts deterministically.
-   Returns Result with vector of issues."
-  [opts ignore-set]
-  (let [issues-result (run-vet-and-get-issues opts)]
-    (if (result/failure? issues-result)
-      issues-result
-      (let [all-issues (:value issues-result)
-            filtered-issues (if (or (:skip-ignore opts) (empty? ignore-set))
-                             all-issues
-                             (ignore/filter-issues all-issues ignore-set))
-            sorted-issues (sort-by (juxt :file :line-num :col-num) filtered-issues)]
-        (result/ok (vec sorted-issues))))))
 
 (defn- read-ignores-by-scope
   "Reads current ignores from project or global scope.
@@ -214,11 +198,11 @@
          issues-result
          (let [issues (:value issues-result)
                ignore-entries (ignore/issues->ignore-entries issues {:granularity :line})
-               updated-ignores (update-ignores-by-scope!
-                                (fn [ignores]
-                                  (update ignores :ignore-issues
-                                          #(vec (concat % ignore-entries))))
-                                opts)
+               _ (update-ignores-by-scope!
+                  (fn [ignores]
+                    (update ignores :ignore-issues
+                            #(vec (concat % ignore-entries))))
+                  opts)
                {:keys [msg-context] :as target-info} (get-target-info opts)]
            (println (format "Added %d contextual ignore(s) to %s ignore list."
                            (count ignore-entries)
@@ -241,11 +225,11 @@
                {:keys [selected-issues total-issues valid-nums invalid-nums]}
                (select-and-validate-issue-numbers all-prepped-issues ignore-map issue-nums)
                ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
-               updated-ignores (update-ignores-by-scope!
-                                (fn [ignores]
-                                  (update ignores :ignore-issues
-                                          #(vec (concat % ignore-entries))))
-                                opts)
+               _ (update-ignores-by-scope!
+                  (fn [ignores]
+                    (update ignores :ignore-issues
+                            #(vec (concat % ignore-entries))))
+                  opts)
                {:keys [msg-context] :as target-info} (get-target-info opts)]
            ;; Provide feedback
            (when (seq invalid-nums)

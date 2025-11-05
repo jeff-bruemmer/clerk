@@ -264,7 +264,7 @@
    (println)
    (print-version))
 
-  ([opts message]
+  ([opts _]
    ;; When called with a message (e.g., from default handler), show full help
    (print-usage opts)))
 

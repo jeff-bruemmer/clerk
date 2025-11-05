@@ -2,7 +2,6 @@
   "Functions for creating a configuration directory."
   (:gen-class)
   (:require [proserunner
-             [error :as error]
              [file-utils :as file-utils]
              [result :as result]
              [system :as sys]]

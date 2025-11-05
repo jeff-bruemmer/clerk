@@ -307,7 +307,7 @@
    Returns a vector of ignore entry maps."
   ([issues]
    (issues->ignore-entries issues {}))
-  ([issues {:keys [granularity dedupe?] :or {dedupe? true} :as opts}]
+  ([issues {:keys [dedupe?] :or {dedupe? true} :as opts}]
    (let [entries (mapv #(issue->ignore-entry % opts) issues)]
      (if dedupe?
        (vec (distinct entries))
