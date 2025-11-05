@@ -106,17 +106,17 @@ proserunner --clean-ignores  # Clean stale ignores
 Global (`~/.proserunner/ignore.edn`):
 ```clojure
 ["hopefully"  ; Simple ignore
- {:file "docs/api.md" :line 42 :specimen "utilize"}]  ; Contextual
+ {:file "docs/api.md" :line-num 42 :specimen "utilize"}]  ; Contextual
 ```
 
 Project (`.proserunner/config.edn`):
 ```clojure
 {:ignore #{"project-term"
-           {:file "docs/internal.md" :line 5 :specimen "utilize"}}
+           {:file "docs/internal.md" :line-num 5 :specimen "utilize"}}
  :ignore-mode :extend}  ; :extend (combine with global) or :replace
 ```
 
-Contextual ignore keys: `:file` (required), `:specimen` (required), `:line` (optional), `:check` (optional)
+Contextual ignore keys: `:file` (required), `:specimen` (required), `:line-num` (optional), `:check` (optional)
 
 ## Project configuration
 
@@ -131,16 +131,27 @@ Creates `.proserunner/` with `config.edn` and `checks/` directory.
 ### config.edn options
 
 ```clojure
-{:check-sources ["default" "checks"]  ; Check locations
- :ignore #{"TODO" "FIXME"}            ; Project ignores
- :ignore-mode :extend                 ; :extend or :replace
- :config-mode :merged}                ; :merged or :project-only
+{:check-sources ["default" "checks"]      ; Check locations
+ :ignore #{"TODO" "FIXME"}                ; Simple ignores (apply everywhere)
+ :ignore-issues [{:file "docs/guide.md"   ; Contextual ignores (specific locations)
+                  :line 42
+                  :specimen "very"}]
+ :ignore-mode :extend                     ; :extend or :replace
+ :config-mode :merged}                    ; :merged or :project-only
 ```
 
 **check-sources:**
 - `"default"` - Global checks from `~/.proserunner/default/`
 - `"checks"` - Project checks from `.proserunner/checks/`
 - Paths (relative or absolute)
+
+**ignore:**
+- Set of strings to ignore everywhere in your project
+- Case-insensitive matching
+
+**ignore-issues:**
+- Vector of maps specifying file/line/specimen to ignore
+- Created automatically with `--ignore-issues` command
 
 **ignore-mode:**
 - `:extend` - Combine with global ignores

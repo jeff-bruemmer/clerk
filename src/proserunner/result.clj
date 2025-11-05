@@ -74,30 +74,6 @@
   (if (success? result)
     (ok (f (:value result)))
     result))
-(defmacro result->
-  "Thread-first macro for Result values. Short-circuits on first Failure.
-
-  Example:
-  (result-> (ok 5)
-            (bind inc-if-valid)
-            (fmap (* 2)))"
-  [val & forms]
-  (reduce (fn [acc form]
-            (if (seq? form)
-              `(bind ~acc (fn [v#] (-> v# ~form)))
-              `(bind ~acc (fn [v#] (~form v#)))))
-          val
-          forms))
-
-(defmacro result->>
-  "Thread-last macro for Result values. Short-circuits on first Failure."
-  [val & forms]
-  (reduce (fn [acc form]
-            (if (seq? form)
-              `(bind ~acc (fn [v#] (->> v# ~form)))
-              `(bind ~acc (fn [v#] (~form v#)))))
-          val
-          forms))
 
 ;; Error recovery and composition
 (defn or-else

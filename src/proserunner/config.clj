@@ -140,6 +140,38 @@
       (println "Created backup at:" backup-dir)
       backup-dir)))
 
+(defn- backup-and-preserve-files
+  "Backs up existing checks and preserves config and ignore files.
+  Returns map with :config-backup and :ignore-backup (may be nil)."
+  [default-dir config-file ignore-file]
+  (println "Backing up existing checks...")
+  (backup-directory! default-dir)
+  {:config-backup (when (.exists (io/file config-file))
+                    (slurp config-file))
+   :ignore-backup (when (.exists (io/file ignore-file))
+                    (slurp ignore-file))})
+
+(defn- download-and-restore-preserved-files!
+  "Downloads fresh checks and restores preserved files.
+  Throws on download failure."
+  [config-file ignore-file config-backup ignore-backup]
+  (println "\nDownloading fresh default checks...")
+  (let [dl-result (download-checks!)]
+    (when (result/failure? dl-result)
+      (throw (ex-info (:error dl-result) (:context dl-result)))))
+
+  ;; Restore preserved files atomically if they existed
+  (when config-backup
+    (file-utils/atomic-spit config-file config-backup)
+    (println "Preserved your config.edn"))
+
+  (when ignore-backup
+    (file-utils/atomic-spit ignore-file ignore-backup)
+    (println "Preserved your ignore.edn"))
+
+  (println "\nDefault checks restored successfully.")
+  (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))
+
 (defn restore-defaults!
   "Restore default checks from GitHub, backing up existing checks first.
 
@@ -162,34 +194,10 @@
                (throw (ex-info (:error dl-result) (:context dl-result)))
                (println "\nDefault checks installed."))))
          ;; Otherwise, backup and restore
-         (do
-           ;; Backup existing checks
-           (println "Backing up existing checks...")
-           (backup-directory! default-dir)
-
-           ;; Preserve config and ignore files
-           (let [config-backup (when (.exists (io/file config-file))
-                                 (slurp config-file))
-                 ignore-backup (when (.exists (io/file ignore-file))
-                                 (slurp ignore-file))]
-
-             ;; Download fresh checks
-             (println "\nDownloading fresh default checks...")
-             (let [dl-result (download-checks!)]
-               (when (result/failure? dl-result)
-                 (throw (ex-info (:error dl-result) (:context dl-result)))))
-
-             ;; Restore preserved files atomically if they existed
-             (when config-backup
-               (file-utils/atomic-spit config-file config-backup)
-               (println "Preserved your config.edn"))
-
-             (when ignore-backup
-               (file-utils/atomic-spit ignore-file ignore-backup)
-               (println "Preserved your ignore.edn"))
-
-             (println "\nDefault checks restored successfully.")
-             (println "\nYour custom checks in ~/.proserunner/custom/ were not modified."))))
+         (let [{:keys [config-backup ignore-backup]}
+               (backup-and-preserve-files default-dir config-file ignore-file)]
+           (download-and-restore-preserved-files! config-file ignore-file
+                                                  config-backup ignore-backup)))
        nil))
    {:operation :restore-defaults}))
 

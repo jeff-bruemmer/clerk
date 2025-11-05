@@ -27,10 +27,10 @@
 
 (defn determine-target
   "Determines whether to use :project or :global based on flags and project existence.
-  
+
   Logic:
   - If --global flag is explicitly set, use :global
-  - If --project flag is explicitly set, use :project  
+  - If --project flag is explicitly set, use :project
   - If .proserunner/config.edn exists, default to :project
   - Otherwise, default to :global"
   [{:keys [global project]}]
@@ -39,6 +39,37 @@
     project :project
     (project-exists?) :project
     :else :global))
+
+(defn get-target-context
+  "Returns a map with target scope information for commands.
+
+  Options:
+  - :use-determine-target? - if true, uses determine-target logic (checks project existence)
+  - :include-alt-msg - if true, includes :alt-msg suggesting alternate scope
+  - :alt-msg-template - custom alternate message template
+
+  Returns:
+  - :target - either :project or :global keyword
+  - :msg-context - string for display (\"project\" or \"global\")
+  - :alt-msg - optional string suggesting the alternate scope
+  - :opts-with-target - opts map with :project key set correctly"
+  ([opts]
+   (get-target-context opts nil))
+  ([opts {:keys [include-alt-msg alt-msg-template use-determine-target?]}]
+   (let [target (if use-determine-target?
+                  (determine-target opts)
+                  (if (:project opts) :project :global))
+         msg-context (if (= target :project) "project" "global")
+         base-result {:target target
+                      :msg-context msg-context
+                      :opts-with-target (assoc opts :project (= target :project))}]
+     (if include-alt-msg
+       (assoc base-result :alt-msg
+              (or alt-msg-template
+                  (if (= target :project)
+                    "Use --global to add to global ignore list instead."
+                    "Use --project to add to project ignore list instead.")))
+       base-result))))
 
 (set! *warn-on-reflection* true)
 
@@ -67,9 +98,10 @@
         (throw (ex-info "Issue numbers must be positive" {:number start-num})))
       (when (< end-num 1)
         (throw (ex-info "Issue numbers must be positive" {:number end-num})))
-      (if (<= start-num end-num)
-        (range start-num (inc end-num))
-        []))))
+      (when (> start-num end-num)
+        (throw (ex-info (str "Invalid range '" s "' - start must be less than or equal to end")
+                       {:start start-num :end end-num})))
+      (range start-num (inc end-num)))))
 
 (defn- parse-part
   "Parses a single part from comma-separated input. Returns sequence of numbers.
@@ -126,21 +158,16 @@
 
 (defn handle-add-ignore
   "Handler for adding a specimen to ignore list."
-  [{:keys [add-ignore project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")
-        alt-msg (if (= target :project)
-                  "Use --global to add to global ignore list instead."
-                  "Use --project to add to project ignore list instead.")]
+  [{:keys [add-ignore] :as opts}]
+  (let [{:keys [msg-context alt-msg]} (get-target-context opts {:include-alt-msg true})]
     {:effects [[:ignore/add add-ignore opts]]
      :messages [(format "Added to %s ignore list: %s" msg-context add-ignore)
                 alt-msg]}))
 
 (defn handle-remove-ignore
   "Handler for removing a specimen from ignore list."
-  [{:keys [remove-ignore project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")]
+  [{:keys [remove-ignore] :as opts}]
+  (let [{:keys [msg-context]} (get-target-context opts)]
     {:effects [[:ignore/remove remove-ignore opts]]
      :messages [(format "Removed from %s ignore list: %s" msg-context remove-ignore)]}))
 
@@ -152,9 +179,8 @@
 
 (defn handle-clear-ignored
   "Handler for clearing all ignored specimens."
-  [{:keys [project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")]
+  [opts]
+  (let [{:keys [msg-context]} (get-target-context opts)]
     {:effects [[:ignore/clear opts]]
      :messages [(format "Cleared all %s ignored specimens." msg-context)]}))
 
@@ -163,9 +189,7 @@
    Runs the file through proserunner, collects all issues, and adds them as contextual ignores.
    Defaults to project if .proserunner/config.edn exists, otherwise global."
   [opts]
-  (let [target (determine-target opts)
-        msg-context (if (= target :project) "project" "global")
-        opts-with-target (assoc opts :project (= target :project))]
+  (let [{:keys [msg-context opts-with-target]} (get-target-context opts {:use-determine-target? true})]
     {:effects [[:ignore/add-all opts-with-target]]
      :messages [(format "Adding all current findings to %s ignore list..." msg-context)]}))
 
@@ -175,12 +199,10 @@
   contextual ignores for only the specified issue numbers.
   Defaults to project if .proserunner/config.edn exists, otherwise global."
   [{:keys [ignore-issues] :as opts}]
-  (let [target (determine-target opts)
-        msg-context (if (= target :project) "project" "global")
+  (let [{:keys [msg-context opts-with-target]} (get-target-context opts {:use-determine-target? true})
         parse-result (parse-issue-numbers ignore-issues)]
     (if (result/success? parse-result)
-      (let [issue-nums (result/get-value parse-result)
-            opts-with-target (assoc opts :project (= target :project))]
+      (let [issue-nums (result/get-value parse-result)]
         {:effects [[:ignore/add-issues issue-nums opts-with-target]]
          :messages [(format "Ignoring issues %s in %s ignore list..."
                             (str/join ", " issue-nums)
@@ -195,9 +217,8 @@
 
 (defn handle-clean-ignores
   "Handler for cleaning stale ignore entries."
-  [{:keys [project] :as opts}]
-  (let [target (if project :project :global)
-        msg-context (if (= target :project) "project" "global")]
+  [opts]
+  (let [{:keys [msg-context]} (get-target-context opts)]
     {:effects [[:ignore/clean opts]]
      :messages [(format "Cleaning stale ignores from %s ignore list..." msg-context)]}))
 

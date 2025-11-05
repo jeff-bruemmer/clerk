@@ -266,8 +266,8 @@
 
   (testing "handles invalid range (end < start)"
     (let [result (cmd/parse-issue-numbers "5-1")]
-      (is (result/success? result))
-      (is (= [] (:value result)))))
+      (is (result/failure? result))
+      (is (re-find #"Invalid range.*start must be less than or equal to end" (:error result)))))
 
   (testing "returns error for non-numeric input"
     (let [result (cmd/parse-issue-numbers "1,foo,3")]

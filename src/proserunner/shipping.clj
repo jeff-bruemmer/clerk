@@ -41,14 +41,15 @@
 ;;;; Default print option: group
 
 (defn issue-str
-  "Creates a simplified result string for grouped results."
-  [{:keys [line-num col-num specimen message]}]
-  (string/join "\t" [(str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
-
-(defn issue-str-numbered
-  "Creates a simplified result string with issue number prefix."
-  [issue-num {:keys [line-num col-num specimen message]}]
-  (string/join "\t" [(str "[" issue-num "]") (str line-num ":" col-num) (str "\"" specimen "\"" " -> " message)]))
+  "Creates a simplified result string for grouped results.
+  Optional issue-num parameter adds a numbered prefix."
+  ([issue] (issue-str nil issue))
+  ([issue-num {:keys [line-num col-num specimen message]}]
+   (string/join "\t"
+     (cond-> []
+       issue-num (conj (str "[" issue-num "]"))
+       true (conj (str line-num ":" col-num))
+       true (conj (str "\"" specimen "\"" " -> " message))))))
 
 (defn group-results
   "Groups results by file."
@@ -68,17 +69,36 @@
       (when-let [first-item (first file-group)]
         (println "\n" (:file (second first-item)))
         (doseq [[num issue] file-group]
-          (println (issue-str-numbered num issue)))))))
+          (println (issue-str num issue)))))))
 
 ;;;; Formatters for command output
 
 (defn format-ignored-list
-  "Formats a list of ignored specimens for display."
-  [ignored]
-  (if (empty? ignored)
-    ["No ignored specimens."]
-    (cons "Ignored specimens:"
-          (map #(str "   " %) ignored))))
+  "Formats separated ignore lists for display.
+   Takes map with :ignore (set of strings) and :ignore-issues (vector of maps)."
+  [{:keys [ignore ignore-issues]}]
+  (let [has-simple? (seq ignore)
+        has-contextual? (seq ignore-issues)]
+    (cond
+      (and (not has-simple?) (not has-contextual?))
+      ["No ignored specimens or issues."]
+
+      :else
+      (concat
+        (when has-simple?
+          (cons "Simple ignores (apply everywhere):"
+                (concat
+                  (map #(str "  - " %) (sort ignore))
+                  [""])))
+        (when has-contextual?
+          (cons "Contextual ignores (specific locations):"
+                (map (fn [{:keys [file line-num line specimen]}]
+                       (format "  - %s:%s \"%s\""
+                               file
+                               (or line-num line "*")
+                               specimen))
+                     (sort-by (juxt :file #(or (:line-num %) (:line %) 0) :specimen)
+                              ignore-issues))))))))
 
 (defn format-init-project
   "Formats project initialization success message."
@@ -285,28 +305,28 @@
 ;;;; Main egress
 
 (defn- load-ignore-set
-  "Loads ignore set from project config or file.
-   Returns a collection that may contain both simple specimens (strings)
-   and contextual ignores (maps)."
-  [project-ignore check-dir config]
+  "Loads ignore map from project config or file.
+   Returns map with :ignore (set of strings) and :ignore-issues (vector of maps)."
+  [project-ignore project-ignore-issues check-dir config]
   (if (some? project-ignore)
-    project-ignore
-    (set (checks/load-ignore-set! check-dir (:ignore config)))))
+    {:ignore project-ignore
+     :ignore-issues (or project-ignore-issues [])}
+    (checks/load-ignore-set! check-dir (:ignore config))))
 
 (defn- filter-ignored
   "Removes ignored issues from results using contextual ignore matching.
    Handles both simple specimen ignores and contextual ignores (file+line+specimen+check)."
-  [results ignore-set]
-  (if (empty? ignore-set)
+  [results ignore-map]
+  (if (and (empty? (:ignore ignore-map)) (empty? (:ignore-issues ignore-map)))
     results
-    (ignore/filter-issues results ignore-set)))
+    (ignore/filter-issues results ignore-map)))
 
 (defn- process-results
   "Preps, filters, and sorts results."
-  [results ignore-set]
+  [results ignore-map]
   (->> results
        (mapcat prep)
-       (#(filter-ignored % ignore-set))
+       (#(filter-ignored % ignore-map))
        (sort-by (juxt :file :line-num :col-num))))
 
 (defn- format-output
@@ -323,12 +343,12 @@
   "Takes results, preps them, removes specimens to ignore, and
   prints them in the supplied output format."
   [payload]
-  (let [{:keys [results output check-dir config project-ignore]} payload]
+  (let [{:keys [results output check-dir config project-ignore project-ignore-issues]} payload]
     (cond
       (empty? results) nil
       (some? results)
-      (let [ignore-set (load-ignore-set project-ignore check-dir config)
-            final-results (process-results (:results results) ignore-set)]
+      (let [ignore-map (load-ignore-set project-ignore project-ignore-issues check-dir config)
+            final-results (process-results (:results results) ignore-map)]
         (format-output final-results output))
       :else nil)))
 
