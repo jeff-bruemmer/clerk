@@ -61,6 +61,44 @@
   [ignore-set specimen]
   (disj ignore-set specimen))
 
+;;; Pure Functions for Ignore Manipulation
+
+(defn add-specimen
+  "Pure function that adds a specimen to an ignores map.
+  Strings are added to :ignore set, maps are added to :ignore-issues vector.
+
+  Args:
+    ignores - Map with :ignore (set) and :ignore-issues (vector)
+    specimen - String or map to add
+
+  Returns: Updated ignores map
+
+  Example:
+    (add-specimen {:ignore #{\"foo\"} :ignore-issues []} \"bar\")
+    => {:ignore #{\"foo\" \"bar\"} :ignore-issues []}"
+  [ignores specimen]
+  (if (string? specimen)
+    (update ignores :ignore (fn [ign] (add-to-set (or ign #{}) specimen)))
+    (update ignores :ignore-issues (fn [issues] (conj (or issues []) specimen)))))
+
+(defn remove-specimen
+  "Pure function that removes a specimen from an ignores map.
+  Strings are removed from :ignore set, maps are removed from :ignore-issues vector.
+
+  Args:
+    ignores - Map with :ignore (set) and :ignore-issues (vector)
+    specimen - String or map to remove
+
+  Returns: Updated ignores map
+
+  Example:
+    (remove-specimen {:ignore #{\"foo\" \"bar\"} :ignore-issues []} \"bar\")
+    => {:ignore #{\"foo\"} :ignore-issues []}"
+  [ignores specimen]
+  (if (string? specimen)
+    (update ignores :ignore (fn [ign] (remove-from-set (or ign #{}) specimen)))
+    (update ignores :ignore-issues (fn [issues] (vec (remove #(= % specimen) (or issues [])))))))
+
 (defn- add-ignore-to-project!
   "Adds a specimen to project .proserunner/config.edn.
    Strings go to :ignore, maps go to :ignore-issues."
@@ -343,22 +381,16 @@
    - :project - Force project scope (.proserunner/config.edn)
    - :start-dir - Starting directory for project detection"
   ([specimen]
-   (let [{:keys [ignore ignore-issues]} (read-ignore-file)]
-     (if (string? specimen)
-       (write-ignore-file! {:ignore (add-to-set ignore specimen)
-                           :ignore-issues ignore-issues})
-       (write-ignore-file! {:ignore ignore
-                           :ignore-issues (conj ignore-issues specimen)}))))
+   (let [ignores (read-ignore-file)
+         updated (add-specimen ignores specimen)]
+     (write-ignore-file! updated)))
   ([specimen options]
    (context/with-context options
      (fn [{:keys [target project-root]}]
        (if (= target :global)
-         (let [{:keys [ignore ignore-issues]} (read-ignore-file)]
-           (if (string? specimen)
-             (write-ignore-file! {:ignore (add-to-set ignore specimen)
-                                 :ignore-issues ignore-issues})
-             (write-ignore-file! {:ignore ignore
-                                 :ignore-issues (conj ignore-issues specimen)})))
+         (let [ignores (read-ignore-file)
+               updated (add-specimen ignores specimen)]
+           (write-ignore-file! updated))
          ;; Add to project
          (add-ignore-to-project! specimen project-root))))))
 
@@ -371,22 +403,16 @@
    - :project - Force project scope (.proserunner/config.edn)
    - :start-dir - Starting directory for project detection"
   ([specimen]
-   (let [{:keys [ignore ignore-issues]} (read-ignore-file)]
-     (if (string? specimen)
-       (write-ignore-file! {:ignore (remove-from-set ignore specimen)
-                           :ignore-issues ignore-issues})
-       (write-ignore-file! {:ignore ignore
-                           :ignore-issues (vec (remove #(= % specimen) ignore-issues))}))))
+   (let [ignores (read-ignore-file)
+         updated (remove-specimen ignores specimen)]
+     (write-ignore-file! updated)))
   ([specimen options]
    (context/with-context options
      (fn [{:keys [target project-root]}]
        (if (= target :global)
-         (let [{:keys [ignore ignore-issues]} (read-ignore-file)]
-           (if (string? specimen)
-             (write-ignore-file! {:ignore (remove-from-set ignore specimen)
-                                 :ignore-issues ignore-issues})
-             (write-ignore-file! {:ignore ignore
-                                 :ignore-issues (vec (remove #(= % specimen) ignore-issues))})))
+         (let [ignores (read-ignore-file)
+               updated (remove-specimen ignores specimen)]
+           (write-ignore-file! updated))
          ;; Remove from project
          (remove-ignore-from-project! specimen project-root))))))
 

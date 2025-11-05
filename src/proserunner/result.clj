@@ -7,8 +7,9 @@
   Key operations:
   - Constructors: ok, err
   - Predicates: success?, failure?
-  - Composition: bind, combine-all-errors
-  - Utilities: try-result, try-result-with-context"
+  - Composition: bind, fmap, traverse, sequence-results
+  - Error handling: map-err, or-else, combine, combine-all-errors
+  - Utilities: try-result, try-result-with-context, tap, result-or-exit"
   (:gen-class))
 
 (set! *warn-on-reflection* true)
@@ -151,3 +152,71 @@
     (println "Error:" (:error result))
     (when (seq (:context result))
       (println "Details:" (:context result)))))
+
+;; Advanced combinators
+
+(defn traverse
+  "Applies a Result-returning function to each element in a collection.
+  Returns Success with vector of values if all succeed, or first Failure.
+
+  f takes a value and returns a Result.
+  Example: (traverse parse-int [\"1\" \"2\" \"3\"]) => (ok [1 2 3])"
+  [f coll]
+  (reduce (fn [acc item]
+            (if (success? acc)
+              (let [result (f item)]
+                (if (success? result)
+                  (ok (conj (:value acc) (:value result)))
+                  result))
+              acc))
+          (ok [])
+          coll))
+
+(defn sequence-results
+  "Converts a collection of Results into a Result containing a vector.
+  Returns Success with all values if all succeed, or first Failure.
+
+  Example: (sequence-results [(ok 1) (ok 2) (ok 3)]) => (ok [1 2 3])"
+  [results]
+  (traverse identity results))
+
+(defn map-err
+  "Transforms the error message in a Failure, preserving context.
+  Does nothing to Success results.
+
+  f takes an error value and returns a new error value.
+  Example: (map-err (err \"failed\") #(str \"ERROR: \" %)) => (err \"ERROR: failed\")"
+  [result f]
+  (if (failure? result)
+    (->Failure (f (:error result)) (:context result))
+    result))
+
+(defn tap
+  "Executes a side-effecting function on Success value, returns original result.
+  Does nothing on Failure. Useful for logging/debugging in a chain.
+
+  f takes a value and returns anything (return value is ignored).
+  Example: (tap (ok 42) println) => (ok 42) ; prints 42"
+  [result f]
+  (when (success? result)
+    (f (:value result)))
+  result)
+
+;; Dynamic var for exit function (allows testing)
+(def ^:dynamic *exit-fn* (fn [code] (System/exit code)))
+
+(defn result-or-exit
+  "Extracts value from Success, or prints error and exits on Failure.
+  This is the boundary function for converting Results to plain values at app entry points.
+
+  Optional exit-code parameter (default 1).
+  Example: (result-or-exit (ok 42)) => 42
+           (result-or-exit (err \"failed\")) => exits with code 1"
+  ([result]
+   (result-or-exit result 1))
+  ([result exit-code]
+   (if (success? result)
+     (:value result)
+     (do
+       (print-failure result)
+       (*exit-fn* exit-code)))))

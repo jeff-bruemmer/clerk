@@ -22,6 +22,30 @@
 
 (set! *warn-on-reflection* true)
 
+;;; Generic helper functions
+
+(defn effect-wrapper
+  "Wraps a function with try-result-with-context for effect execution.
+
+  Reduces boilerplate by providing a standard way to wrap effect functions.
+
+  Args:
+    f - Zero-arg function to execute
+    effect-type - Keyword identifying the effect (e.g., :ignore/add)
+    context-map - Map of context data to include in errors
+
+  Returns: Result (Success with function return value, or Failure with context)
+
+  Example:
+    (effect-wrapper
+      #(do-something specimen opts)
+      :ignore/add
+      {:specimen specimen})"
+  [f effect-type context-map]
+  (result/try-result-with-context
+   f
+   (assoc context-map :effect effect-type)))
+
 ;;; Helper functions for ignore effects
 
 (defn- run-vet-and-get-issues
@@ -77,6 +101,27 @@
                                                 :ignore-issues (:ignore-issues ignores))))
     (ignore/write-ignore-file! ignores)))
 
+(defn update-ignores-by-scope!
+  "Applies an update function to ignores in project or global scope.
+
+  Reduces the read-modify-write boilerplate for ignore operations.
+
+  Args:
+    update-fn - Function taking ignores map and returning updated ignores map
+    opts - Options map with :project key to determine scope
+
+  Returns: Updated ignores map (same format as returned by read-ignores-by-scope)
+
+  Example:
+    (update-ignores-by-scope!
+      #(update % :ignore conj \"new-pattern\")
+      {:project false})"
+  [update-fn opts]
+  (let [current-ignores (read-ignores-by-scope opts)
+        updated-ignores (update-fn current-ignores)]
+    (write-ignores-by-scope! updated-ignores opts)
+    updated-ignores))
+
 (defn- get-target-info
   "Returns map with :target keyword and :msg-context string for display."
   [opts]
@@ -128,102 +173,113 @@
 ;; Ignore management effects
 (defmethod execute-effect :ignore/add
   [[_ specimen opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(do
       (ignore/add-to-ignore! specimen opts)
       (merge {:specimen specimen} (get-target-info opts)))
-   {:effect :ignore/add :specimen specimen}))
+   :ignore/add
+   {:specimen specimen}))
 
 (defmethod execute-effect :ignore/remove
   [[_ specimen opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(do
       (ignore/remove-from-ignore! specimen opts)
       (merge {:specimen specimen} (get-target-info opts)))
-   {:effect :ignore/remove :specimen specimen}))
+   :ignore/remove
+   {:specimen specimen}))
 
 (defmethod execute-effect :ignore/list
   [[_ opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(ignore/list-ignored opts)
-   {:effect :ignore/list}))
+   :ignore/list
+   {}))
 
 (defmethod execute-effect :ignore/clear
   [[_ opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(do
       (ignore/clear-ignore! opts)
       (get-target-info opts))
-   {:effect :ignore/clear}))
+   :ignore/clear
+   {}))
 
 (defmethod execute-effect :ignore/add-all
   [[_ opts]]
-  (result/try-result-with-context
-   #(let [issues-result (run-vet-and-get-issues opts)]
-      (if (result/failure? issues-result)
-        issues-result
-        (let [issues (:value issues-result)
-              ignore-entries (ignore/issues->ignore-entries issues {:granularity :line})
-              {:keys [ignore ignore-issues]} (read-ignores-by-scope opts)
-              updated-ignores {:ignore ignore
-                               :ignore-issues (vec (concat ignore-issues ignore-entries))}
-              {:keys [msg-context] :as target-info} (get-target-info opts)]
-          (write-ignores-by-scope! updated-ignores opts)
-          (println (format "Added %d contextual ignore(s) to %s ignore list."
-                          (count ignore-entries)
-                          msg-context))
-          (merge {:count (count ignore-entries)} target-info))))
-   {:effect :ignore/add-all}))
+  (effect-wrapper
+   (fn []
+     (let [issues-result (run-vet-and-get-issues opts)]
+       (if (result/failure? issues-result)
+         issues-result
+         (let [issues (:value issues-result)
+               ignore-entries (ignore/issues->ignore-entries issues {:granularity :line})
+               updated-ignores (update-ignores-by-scope!
+                                (fn [ignores]
+                                  (update ignores :ignore-issues
+                                          #(vec (concat % ignore-entries))))
+                                opts)
+               {:keys [msg-context] :as target-info} (get-target-info opts)]
+           (println (format "Added %d contextual ignore(s) to %s ignore list."
+                           (count ignore-entries)
+                           msg-context))
+           (merge {:count (count ignore-entries)} target-info)))))
+   :ignore/add-all
+   {}))
 
 (defmethod execute-effect :ignore/add-issues
   [[_ issue-nums opts]]
-  (result/try-result-with-context
-   #(let [vet (requiring-resolve 'proserunner.vet/compute-or-cached)
-          vet-result (vet opts)]
-      (if (result/failure? vet-result)
-        vet-result
-        (let [payload (:value vet-result)
-              all-prepped-issues (extract-prepped-issues payload)
-              ignore-map (load-ignore-map-for-filtering payload opts)
-              {:keys [selected-issues total-issues valid-nums invalid-nums]}
-              (select-and-validate-issue-numbers all-prepped-issues ignore-map issue-nums)
-              ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
-              {:keys [ignore ignore-issues]} (read-ignores-by-scope opts)
-              updated-ignores {:ignore ignore
-                               :ignore-issues (vec (concat ignore-issues ignore-entries))}
-              {:keys [msg-context] :as target-info} (get-target-info opts)]
-          (write-ignores-by-scope! updated-ignores opts)
-          ;; Provide feedback
-          (when (seq invalid-nums)
-            (println (format "Warning: Issue numbers out of range (1-%d): %s"
-                            total-issues
-                            (str/join ", " invalid-nums))))
-          (if (empty? selected-issues)
-            (println "No valid issue numbers provided. Nothing was ignored.")
-            (println (format "Added %d contextual ignore(s) for issues %s to %s ignore list."
-                            (count ignore-entries)
-                            (str/join ", " (filter valid-nums issue-nums))
-                            msg-context)))
-          (merge {:count (count ignore-entries)
-                  :issues issue-nums
-                  :selected (count selected-issues)
-                  :invalid (vec invalid-nums)}
-                 target-info))))
-   {:effect :ignore/add-issues}))
+  (effect-wrapper
+   (fn []
+     (let [vet (requiring-resolve 'proserunner.vet/compute-or-cached)
+           vet-result (vet opts)]
+       (if (result/failure? vet-result)
+         vet-result
+         (let [payload (:value vet-result)
+               all-prepped-issues (extract-prepped-issues payload)
+               ignore-map (load-ignore-map-for-filtering payload opts)
+               {:keys [selected-issues total-issues valid-nums invalid-nums]}
+               (select-and-validate-issue-numbers all-prepped-issues ignore-map issue-nums)
+               ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
+               updated-ignores (update-ignores-by-scope!
+                                (fn [ignores]
+                                  (update ignores :ignore-issues
+                                          #(vec (concat % ignore-entries))))
+                                opts)
+               {:keys [msg-context] :as target-info} (get-target-info opts)]
+           ;; Provide feedback
+           (when (seq invalid-nums)
+             (println (format "Warning: Issue numbers out of range (1-%d): %s"
+                             total-issues
+                             (str/join ", " invalid-nums))))
+           (if (empty? selected-issues)
+             (println "No valid issue numbers provided. Nothing was ignored.")
+             (println (format "Added %d contextual ignore(s) for issues %s to %s ignore list."
+                             (count ignore-entries)
+                             (str/join ", " (filter valid-nums issue-nums))
+                             msg-context)))
+           (merge {:count (count ignore-entries)
+                   :issues issue-nums
+                   :selected (count selected-issues)
+                   :invalid (vec invalid-nums)}
+                  target-info)))))
+   :ignore/add-issues
+   {}))
 
 
 
 (defmethod execute-effect :ignore/audit
   [[_ opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(let [ignores (read-ignores-by-scope opts)
           audit-result (ignore/audit-ignores ignores)]
       audit-result)
-   {:effect :ignore/audit}))
+   :ignore/audit
+   {}))
 
 (defmethod execute-effect :ignore/clean
   [[_ opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(let [ignores (read-ignores-by-scope opts)
           cleaned-ignores (ignore/remove-stale-ignores ignores)
           removed-count (- (count (:ignore-issues ignores))
@@ -235,7 +291,8 @@
                       removed-count
                       msg-context))
       (merge {:removed removed-count} target-info))
-   {:effect :ignore/clean}))
+   :ignore/clean
+   {}))
 
 ;; Configuration effects
 (defmethod execute-effect :config/restore-defaults
@@ -248,36 +305,40 @@
 ;; Project initialization effects
 (defmethod execute-effect :project/init
   [[_]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(let [cwd (System/getProperty "user.dir")
           result (project-conf/init! cwd)]
       {:cwd cwd :result result})
-   {:effect :project/init}))
+   :project/init
+   {}))
 
 ;; Custom checks effects
 (defmethod execute-effect :checks/add
   [[_ source opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(do
       (custom/add-checks source opts)
       {:source source :opts opts})
-   {:effect :checks/add :source source}))
+   :checks/add
+   {:source source}))
 
 (defmethod execute-effect :checks/print
   [[_ config]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(do
       (ship/print-checks config)
       {:config config})
-   {:effect :checks/print}))
+   :checks/print
+   {}))
 
 ;; File processing effects
 (defmethod execute-effect :file/process
   [[_ opts]]
-  (result/try-result-with-context
+  (effect-wrapper
    #(let [process-fn (requiring-resolve 'proserunner.process/proserunner)]
       (process-fn opts))
-   {:effect :file/process}))
+   :file/process
+   {}))
 
 ;; Help and version effects
 (defmethod execute-effect :help/print

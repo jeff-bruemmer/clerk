@@ -202,16 +202,18 @@
    {:operation :restore-defaults}))
 
 (defn initialize-proserunner
-  "Sets up ~/.proserunner directory and downloads default checks for first-time users."
+  "Sets up ~/.proserunner directory and downloads default checks for first-time users.
+
+   Returns Result with config on success, or Failure with error details."
   [default-config]
   (println "Initializing Proserunner...")
   (let [dl-result (download-checks!)]
     (if (result/failure? dl-result)
-      (error/exit (str "Failed to download default checks: " (:error dl-result)))
+      (result/map-err dl-result #(str "Failed to download default checks: " %))
       (do
         (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
         (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
-        (loader/safe-load-config default-config)))))
+        (result/ok (loader/safe-load-config default-config))))))
 
 (defn update-default-checks
   "Refreshes default checks when remote version is newer than local cache."
@@ -238,12 +240,15 @@
       options)))
 
 (defn- load-project-based-config
-  "Loads project configuration, merging with global config as appropriate."
+  "Loads project configuration, merging with global config as appropriate.
+
+   Returns Result with Config record on success, or Failure with error details."
   [current-dir]
   (if-let [project-cfg (project-config/load current-dir)]
-    (map->Config {:checks (:checks project-cfg)
-                  :ignore (:ignore project-cfg)})
-    (error/exit "Failed to load project configuration. Check .proserunner/config.edn for errors.\n")))
+    (result/ok (map->Config {:checks (:checks project-cfg)
+                             :ignore (:ignore project-cfg)}))
+    (result/err "Failed to load project configuration. Check .proserunner/config.edn for errors."
+                {:current-dir current-dir})))
 
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
@@ -269,7 +274,7 @@
       ;; In a project directory - load project config (merges with global)
       ;; This must come BEFORE the checks-stale? and config-exists? checks
       (and using-default? in-project?)
-      (load-project-based-config current-dir)
+      (result/result-or-exit (load-project-based-config current-dir))
 
       ;; Using default config and checks need updating
       (and using-default? config-exists? (checks-stale?))
@@ -281,4 +286,4 @@
 
       ;; First-time initialization
       :else
-      (initialize-proserunner default-config))))
+      (result/result-or-exit (initialize-proserunner default-config)))))

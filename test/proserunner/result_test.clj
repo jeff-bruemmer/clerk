@@ -298,3 +298,162 @@
               right (result/bind m (comp result/ok f))]
           (is (= left right)
               (str "Monad-functor consistency failed for value: " x)))))))
+
+;; Tests for new Result combinators
+
+(deftest traverse-test
+  (testing "traverse applies Result-returning function to collection"
+    (let [parse-int (fn [s]
+                      (try
+                        (result/ok (Integer/parseInt s))
+                        (catch Exception _
+                          (result/err "Not a number" {:input s}))))
+          inputs ["1" "2" "3"]
+          result (result/traverse parse-int inputs)]
+      (is (result/success? result))
+      (is (= [1 2 3] (:value result)))))
+
+  (testing "traverse fails on first error"
+    (let [parse-int (fn [s]
+                      (try
+                        (result/ok (Integer/parseInt s))
+                        (catch Exception _
+                          (result/err "Not a number" {:input s}))))
+          inputs ["1" "bad" "3"]
+          result (result/traverse parse-int inputs)]
+      (is (result/failure? result))
+      (is (= "Not a number" (:error result)))
+      (is (= "bad" (-> result :context :input)))))
+
+  (testing "traverse works with empty collection"
+    (let [f (fn [x] (result/ok (* x 2)))
+          result (result/traverse f [])]
+      (is (result/success? result))
+      (is (= [] (:value result)))))
+
+  (testing "traverse preserves order"
+    (let [f (fn [x] (result/ok (* x 2)))
+          inputs [1 2 3 4 5]
+          result (result/traverse f inputs)]
+      (is (result/success? result))
+      (is (= [2 4 6 8 10] (:value result))))))
+
+(deftest sequence-results-test
+  (testing "sequence-results converts collection of Results to Result of collection"
+    (let [results [(result/ok 1) (result/ok 2) (result/ok 3)]
+          sequenced (result/sequence-results results)]
+      (is (result/success? sequenced))
+      (is (= [1 2 3] (:value sequenced)))))
+
+  (testing "sequence-results fails on first error"
+    (let [results [(result/ok 1)
+                   (result/err "Error 2" {})
+                   (result/ok 3)
+                   (result/err "Error 4" {})]
+          sequenced (result/sequence-results results)]
+      (is (result/failure? sequenced))
+      (is (= "Error 2" (:error sequenced)))))
+
+  (testing "sequence-results works with empty collection"
+    (let [sequenced (result/sequence-results [])]
+      (is (result/success? sequenced))
+      (is (= [] (:value sequenced)))))
+
+  (testing "sequence-results preserves order"
+    (let [results [(result/ok 10) (result/ok 20) (result/ok 30)]
+          sequenced (result/sequence-results results)]
+      (is (result/success? sequenced))
+      (is (= [10 20 30] (:value sequenced))))))
+
+(deftest map-err-test
+  (testing "map-err transforms error message in Failure"
+    (let [r (result/err "file not found" {:path "/tmp/test.txt"})
+          transformed (result/map-err r #(str "ERROR: " %))]
+      (is (result/failure? transformed))
+      (is (= "ERROR: file not found" (:error transformed)))
+      (is (= "/tmp/test.txt" (-> transformed :context :path)))))
+
+  (testing "map-err preserves context"
+    (let [r (result/err "timeout" {:duration 5000 :operation :fetch})
+          transformed (result/map-err r clojure.string/upper-case)]
+      (is (result/failure? transformed))
+      (is (= "TIMEOUT" (:error transformed)))
+      (is (= 5000 (-> transformed :context :duration)))
+      (is (= :fetch (-> transformed :context :operation)))))
+
+  (testing "map-err does nothing to Success"
+    (let [r (result/ok 42)
+          transformed (result/map-err r #(str "Should not apply: " %))]
+      (is (result/success? transformed))
+      (is (= 42 (:value transformed)))))
+
+  (testing "map-err can transform to structured error"
+    (let [r (result/err "simple error" {})
+          transformed (result/map-err r (fn [msg] {:type :user-error :message msg}))]
+      (is (result/failure? transformed))
+      (is (= {:type :user-error :message "simple error"} (:error transformed))))))
+
+(deftest tap-test
+  (testing "tap executes side effect on Success and returns original"
+    (let [captured (atom nil)
+          r (result/ok 42)
+          tapped (result/tap r (fn [v] (reset! captured v)))]
+      (is (result/success? tapped))
+      (is (= 42 (:value tapped)))
+      (is (= 42 @captured))
+      (is (= r tapped) "tap should return identical result")))
+
+  (testing "tap does not execute on Failure"
+    (let [captured (atom :not-called)
+          r (result/err "failed" {})
+          tapped (result/tap r (fn [v] (reset! captured v)))]
+      (is (result/failure? tapped))
+      (is (= "failed" (:error tapped)))
+      (is (= :not-called @captured) "Side effect should not execute on Failure")))
+
+  (testing "tap preserves value in chain"
+    (let [side-effects (atom [])
+          result (-> (result/ok 5)
+                     (result/tap (fn [v] (swap! side-effects conj [:first v])))
+                     (result/fmap #(* % 2))
+                     (result/tap (fn [v] (swap! side-effects conj [:second v])))
+                     (result/fmap inc))]
+      (is (result/success? result))
+      (is (= 11 (:value result)))
+      (is (= [[:first 5] [:second 10]] @side-effects))))
+
+  (testing "tap can be used for logging without breaking chain"
+    (let [log (atom [])
+          result (-> (result/ok "data")
+                     (result/tap (fn [v] (swap! log conj (str "Processing: " v))))
+                     (result/fmap clojure.string/upper-case)
+                     (result/tap (fn [v] (swap! log conj (str "Result: " v)))))]
+      (is (result/success? result))
+      (is (= "DATA" (:value result)))
+      (is (= ["Processing: data" "Result: DATA"] @log)))))
+
+(deftest result-or-exit-test
+  (testing "result-or-exit returns value on Success"
+    (let [r (result/ok 42)
+          value (result/result-or-exit r)]
+      (is (= 42 value))))
+
+  (testing "result-or-exit exits on Failure"
+    (let [r (result/err "Something went wrong" {:file "/tmp/test.txt"})
+          print-called (atom false)
+          exit-called (atom nil)]
+      (binding [result/*exit-fn* (fn [code] (reset! exit-called code))]
+        (with-redefs [result/print-failure (fn [res]
+                                             (reset! print-called true)
+                                             (is (= "Something went wrong" (:error res))))]
+          (result/result-or-exit r)))
+      (is @print-called "print-failure should be called")
+      (is (= 1 @exit-called) "exit function should be called with code 1")))
+
+  (testing "result-or-exit with custom exit code"
+    (let [r (result/err "Permission denied" {:code 403})
+          exit-code (atom nil)]
+      (binding [result/*exit-fn* (fn [code] (reset! exit-code code))]
+        (with-redefs [result/print-failure (fn [_] nil)]
+          (result/result-or-exit r 403)))
+      (is (= 403 @exit-code)))))
