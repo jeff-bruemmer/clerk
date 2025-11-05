@@ -138,8 +138,10 @@
         (result/ok numbers))
       (catch NumberFormatException e
         (result/err (str "Invalid issue number format: " (.getMessage e))))
+      (catch clojure.lang.ExceptionInfo e
+        (result/err (.getMessage e)))
       (catch Exception e
-        (result/err (.getMessage e))))))
+        (result/err (str "Unexpected error parsing issue numbers: " (.getMessage e)))))))
 
 
 (defn filter-issues-by-numbers

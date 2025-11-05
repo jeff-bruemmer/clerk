@@ -51,14 +51,6 @@
        true (conj (str line-num ":" col-num))
        true (conj (str "\"" specimen "\"" " -> " message))))))
 
-(defn group-results
-  "Groups results by file."
-  [results]
-  (doseq [[k v] (group-by :file results)]
-    (println "\n" k)
-    (doseq [issue (map issue-str v)]
-      (println issue))))
-
 (defn group-results-numbered
   "Groups results by file with issue numbers, preserving order."
   [results]
@@ -253,14 +245,6 @@
   (println "  List all enabled checks:")
   (println "    proserunner --checks"))
 
-(defn print-opts
-  "Utility for printing usage."
-  [summary title config]
-  (println title)
-  (print-options [:option :required :desc] summary)
-  (println "\nConfig file: " config)
-  (print-version))
-
 (defn print-usage
   "Prints usage, optionally with a message."
   ([{:keys [summary config]}]
@@ -283,18 +267,6 @@
   ([opts message]
    ;; When called with a message (e.g., from default handler), show full help
    (print-usage opts)))
-
-(defn results-table
-  "Takes results and prints them as a table."
-  [results]
-  (->> results
-       (map (make-key-printer {:file "File"
-                               :line-num "Line"
-                               :col-num "Col"
-                               :specimen "Specimen"
-                               :name "Name"
-                               :message "Message"}))
-       (print-table)))
 
 (defn results-table-numbered
   "Takes results and prints them as a table with issue numbers."

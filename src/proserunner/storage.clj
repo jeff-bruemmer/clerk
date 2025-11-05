@@ -3,7 +3,6 @@
   (:gen-class)
   (:require [proserunner
              [checks :as checks]
-             [error :as error]
              [edn-utils :as edn-utils]
              [file-utils :as file-utils]
              [result :as result]
@@ -35,14 +34,23 @@
 ;; - results: Vector of Line records with issues found
 
 (defn mk-tmp-dir!
-  "Makes dir in tmp directory to store cached results."
+  "Makes dir in tmp directory to store cached results.
+
+  Returns Result<File> - Success with the directory File object, or Failure with error details."
   [path]
-  (let [p (io/file (file-utils/join-path (System/getProperty "java.io.tmpdir") path))]
-    (if (.exists p)
-      p
-      (do (try (.mkdirs p)
-               (catch Exception e (error/exit (str "Proserunner couldn't create cache directory:\n" (.getMessage e)))))
-          p))))
+  (result/try-result-with-context
+    (fn []
+      (let [p (io/file (file-utils/join-path (System/getProperty "java.io.tmpdir") path))]
+        (when-not (.exists p)
+          (when-not (.mkdirs p)
+            (throw (ex-info (str "Failed to create cache directory: " (.getPath p))
+                           {:path (.getPath p)
+                            :exists (.exists p)
+                            :writable (when (.exists (.getParentFile p))
+                                       (.canWrite (.getParentFile p)))}))))
+        p))
+    {:operation :mk-tmp-dir
+     :path path}))
 
 (defn ^:private filepath
   "Builds filepath to cached results."
@@ -50,17 +58,20 @@
   (io/file dir (str "file" (:file-hash result) ".edn")))
 
 (defn save!
-  "Creates a storage directory in the OS's temp directory (if it hasn't already,
-  and writes the result to that storage directory."
+  "Creates a storage directory in the OS's temp directory (if it hasn't already),
+  and writes the result to that storage directory.
+
+  Returns Result<Path> - Success with the path to the cached file, or Failure with error details."
   [result]
-  (try
-    (let [dir (mk-tmp-dir! "proserunner-storage")
-          storage-file (filepath dir result)]
-      (if (.exists (io/file dir))
-        (file-utils/atomic-spit storage-file (pr-str result))
-        (println "Warning: Unable to cache results - storage directory doesn't exist.")))
-    (catch Exception e
-      (println (str "Warning: Failed to save cache: " (.getMessage e))))))
+  (result/bind
+    (mk-tmp-dir! "proserunner-storage")
+    (fn [dir]
+      (result/try-result-with-context
+        (fn []
+          (let [storage-file (filepath dir result)]
+            (file-utils/atomic-spit storage-file (pr-str result))))
+        {:operation :save-cache
+         :file-hash (:file-hash result)}))))
 
 (def ^:private edn-readers
   {:readers (merge default-data-readers

@@ -3,7 +3,6 @@
   (:gen-class)
   (:require [proserunner
              [edn-utils :as edn-utils]
-             [error :as error]
              [file-utils :as file-utils]
              [result :as result]]
             [clojure
@@ -104,19 +103,15 @@
 
 (defn load-edn!
   "Loads an EDN-formatted check file (I/O + parsing).
-   Prints warning and returns nil if file cannot be loaded.
-   Composed from pure read and parse functions."
+
+  Returns Result<Check> - Success with parsed Check, or Failure with error details."
   [filename]
   (let [read-result (read-check-file filename)]
     (if-let [error (:error read-result)]
-      (do
-        (println (str "Error: " error))
-        nil)
-      (try
-        (parse-check-edn (:ok read-result))
-        (catch Exception e
-          (println (str "Error: Failed to parse check file '" filename "': " (.getMessage e)))
-          nil)))))
+      (result/err error {:filepath filename :operation :load-check-file})
+      (result/try-result-with-context
+        (fn [] (parse-check-edn (:ok read-result)))
+        {:filepath filename :operation :parse-check-edn}))))
 
 (defn load-ignore-set!
   "Takes a checks directory and a file name for an edn file that
@@ -168,24 +163,36 @@
 
 (defn create
   "Takes an options ball, and loads all the specified checks.
-   Filters out any checks that failed to load.
-   Applies ignore filtering to remove specimens in the ignore set."
+
+  Returns Result<vector<Check>> - Success with filtered checks, or Failure if none load.
+  Logs warnings for partially failed loads but continues with valid checks."
   [options]
   (let [{:keys [config check-dir project-ignore]} options
         checks (:checks config)
-        all-checks (mapcat (fn
-                             [{:keys [directory files]}]
-                             (let [base-path (if (file-utils/absolute-path? directory)
-                                              directory
-                                              (str check-dir directory))
-                                   sep java.io.File/separator]
-                               (map #(str base-path sep % ".edn") files))) checks)
-        loaded-checks (keep load-edn! all-checks)
+        all-check-paths (mapcat (fn
+                                  [{:keys [directory files]}]
+                                  (let [base-path (if (file-utils/absolute-path? directory)
+                                                   directory
+                                                   (str check-dir directory))
+                                        sep java.io.File/separator]
+                                    (map #(str base-path sep % ".edn") files))) checks)
+        ;; Load all checks, collecting Results
+        load-results (map load-edn! all-check-paths)
+        ;; Extract successful checks
+        loaded-checks (keep (fn [r] (when (result/success? r) (:value r))) load-results)
         filtered-checks (mapv #(apply-ignore-filter % project-ignore) loaded-checks)
-        failed-count (- (count all-checks) (count loaded-checks))]
+        failed-count (- (count all-check-paths) (count loaded-checks))]
+
+    ;; Log warnings for partial failures
     (when (pos? failed-count)
       (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped.")))
-    (when (empty? filtered-checks)
-      (error/exit "No valid checks could be loaded. Please check your configuration."))
-    filtered-checks))
+
+    ;; Return Failure if no checks loaded successfully
+    (if (empty? filtered-checks)
+      (result/err "No valid checks could be loaded. Please check your configuration."
+                  {:operation :create-checks
+                   :total-attempts (count all-check-paths)
+                   :successful 0
+                   :failed failed-count})
+      (result/ok filtered-checks))))
 

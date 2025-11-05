@@ -87,7 +87,7 @@
             updated-issues (vec (remove #(= % specimen) current-issues))]
         (project-config/write! project-root (assoc config :ignore-issues updated-issues))))))
 
-;;; Contextual Ignore Support
+;;; Helper functions for contextual ignore matching
 
 (defn contextual-ignore?
   "Returns true if the ignore entry is a contextual ignore (map) rather than a simple specimen (string).
@@ -97,23 +97,6 @@
    (and (map? entry)
         (:file entry)
         (:specimen entry))))
-
-(defn normalize-ignore-entry
-  "Normalizes an ignore entry to a consistent format.
-   Returns {:type :simple :specimen ...} for strings
-   Returns {:type :contextual :file ... :specimen ... :line-num ... :check ...} for maps
-   Returns nil if entry is invalid."
-  [entry]
-  (cond
-    (string? entry)
-    {:type :simple :specimen entry}
-
-    (and (map? entry) (:file entry) (:specimen entry))
-    (merge {:type :contextual}
-           (select-keys entry [:file :line-num :line :specimen :check]))
-
-    :else
-    nil))
 
 (defn matches-simple-ignore?
   "Returns true if a simple specimen ignore matches the issue.
@@ -154,6 +137,9 @@
   "Returns true if the issue should be ignored based on the ignore list.
    Handles both simple specimen ignores and contextual ignores.
 
+   Note: This is the non-indexed implementation kept for testing compatibility.
+   Production code uses should-ignore-issue-indexed? for better performance.
+
    issue: map with :file, :line-num, :specimen, :name
    ignores: collection of strings (simple) and/or maps (contextual)"
   [issue ignores]
@@ -162,13 +148,15 @@
            (cond
              (string? ignore-entry)
              (matches-simple-ignore? ignore-entry issue)
-             
+
              (contextual-ignore? ignore-entry)
              (matches-contextual-ignore? ignore-entry issue)
-             
+
              :else
              false))
          ignores)))
+
+;;; Indexed Ignore Implementation for Performance
 
 (defn- add-simple-ignore
   "Adds a simple string ignore to the index."

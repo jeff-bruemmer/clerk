@@ -130,18 +130,23 @@
                               :check-dir check-dir
                               :project-ignore project-ignore)
         lines-result (get-lines-from-all-files code-blocks quoted-text file exclude-patterns parallel-files?)]
-    (if (result/failure? lines-result)
+    (result/bind
       lines-result
-      (result/ok
-       (map->Input
-        {:file file
-         :lines (:value lines-result)
-         :config config
-         :check-dir check-dir
-         :checks (checks/create updated-options)
-         :cached-result (store/inventory file)
-         :output output
-         :no-cache no-cache
-         :parallel-lines parallel-lines?
-         :project-ignore project-ignore
-         :project-ignore-issues project-ignore-issues})))))
+      (fn [lines]
+        (let [checks-result (checks/create updated-options)]
+          (result/bind
+            checks-result
+            (fn [loaded-checks]
+              (result/ok
+                (map->Input
+                  {:file file
+                   :lines lines
+                   :config config
+                   :check-dir check-dir
+                   :checks loaded-checks
+                   :cached-result (store/inventory file)
+                   :output output
+                   :no-cache no-cache
+                   :parallel-lines parallel-lines?
+                   :project-ignore project-ignore
+                   :project-ignore-issues project-ignore-issues})))))))))

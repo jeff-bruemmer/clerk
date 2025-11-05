@@ -2,13 +2,13 @@
   "Result type for error handling.
 
   A Result is either Success (contains value) or Failure (contains error and context).
-  Enables error composition through bind/fmap without exceptions or System/exit.
+  Enables error composition through bind without exceptions or System/exit.
 
   Key operations:
   - Constructors: ok, err
   - Predicates: success?, failure?
-  - Composition: bind, fmap, combine, or-else
-  - Utilities: try-result, unwrap, validate"
+  - Composition: bind, combine-all-errors
+  - Utilities: try-result, try-result-with-context"
   (:gen-class))
 
 (set! *warn-on-reflection* true)
@@ -47,13 +47,6 @@
   [result]
   (when (success? result)
     (:value result)))
-
-(defn unwrap
-  "Unwraps a Success value or throws on Failure."
-  [result]
-  (if (success? result)
-    (:value result)
-    (throw (ex-info (:error result) (:context result)))))
 
 (defn bind
   "Applies function f to Success value, short-circuits on Failure.
@@ -150,18 +143,7 @@
     (ok value)
     (err error-msg {:value value})))
 
-;; Legacy compatibility helpers
-(defn exit-on-failure
-  "Exits with status 1 if result is Failure, returns value if Success."
-  [result]
-  (if (failure? result)
-    (do
-      (println "Error:" (:error result))
-      (when (seq (:context result))
-        (println "Context:" (:context result)))
-      (System/exit 1))
-    (:value result)))
-
+;; Output helpers
 (defn print-failure
   "Prints failure details without exiting."
   [result]

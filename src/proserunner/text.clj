@@ -181,10 +181,4 @@
                              (:code? %))))))))
     {:filepath filepath :operation :fetch})))
 
-(defn get-lines
-  "Read and decorate lines."
-  [files code-blocks]
-  (let [line-builder (partial fetch! code-blocks)]
-    (mapcat line-builder files)))
-
 
