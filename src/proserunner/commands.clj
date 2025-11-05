@@ -126,7 +126,8 @@
     \"\" -> (result/err \"Issue numbers cannot be empty\")"
   [s]
   (if (or (nil? s) (str/blank? s))
-    (result/err "Issue numbers cannot be empty")
+    (result/err "Issue numbers cannot be empty"
+                {:input s :operation :parse-issue-numbers})
     (try
       (let [parts (str/split s #",")
             numbers (->> parts
@@ -137,11 +138,14 @@
                         (vec))]
         (result/ok numbers))
       (catch NumberFormatException e
-        (result/err (str "Invalid issue number format: " (.getMessage e))))
+        (result/err (str "Invalid issue number format: " (.getMessage e))
+                    {:input s :operation :parse-issue-numbers :exception-type :number-format}))
       (catch clojure.lang.ExceptionInfo e
-        (result/err (.getMessage e)))
+        (result/err (.getMessage e)
+                    {:input s :operation :parse-issue-numbers :exception-type :validation}))
       (catch Exception e
-        (result/err (str "Unexpected error parsing issue numbers: " (.getMessage e)))))))
+        (result/err (str "Unexpected error parsing issue numbers: " (.getMessage e))
+                    {:input s :operation :parse-issue-numbers :exception-type :unknown})))))
 
 
 (defn filter-issues-by-numbers
@@ -329,16 +333,28 @@
   [{:keys [parallel-files sequential-lines global project ignore-issues ignore-all file] :as opts}]
   (cond
     (and parallel-files (not sequential-lines))
-    (result/err "Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files.")
+    (result/err "Cannot enable both parallel file and parallel line processing. Use --sequential-lines with --parallel-files."
+                {:operation :validate-options
+                 :conflict :parallel-processing
+                 :suggestion "Add --sequential-lines flag"})
 
     (and global project)
-    (result/err "Cannot specify both --global and --project flags.")
+    (result/err "Cannot specify both --global and --project flags."
+                {:operation :validate-options
+                 :conflict :config-scope
+                 :flags [:global :project]})
 
     (and ignore-issues (not file))
-    (result/err "The --ignore-issues flag requires a --file argument to determine which issues to ignore.")
+    (result/err "The --ignore-issues flag requires a --file argument to determine which issues to ignore."
+                {:operation :validate-options
+                 :missing-flag :file
+                 :dependent-flag :ignore-issues})
 
     (and ignore-all (not file))
-    (result/err "The --ignore-all flag requires a --file argument to determine which issues to ignore.")
+    (result/err "The --ignore-all flag requires a --file argument to determine which issues to ignore."
+                {:operation :validate-options
+                 :missing-flag :file
+                 :dependent-flag :ignore-all})
 
     :else
     (result/ok opts)))

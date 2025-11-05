@@ -92,23 +92,22 @@
         lines-with-issues (:results results-record)]
     (mapcat ship-prep lines-with-issues)))
 
-(defn- load-ignore-set-for-filtering
-  "Loads ignore set for filtering, matching what the user saw in output."
+(defn- load-ignore-map-for-filtering
+  "Loads ignore map for filtering, matching what the user saw in output.
+  Returns map with :ignore (set) and :ignore-issues (vector)."
   [payload opts]
   (if (:skip-ignore opts)
-    #{}
-    (if-let [project-ignore (:project-ignore payload)]
-      project-ignore
-      (set (checks/load-ignore-set! (:check-dir payload)
-                                    (:ignore (:config payload)))))))
+    {:ignore #{} :ignore-issues []}
+    {:ignore (or (:project-ignore payload) #{})
+     :ignore-issues (or (:project-ignore-issues payload) [])}))
 
 (defn- select-and-validate-issue-numbers
   "Filters and validates issues by requested numbers.
   Returns map with :selected-issues, :valid-nums, and :invalid-nums."
-  [all-issues ignore-set issue-nums]
-  (let [filtered-issues (if (empty? ignore-set)
+  [all-issues ignore-map issue-nums]
+  (let [filtered-issues (if (and (empty? (:ignore ignore-map)) (empty? (:ignore-issues ignore-map)))
                           all-issues
-                          (ignore/filter-issues all-issues ignore-set))
+                          (ignore/filter-issues all-issues ignore-map))
         sorted-issues (sort-by (juxt :file :line-num :col-num) filtered-issues)
         total-issues (count sorted-issues)
         selected-issues (cmd/filter-issues-by-numbers sorted-issues issue-nums)
@@ -185,9 +184,9 @@
         vet-result
         (let [payload (:value vet-result)
               all-prepped-issues (extract-prepped-issues payload)
-              ignore-set (load-ignore-set-for-filtering payload opts)
+              ignore-map (load-ignore-map-for-filtering payload opts)
               {:keys [selected-issues total-issues valid-nums invalid-nums]}
-              (select-and-validate-issue-numbers all-prepped-issues ignore-set issue-nums)
+              (select-and-validate-issue-numbers all-prepped-issues ignore-map issue-nums)
               ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
               {:keys [ignore ignore-issues]} (read-ignores-by-scope opts)
               updated-ignores {:ignore ignore

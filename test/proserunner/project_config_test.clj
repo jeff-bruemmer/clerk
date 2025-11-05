@@ -116,17 +116,22 @@
       (is (= ["default"] (:checks parsed)))
       (is (= :extend (:ignore-mode parsed))) ; default
       (is (= :merged (:config-mode parsed))) ; default
-      (is (empty? (:ignore parsed))))))
+      (is (empty? (:ignore parsed)))
+      (is (empty? (:ignore-issues parsed)) "Should default to empty vector"))))
 
 (deftest parse-full-manifest
   (testing "Parsing a complete manifest with all fields"
     (let [manifest {:checks ["default" "./local" "/absolute/path"]
                     :ignore #{"TODO" "FIXME"}
+                    :ignore-issues [{:file "test.md" :line-num 5 :specimen "very"}
+                                   {:file "doc.md" :line-num 10 :specimen "really"}]
                     :ignore-mode :replace
                     :config-mode :project-only}
           parsed (manifest/parse manifest)]
       (is (= 3 (count (:checks parsed))))
       (is (= #{"TODO" "FIXME"} (:ignore parsed)))
+      (is (= 2 (count (:ignore-issues parsed))))
+      (is (= "test.md" (:file (first (:ignore-issues parsed)))))
       (is (= :replace (:ignore-mode parsed)))
       (is (= :project-only (:config-mode parsed))))))
 
@@ -136,7 +141,8 @@
                     :ignore #{"TODO"}}
           parsed (manifest/parse manifest)]
       (is (= :extend (:ignore-mode parsed)))
-      (is (= :merged (:config-mode parsed))))))
+      (is (= :merged (:config-mode parsed)))
+      (is (empty? (:ignore-issues parsed)) "Should default to empty vector"))))
 
 (deftest parse-manifest-validates-checks
   (testing "Validation fails when :checks is missing"
@@ -181,6 +187,14 @@
          (manifest/parse {:checks ["default"]
                                          :ignore ["TODO" "FIXME"]})))))
 
+(deftest parse-manifest-validates-ignore-issues-is-vector
+  (testing "Validation fails when :ignore-issues is not a vector"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"ignore-issues.*vector"
+         (manifest/parse {:checks ["default"]
+                         :ignore-issues #{{:file "test.md" :line-num 1 :specimen "foo"}}})))))
+
 (deftest parse-manifest-multiple-errors
   (testing "Collects and reports all validation errors"
     (let [bad-manifest {:checks nil          ; Error 1
@@ -220,6 +234,16 @@
       (is (= #{"global-1" "global-2" "project-1" "project-2"}
              (:ignore merged))))))
 
+(deftest merge-configs-extend-mode-with-ignore-issues
+  (testing "Merging in :extend mode combines ignore-issues vectors"
+    (let [global {:ignore-issues [{:file "global.md" :line-num 1 :specimen "foo"}]}
+          project {:ignore-issues [{:file "project.md" :line-num 2 :specimen "bar"}]
+                   :ignore-mode :extend}
+          merged (merger/merge-configs global project)]
+      (is (= 2 (count (:ignore-issues merged))))
+      (is (= "global.md" (:file (first (:ignore-issues merged)))))
+      (is (= "project.md" (:file (second (:ignore-issues merged))))))))
+
 (deftest merge-configs-replace-mode
   (testing "Merging in :replace mode uses only project ignore"
     (let [global {:ignore #{"global-1" "global-2"}}
@@ -228,6 +252,15 @@
           merged (merger/merge-configs global project)]
       (is (= #{"project-1" "project-2"}
              (:ignore merged))))))
+
+(deftest merge-configs-replace-mode-with-ignore-issues
+  (testing "Merging in :replace mode uses only project ignore-issues"
+    (let [global {:ignore-issues [{:file "global.md" :line-num 1 :specimen "foo"}]}
+          project {:ignore-issues [{:file "project.md" :line-num 2 :specimen "bar"}]
+                   :ignore-mode :replace}
+          merged (merger/merge-configs global project)]
+      (is (= 1 (count (:ignore-issues merged))))
+      (is (= "project.md" (:file (first (:ignore-issues merged))))))))
 
 (deftest merge-configs-project-only-mode
   (testing "Config mode :project-only ignores global config entirely"

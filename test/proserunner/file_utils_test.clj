@@ -122,3 +122,110 @@
           "Should work when called multiple times")
       (is (.isDirectory (io/file dirpath))
           "Should remain a directory"))))
+
+;;; Atomic operation cleanup tests
+
+(deftest atomic-spit-success
+  (testing "atomic-spit successfully writes file"
+    (let [filepath (file-utils/join-path @test-dir "atomic-test.txt")
+          content "test content"]
+
+      (file-utils/atomic-spit filepath content)
+
+      (is (.exists (io/file filepath))
+          "File should be created")
+      (is (= content (slurp filepath))
+          "Content should match"))))
+
+(deftest atomic-spit-temp-file-cleanup
+  (testing "atomic-spit cleans up temp file on write failure"
+    (let [parent-dir (io/file @test-dir "readonly-parent")
+          _ (.mkdirs parent-dir)
+          _ (.setWritable parent-dir false)  ; Make directory read-only
+          filepath (file-utils/join-path (.getPath parent-dir) "file.txt")
+          temp-files-before (filter #(.startsWith (.getName %) ".proserunner-")
+                                   (.listFiles (io/file @test-dir)))]
+
+      ;; Attempt write (should fail due to permissions)
+      (try
+        (file-utils/atomic-spit filepath "content")
+        (catch Exception _))
+
+      ;; Restore permissions for cleanup
+      (.setWritable parent-dir true)
+
+      ;; Check for leaked temp files in parent of parent (where temp files are created)
+      (let [temp-files-after (filter #(.startsWith (.getName %) ".proserunner-")
+                                    (.listFiles (io/file @test-dir)))]
+        (is (= (count temp-files-before) (count temp-files-after))
+            "Should not leak temp files even when write fails")))))
+
+(deftest atomic-spit-overwrites-existing
+  (testing "atomic-spit atomically overwrites existing file"
+    (let [filepath (file-utils/join-path @test-dir "overwrite-atomic.txt")]
+
+      (spit filepath "original")
+      (is (= "original" (slurp filepath)))
+
+      (file-utils/atomic-spit filepath "updated")
+      (is (= "updated" (slurp filepath))
+          "Should atomically replace file content"))))
+
+(deftest atomic-spit-concurrent-writes
+  (testing "atomic-spit handles concurrent writes safely"
+    (let [filepath (file-utils/join-path @test-dir "concurrent.txt")
+          num-threads 5
+          latch (java.util.concurrent.CountDownLatch. num-threads)
+          results (atom [])]
+
+      (doseq [i (range num-threads)]
+        (.start
+         (Thread.
+          (fn []
+            (.await latch)
+            (try
+              (file-utils/atomic-spit filepath (str "thread-" i))
+              (swap! results conj {:success true :thread i})
+              (catch Exception e
+                (swap! results conj {:success false :thread i :error (.getMessage e)})))))))
+
+      ;; Start all threads simultaneously
+      (dotimes [_ num-threads] (.countDown latch))
+      (Thread/sleep 200)  ; Give threads time to complete
+
+      ;; Verify file exists and no exceptions occurred
+      (is (.exists (io/file filepath))
+          "File should exist after concurrent writes")
+      (is (every? :success @results)
+          "All concurrent writes should succeed without exceptions"))))
+
+;;; Path normalization tests
+
+(deftest normalize-path-relative-stays-relative
+  (testing "normalize-path keeps relative paths relative"
+    (let [relative-path "docs/file.md"
+          result (file-utils/normalize-path relative-path)]
+      (is (= "docs/file.md" result)
+          "Relative path should remain unchanged"))))
+
+(deftest normalize-path-absolute-under-cwd
+  (testing "normalize-path converts absolute paths under cwd to relative"
+    (let [cwd (System/getProperty "user.dir")
+          absolute-path (file-utils/join-path cwd "docs" "file.md")
+          result (file-utils/normalize-path absolute-path)]
+      (is (= (file-utils/join-path "docs" "file.md") result)
+          "Absolute path under cwd should become relative"))))
+
+(deftest normalize-path-dot-slash-prefix
+  (testing "normalize-path handles ./ prefix in paths"
+    (let [dot-path "./docs/file.md"
+          result (file-utils/normalize-path dot-path)]
+      (is (= (file-utils/join-path "docs" "file.md") result)
+          "./ prefix should be normalized"))))
+
+(deftest normalize-path-outside-cwd
+  (testing "normalize-path keeps absolute paths outside cwd as absolute"
+    (let [outside-path "/tmp/somewhere/file.md"
+          result (file-utils/normalize-path outside-path)]
+      (is (= outside-path result)
+          "Paths outside cwd should remain absolute"))))

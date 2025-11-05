@@ -22,7 +22,10 @@
 
 (defn atomic-spit
   "Atomically writes content to a file by writing to a temp file and renaming.
-   This prevents partial writes and race conditions during concurrent updates."
+   This prevents partial writes and race conditions during concurrent updates.
+
+   On failure, attempts to clean up the temporary file. If cleanup fails,
+   logs a warning but still propagates the original exception."
   [file-path content]
   (let [file (io/file file-path)
         parent-dir (.getParentFile file)
@@ -38,8 +41,15 @@
                    [java.nio.file.StandardCopyOption/ATOMIC_MOVE
                     java.nio.file.StandardCopyOption/REPLACE_EXISTING]))
       (catch Exception e
-        ;; Clean up temp file on failure
-        (.delete temp-file)
+        ;; Clean up temp file on failure with nested try/catch
+        (try
+          (.delete temp-file)
+          (catch Exception cleanup-error
+            ;; Log cleanup failure but don't mask original error
+            (binding [*out* *err*]
+              (println (str "Warning: Failed to cleanup temp file " (.getName temp-file)
+                           ": " (.getMessage cleanup-error))))))
+        ;; Always rethrow original exception
         (throw e)))))
 
 (defn ensure-parent-dir
@@ -79,3 +89,28 @@
     ;; Creates the entire directory structure"
   [dirpath]
   (.mkdirs (io/file dirpath)))
+
+(defn normalize-path
+  "Normalizes a file path to be relative to the current working directory.
+  This ensures consistent path representation across the application.
+
+  Examples:
+    ;; When cwd is /home/user/project
+    (normalize-path \"/home/user/project/docs/file.md\")
+    ;; => \"docs/file.md\"
+
+    (normalize-path \"docs/file.md\")
+    ;; => \"docs/file.md\"
+
+    (normalize-path \"./docs/file.md\")
+    ;; => \"docs/file.md\""
+  [filepath]
+  (let [file (io/file filepath)
+        absolute-file (.getAbsoluteFile file)
+        cwd (io/file (System/getProperty "user.dir"))
+        absolute-cwd (.getAbsoluteFile cwd)]
+    (if (.startsWith (.toPath absolute-file) (.toPath absolute-cwd))
+      ;; File is under working directory, make it relative
+      (str (.relativize (.toPath absolute-cwd) (.toPath absolute-file)))
+      ;; File is outside working directory, return absolute path
+      (.getPath absolute-file))))

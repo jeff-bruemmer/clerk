@@ -3,6 +3,7 @@
   (:gen-class)
   (:require [clojure.java.io :as io]
             [proserunner.result :as result]
+            [proserunner.file-utils :as file-utils]
             [clojure.string :as string]))
 
 (set! *warn-on-reflection* true)
@@ -15,7 +16,7 @@
 
 ;; Line represents a line of text to be vetted.
 ;; Fields:
-;; - file: Path to source file (abbreviated with ~ for home)
+;; - file: Path to source file (relative to working directory)
 ;; - text: Text content of the line
 ;; - line-num: Line number in the source file
 ;; - code?: Boolean indicating if line is within a code block
@@ -156,7 +157,7 @@
   ([code-blocks filepath check-quoted-text]
    (result/try-result-with-context
     (fn []
-      (let [homepath (home-path filepath)
+      (let [normalized-path (file-utils/normalize-path filepath)
             code (atom false) ;; Are we in a code block?
             boundary "```" ;; assumes code blocks are delimited by triple backticks.
             ;; If we see a boundry, we're either entering or exiting a code block.
@@ -171,7 +172,7 @@
               (remove #(string/blank? (:text %)))
               (map (comp
                     map->Line
-                    #(assoc % :file homepath)
+                    #(assoc % :file normalized-path)
                     code-fn))
               (map mark-quoted-text)
               (map (partial process-quoted-text check-quoted-text))

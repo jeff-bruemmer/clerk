@@ -108,6 +108,10 @@
    (v/with-default #{}
      (v/type-check ":ignore" set? "a set"))
 
+   :ignore-issues
+   (v/with-default []
+     (v/type-check ":ignore-issues" vector? "a vector"))
+
    :ignore-mode
    (v/with-default :extend
      (v/enum-check ":ignore-mode" #{:extend :replace}))
