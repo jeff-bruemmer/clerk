@@ -244,4 +244,57 @@
             ;; Verify correct ignore patterns loaded
             (is (= #{"adverb" "cliche"} (-> input :config :ignore)))
             ;; Verify project-ignore also populated
-            (is (= #{"adverb" "cliche"} (:project-ignore input)))))))))
+            (is (= #{"adverb" "cliche"} (:project-ignore input))))))))
+
+(deftest load-config-and-dir-calls-fetch-or-create-test
+  (testing "load-config-and-dir should call fetch-or-create! for both project and global configs"
+    ;; This ensures auto-download logic runs for all config types
+    (let [fetch-called (atom false)
+          mock-config {:checks [] :ignore #{}}
+          mock-project-config {:source :project :checks [] :ignore #{}}]
+
+      ;; Mock fetch-or-create! to track if it's called
+      (with-redefs [proserunner.config/fetch-or-create!
+                    (fn [_]
+                      (reset! fetch-called true)
+                      mock-config)]
+
+        ;; Test with project config (source = :project)
+        (reset! fetch-called false)
+        (let [result (#'input/load-config-and-dir nil mock-project-config)]
+          (is @fetch-called
+              "fetch-or-create! should be called for project configs")
+          (is (some? (:config result)))
+          (is (= "" (:check-dir result))))
+
+        ;; Test with global config (source != :project)
+        (reset! fetch-called false)
+        (let [non-project-config (assoc mock-project-config :source :global)
+              result (#'input/load-config-and-dir nil non-project-config)]
+          (is @fetch-called
+              "fetch-or-create! should be called for global configs")
+          (is (some? (:config result)))))))
+
+  (testing "fetch-or-create! is called with nil for project configs to use default path"
+    ;; Project configs should use the default config path for auto-download
+    (let [config-arg (atom nil)
+          mock-config {:checks [] :ignore #{}}
+          mock-project-config {:source :project :checks [] :ignore #{}}]
+
+      (with-redefs [proserunner.config/fetch-or-create!
+                    (fn [config]
+                      (reset! config-arg config)
+                      mock-config)]
+
+        ;; For project config, should call with nil to use default path
+        (reset! config-arg :not-called)
+        (#'input/load-config-and-dir "custom-config" mock-project-config)
+        (is (nil? @config-arg)
+            "Should call fetch-or-create! with nil for project configs")
+
+        ;; For non-project config, should pass through the config arg
+        (reset! config-arg :not-called)
+        (let [non-project-config (assoc mock-project-config :source :global)]
+          (#'input/load-config-and-dir "custom-config" non-project-config)
+          (is (= "custom-config" @config-arg)
+              "Should pass config arg through for non-project configs")))))))
