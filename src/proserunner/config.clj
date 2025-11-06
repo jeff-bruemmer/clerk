@@ -255,7 +255,7 @@
         (println "Created Proserunner directory: " (sys/filepath ".proserunner/"))
         (println "You can store custom checks in: " (sys/filepath ".proserunner" "custom/"))
         (create-default-config-entry!)
-        (result/ok (loader/safe-load-config default-config))))))
+        (loader/load-config-from-file default-config)))))
 
 (defn update-default-checks
   "Refreshes default checks when remote version is newer than local cache."
@@ -266,10 +266,10 @@
       (do
         (println "Warning: Failed to update checks:" (:error dl-result))
         (println "Continuing with existing checks...")
-        (loader/safe-load-config default-config))
+        (result/result-or-exit (loader/load-config-from-file default-config)))
       (do
         (println "Checks updated.")
-        (loader/safe-load-config default-config)))))
+        (result/result-or-exit (loader/load-config-from-file default-config))))))
 
 (defn default
   "If current config isn't valid, use the default."
@@ -351,7 +351,7 @@
       (cond
         ;; Custom config file specified via -c flag
         (and (not using-default?) (.exists (io/file config-filepath)))
-        (loader/safe-load-config config-filepath)
+        (result/result-or-exit (loader/load-config-from-file config-filepath))
 
         ;; In a project directory - load project config (merges with global)
         (and using-default? in-project?)
@@ -363,8 +363,8 @@
 
         ;; Global config exists
         config-exists?
-        (loader/safe-load-config default-config)
+        (result/result-or-exit (loader/load-config-from-file default-config))
 
         ;; Fallback
         :else
-        (loader/safe-load-config default-config)))))
+        (result/result-or-exit (loader/load-config-from-file default-config))))))

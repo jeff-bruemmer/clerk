@@ -28,16 +28,6 @@
        (types/map->Config with-defaults)))
    {:filepath filepath :operation :load-config}))
 
-(defn safe-load-config
-  "Loads and parses config file, exiting on error (for backwards compatibility).
-
-  Prefer using load-config-from-file for better error handling."
-  [filepath]
-  (let [result (load-config-from-file filepath)]
-    (if (result/success? result)
-      (:value result)
-      (error/exit (str "Proserunner could not load config file '" filepath "':\n"
-                      (:error result) "\n")))))
 
 (defn load-config
   "Parse config EDN string and return Config record.

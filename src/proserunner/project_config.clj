@@ -47,14 +47,18 @@
   (let [config-path (sys/filepath ".proserunner" "config.edn")
         config-file (io/file config-path)]
     (if (.exists config-file)
-      (let [parsed-config-map (loader/safe-load-config config-path)
-            global-proserunner-dir (sys/filepath ".proserunner" "")
-            normalized-checks (mapv #(normalize-check-entry global-proserunner-dir %)
-                                   (:checks parsed-config-map))
-            {:keys [ignore ignore-issues]} (ignore-file/read)]
-        {:checks normalized-checks
-         :ignore ignore
-         :ignore-issues ignore-issues})
+      (let [config-result (loader/load-config-from-file config-path)]
+        (if (result/success? config-result)
+          (let [parsed-config-map (:value config-result)
+                global-proserunner-dir (sys/filepath ".proserunner" "")
+                normalized-checks (mapv #(normalize-check-entry global-proserunner-dir %)
+                                       (:checks parsed-config-map))
+                {:keys [ignore ignore-issues]} (ignore-file/read)]
+            {:checks normalized-checks
+             :ignore ignore
+             :ignore-issues ignore-issues})
+          ;; If config load fails, return empty config (graceful degradation)
+          {:checks [] :ignore #{} :ignore-issues #{}}))
       {:ignore #{} :ignore-issues #{}})))
 
 (defn- build-project-config

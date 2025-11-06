@@ -80,11 +80,9 @@
           (let [command-result (cmd/dispatch-command expanded-options)
                 effect-result (effects/execute-command-result command-result)]
             ;; Return options for follow-up activity (like printing time)
-            (if (result/failure? effect-result)
-              ;; Effect failed - exit with error code
-              (do
-                (System/exit 1)
-                expanded-options)
+            ;; Use result-or-exit to handle failures consistently
+            (do
+              (result/result-or-exit effect-result 1)
               expanded-options)))))))
 
 (defn run
