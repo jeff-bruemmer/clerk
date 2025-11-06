@@ -136,8 +136,10 @@
 
         (is (result/success? result)
             "Should return Success when all checks load")
-        (is (= 2 (count (:value result)))
-            "Should return all valid checks")))))
+        (is (= 2 (count (:checks (:value result))))
+            "Should return all valid checks")
+        (is (empty? (:warnings (:value result)))
+            "Should have no warnings when all checks load successfully")))))
 
 (deftest create-checks-partial-failure
   (testing "create succeeds with warnings when some files fail"
@@ -149,15 +151,21 @@
             options {:config {:checks [{:directory temp-dir :files ["good" "bad"]}]}
                      :check-dir temp-dir
                      :project-ignore #{}}
-            ;; Capture warning output
-            result (silently (check/create options))]
+            result (check/create options)]
 
         (is (result/success? result)
             "Should return Success even when some checks fail to load")
-        (is (= 1 (count (:value result)))
+        (is (= 1 (count (:checks (:value result))))
             "Should return only valid checks")
-        (is (= "good" (:name (first (:value result))))
-            "Should load the valid check")))))
+        (is (= "good" (:name (first (:checks (:value result)))))
+            "Should load the valid check")
+        (is (= 1 (count (:warnings (:value result))))
+            "Should have one warning for the failed check")
+        (let [warning (first (:warnings (:value result)))]
+          (is (contains? warning :path)
+              "Warning should contain :path")
+          (is (contains? warning :error)
+              "Warning should contain :error"))))))
 
 (deftest create-checks-all-fail
   (testing "create returns Failure when no checks load"
@@ -167,7 +175,7 @@
             options {:config {:checks [{:directory temp-dir :files ["bad"]}]}
                      :check-dir temp-dir
                      :project-ignore #{}}
-            result (silently (check/create options))]
+            result (check/create options)]
 
         (is (result/failure? result)
             "Should return Failure when no checks load successfully")
@@ -182,7 +190,7 @@
       (let [options {:config {:checks [{:directory temp-dir :files ["nonexistent"]}]}
                      :check-dir temp-dir
                      :project-ignore #{}}
-            result (silently (check/create options))]
+            result (check/create options)]
 
         (is (result/failure? result)
             "Should return Failure when check files don't exist")
@@ -203,7 +211,7 @@
             result (check/create options)]
 
         (is (result/success? result))
-        (is (= 1 (count (:value result))))
-        (let [loaded-check (first (:value result))]
+        (is (= 1 (count (:checks (:value result)))))
+        (let [loaded-check (first (:checks (:value result)))]
           (is (= ["foo" "baz"] (:specimens loaded-check))
               "Should filter out ignored specimen"))))))

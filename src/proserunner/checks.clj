@@ -164,8 +164,10 @@
 (defn create
   "Takes an options ball, and loads all the specified checks.
 
-  Returns Result<vector<Check>> - Success with filtered checks, or Failure if none load.
-  Logs warnings for partially failed loads but continues with valid checks."
+  Returns Result<map> with:
+    - Success: {:checks [Check...], :warnings [{:path str :error str}...]}
+    - Failure: If no checks load successfully
+  Returns warnings as data for partially failed loads."
   [options]
   (let [{:keys [config check-dir project-ignore]} options
         checks (:checks config)
@@ -188,12 +190,6 @@
         filtered-checks (mapv #(apply-ignore-filter % project-ignore) loaded-checks)
         failed-count (count failed-checks)]
 
-    ;; Log warnings for partial failures
-    (when (pos? failed-count)
-      (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped."))
-      (doseq [{:keys [path error]} failed-checks]
-        (println (str "  - " path ": " error))))
-
     ;; Return Failure if no checks loaded successfully
     (if (empty? filtered-checks)
       (result/err "No valid checks could be loaded. Please check your configuration."
@@ -201,5 +197,6 @@
                    :total-attempts (count all-check-paths)
                    :successful 0
                    :failed failed-count})
-      (result/ok filtered-checks))))
+      (result/ok {:checks filtered-checks
+                  :warnings failed-checks}))))
 

@@ -26,6 +26,35 @@
              *err* (java.io.StringWriter.)]
      ~@body))
 
+(defn capture-output
+  "Captures stdout during function execution and returns both output and result.
+
+  Returns a map with :output (string) and :result (function return value).
+
+  Example:
+    (capture-output #(do (println \"Hello\") 42))
+    ;; => {:output \"Hello\\n\" :result 42}"
+  [f]
+  (let [out-writer (java.io.StringWriter.)]
+    (binding [*out* out-writer]
+      (let [result (f)]
+        {:output (str out-writer)
+         :result result}))))
+
+(defmacro with-captured-output
+  "Executes body with stdout captured, binding output to specified name.
+
+  Example:
+    (with-captured-output [output]
+      (println \"test\")
+      (is (= \"test\\n\" output)))"
+  [[binding-name] & body]
+  `(let [out-writer# (java.io.StringWriter.)]
+     (binding [*out* out-writer#]
+       (let [result# (do ~@body)
+             ~binding-name (str out-writer#)]
+         result#))))
+
 ;;; File System Utilities
 
 (defn delete-recursively
@@ -138,3 +167,43 @@
   [home-path & body]
   `(with-system-property "user.home" ~home-path
      (fn [] ~@body)))
+
+;;; Exit Prevention
+
+(def ^:dynamic *exit-called* nil)
+(def ^:dynamic *exit-code* nil)
+
+(defn mock-exit
+  "Mock System/exit for testing. Records exit was called and the code."
+  [code]
+  (when *exit-called*
+    (reset! *exit-called* true)
+    (reset! *exit-code* code))
+  (throw (ex-info "System.exit prevented" {:exit-code code})))
+
+(defmacro with-prevented-exit
+  "Prevents System/exit during test execution.
+
+  Throws ex-info instead with {:exit-code N} in ex-data.
+
+  Example:
+    (with-prevented-exit
+      (try
+        (System/exit 1)
+        (catch Exception e
+          (is (= 1 (:exit-code (ex-data e)))))))"
+  [& body]
+  `(binding [*exit-called* (atom false)
+             *exit-code* (atom nil)]
+     (with-redefs [System/exit mock-exit]
+       ~@body)))
+
+(defn exit-called?
+  "Returns true if System/exit was called during with-prevented-exit block."
+  []
+  (and *exit-called* @*exit-called*))
+
+(defn exit-code
+  "Returns the exit code passed to System/exit, or nil if not called."
+  []
+  (and *exit-code* @*exit-code*))

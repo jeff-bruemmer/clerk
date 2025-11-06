@@ -145,7 +145,7 @@
                    :lines lines
                    :config config
                    :check-dir check-dir
-                   :checks loaded-checks
+                   :checks (:checks loaded-checks)
                    :cached-result (store/inventory file)
                    :output output
                    :no-cache no-cache

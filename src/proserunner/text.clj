@@ -143,6 +143,40 @@
   [filepath]
   (string/replace filepath (System/getProperty "user.home") "~"))
 
+(defn- mark-code-blocks
+  "Marks lines as inside or outside code blocks based on boundary markers.
+   Pure function using reduce to track state immutably.
+
+   Returns vector of lines with :code? field set appropriately."
+  [lines boundary]
+  (-> (reduce
+        (fn [acc line]
+          (let [in-code? (:in-code? acc)
+                is-boundary? (string/starts-with? (:text line) boundary)
+                new-in-code? (if is-boundary? (not in-code?) in-code?)
+                marked-line (assoc line :code? (if is-boundary? new-in-code? in-code?))]
+            {:in-code? new-in-code?
+             :lines (conj (:lines acc) marked-line)}))
+        {:in-code? false :lines []}
+        lines)
+      :lines))
+
+(defn- apply-line-transformations
+  "Applies transformation pipeline to lines: converts to Line records,
+   marks quoted text, and processes quoted text based on flag."
+  [lines normalized-path check-quoted-text]
+  (->> lines
+       (map (comp map->Line #(assoc % :file normalized-path)))
+       (map mark-quoted-text)
+       (map (partial process-quoted-text check-quoted-text))))
+
+(defn- filter-excluded-lines
+  "Removes boundary markers and optionally code blocks from lines."
+  [lines boundary code-blocks]
+  (remove #(or (= boundary (:text %))
+               (and (not code-blocks) (:code? %)))
+          lines))
+
 (defn fetch!
   "Takes a code-blocks boolean and a filepath string. It loads the file
   and returns a Result containing decorated lines. Code-blocks is false by default,
@@ -158,28 +192,16 @@
    (result/try-result-with-context
     (fn []
       (let [normalized-path (file-utils/normalize-path filepath)
-            code (atom false) ;; Are we in a code block?
-            boundary "```" ;; assumes code blocks are delimited by triple backticks.
-            ;; If we see a boundry, we're either entering or exiting a code block.
-            code-fn (fn [line] (if (string/starts-with? (:text line) boundary)
-                                 (assoc line :code? (swap! code not))
-                                 (assoc line :code? @code)))]
+            boundary "```"]
         (vec
          (->> filepath
               slurp
               string/split-lines
               (map-indexed number-lines)
               (remove #(string/blank? (:text %)))
-              (map (comp
-                    map->Line
-                    #(assoc % :file normalized-path)
-                    code-fn))
-              (map mark-quoted-text)
-              (map (partial process-quoted-text check-quoted-text))
-              (remove #(or
-                        (= boundary (:text %))
-                        (and (not code-blocks)
-                             (:code? %))))))))
+              (#(mark-code-blocks % boundary))
+              (#(apply-line-transformations % normalized-path check-quoted-text))
+              (#(filter-excluded-lines % boundary code-blocks))))))
     {:filepath filepath :operation :fetch})))
 
 

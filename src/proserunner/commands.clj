@@ -12,7 +12,9 @@
 
   The effects namespace executes these descriptions."
   (:gen-class)
-  (:require [proserunner.ignore.audit :as ignore-audit]
+  (:require [proserunner.context :as context]
+            [proserunner.config.manifest :as manifest]
+            [proserunner.ignore.audit :as ignore-audit]
             [proserunner.output.format :as output-fmt]
             [proserunner.result :as result]
             [clojure.java.io :as io]
@@ -21,9 +23,8 @@
 (defn project-exists?
   "Checks if a .proserunner/config.edn file exists in the current directory."
   []
-  (let [project-root (System/getProperty "user.dir")
-        config-file (io/file project-root ".proserunner" "config.edn")]
-    (.exists config-file)))
+  (let [start-dir (System/getProperty "user.dir")]
+    (boolean (manifest/find start-dir))))
 
 (defn determine-target
   "Determines whether to use :project or :global based on flags and project existence.
@@ -32,19 +33,18 @@
   - If --global flag is explicitly set, use :global
   - If --project flag is explicitly set, use :project
   - If .proserunner/config.edn exists, default to :project
-  - Otherwise, default to :global"
-  [{:keys [global project]}]
-  (cond
-    global  :global
-    project :project
-    (project-exists?) :project
-    :else :global))
+  - Otherwise, default to :global
+
+  Throws ExceptionInfo if both --global and --project are specified, or if
+  --project is specified but no project exists."
+  [opts]
+  (:target (context/determine-context opts)))
 
 (defn get-target-context
   "Returns a map with target scope information for commands.
 
   Options:
-  - :use-determine-target? - if true, uses determine-target logic (checks project existence)
+  - :use-determine-target? - if true, validates project existence; otherwise uses flags directly
   - :include-alt-msg - if true, includes :alt-msg suggesting alternate scope
   - :alt-msg-template - custom alternate message template
 
@@ -56,20 +56,31 @@
   ([opts]
    (get-target-context opts nil))
   ([opts {:keys [include-alt-msg alt-msg-template use-determine-target?]}]
-   (let [target (if use-determine-target?
-                  (determine-target opts)
-                  (if (:project opts) :project :global))
-         msg-context (if (= target :project) "project" "global")
-         base-result {:target target
-                      :msg-context msg-context
-                      :opts-with-target (assoc opts :project (= target :project))}]
-     (if include-alt-msg
-       (assoc base-result :alt-msg
-              (or alt-msg-template
-                  (if (= target :project)
-                    "Use --global to add to global ignore list instead."
-                    "Use --project to add to project ignore list instead.")))
-       base-result))))
+   (if use-determine-target?
+     ;; Full context resolution with project existence validation
+     (let [context-opts (cond-> opts
+                          include-alt-msg (assoc :include-alt-msg true)
+                          alt-msg-template (assoc :alt-msg-template alt-msg-template)
+                          true (assoc :normalize-opts true))
+           result (context/determine-context context-opts)]
+       (cond-> {:target (:target result)
+                :msg-context (:msg-context result)
+                :opts-with-target (:opts-with-target result)}
+         (:alt-msg result) (assoc :alt-msg (:alt-msg result))))
+
+     ;; Simple mode: use flags directly without validation
+     (let [target (if (:project opts) :project :global)
+           msg-context (if (= target :project) "project" "global")
+           base-result {:target target
+                        :msg-context msg-context
+                        :opts-with-target (assoc opts :project (= target :project))}]
+       (if include-alt-msg
+         (assoc base-result :alt-msg
+                (or alt-msg-template
+                    (if (= target :project)
+                      "Use --global to add to global ignore list instead."
+                      "Use --project to add to project ignore list instead.")))
+         base-result)))))
 
 (set! *warn-on-reflection* true)
 
