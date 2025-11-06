@@ -55,7 +55,7 @@
         {:checks normalized-checks
          :ignore ignore
          :ignore-issues ignore-issues})
-      {:ignore #{} :ignore-issues []})))
+      {:ignore #{} :ignore-issues #{}})))
 
 (defn- build-project-config
   "Builds final project config from merged config and resolved checks."
@@ -163,7 +163,7 @@
   "Default template for a new project manifest."
   {:checks ["default"]
    :ignore #{}
-   :ignore-issues []
+   :ignore-issues #{}
    :ignore-mode :extend
    :config-mode :merged})
 

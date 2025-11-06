@@ -73,18 +73,18 @@
 
 (defn- read-ignores-by-scope
   "Reads current ignores from project or global scope.
-   Returns map with :ignore (set) and :ignore-issues (vector)."
+   Returns map with :ignore (set) and :ignore-issues (set)."
   [opts]
   (if (:project opts)
     (let [project-root (get-project-root opts)
           config (project-conf/read project-root)]
       {:ignore (or (:ignore config) #{})
-       :ignore-issues (or (:ignore-issues config) [])})
+       :ignore-issues (or (:ignore-issues config) #{})})
     (ignore-file/read)))
 
 (defn- write-ignores-by-scope!
   "Writes ignores map to project or global scope.
-   Takes map with :ignore (set) and :ignore-issues (vector)."
+   Takes map with :ignore (set) and :ignore-issues (set)."
   [ignores opts]
   (if (:project opts)
     (let [project-root (get-project-root opts)
@@ -125,12 +125,12 @@
 
 (defn- load-ignore-map-for-filtering
   "Loads ignore map for filtering, matching what the user saw in output.
-  Returns map with :ignore (set) and :ignore-issues (vector)."
+  Returns map with :ignore (set) and :ignore-issues (set)."
   [payload opts]
   (if (:skip-ignore opts)
-    {:ignore #{} :ignore-issues []}
+    {:ignore #{} :ignore-issues #{}}
     {:ignore (or (:project-ignore payload) #{})
-     :ignore-issues (or (:project-ignore-issues payload) [])}))
+     :ignore-issues (or (:project-ignore-issues payload) #{})}))
 
 (defn- select-and-validate-issue-numbers
   "Filters and validates issues by requested numbers.
@@ -203,7 +203,7 @@
                _ (update-ignores-by-scope!
                   (fn [ignores]
                     (update ignores :ignore-issues
-                            #(vec (concat % ignore-entries))))
+                            #(into (or % #{}) ignore-entries)))
                   opts)
                {:keys [msg-context] :as target-info} (scope/get-target-info opts)]
            (println (format "Added %d contextual ignore(s) to %s ignore list."
@@ -229,7 +229,7 @@
                _ (update-ignores-by-scope!
                   (fn [ignores]
                     (update ignores :ignore-issues
-                            #(vec (concat % ignore-entries))))
+                            #(into (or % #{}) ignore-entries)))
                   opts)
                {:keys [msg-context] :as target-info} (scope/get-target-info opts)]
            ;; Provide feedback

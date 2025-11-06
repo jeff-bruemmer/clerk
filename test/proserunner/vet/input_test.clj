@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [proserunner.vet.input :as input]
             [proserunner.result :as result]
-            [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
+            [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently with-system-property]]
             [clojure.java.io :as io]
             [clojure.string]
             [editors.registry :as registry]
@@ -216,3 +216,32 @@
             lines (:lines input)]
         (is (pos? (count lines)))
         (is (every? #(clojure.string/includes? (:file %) "keep.md") lines))))))
+
+(deftest make-input-loads-project-ignore-patterns
+  (testing "Project config ignore patterns are loaded into Input"
+    (with-system-property "user.dir" @test-temp-dir
+      (fn []
+        (let [temp-dir @test-temp-dir
+              proserunner-dir (io/file temp-dir ".proserunner")
+              _ (.mkdirs proserunner-dir)
+              ;; Create project config with ignore patterns - use "default" checks from global
+              _ (spit (str proserunner-dir File/separator "config.edn")
+                      (pr-str {:checks ["default"]
+                               :ignore #{"adverb" "cliche"}
+                               :ignore-mode :extend}))
+              _ (spit (str temp-dir File/separator "test.md") "# Test")
+              opts {:file temp-dir
+                    :config (str (System/getProperty "user.home")
+                                File/separator ".proserunner"
+                                File/separator "config.edn")
+                    :output "table"
+                    :parallel-files false}
+              input-result (input/make opts)]
+          (is (result/success? input-result))
+          (let [input (:value input-result)]
+            ;; Verify ignore is a set, not a string
+            (is (set? (-> input :config :ignore)))
+            ;; Verify correct ignore patterns loaded
+            (is (= #{"adverb" "cliche"} (-> input :config :ignore)))
+            ;; Verify project-ignore also populated
+            (is (= #{"adverb" "cliche"} (:project-ignore input)))))))))

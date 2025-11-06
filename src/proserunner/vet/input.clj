@@ -38,7 +38,7 @@
 ;; - no-cache: Boolean flag to bypass cache
 ;; - parallel-lines: Boolean flag for parallel line processing
 ;; - project-ignore: Set of project-specific simple ignore patterns
-;; - project-ignore-issues: Vector of contextual ignore maps
+;; - project-ignore-issues: Set of contextual ignore maps
 
 (defn build-ignore-patterns
   "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
@@ -99,7 +99,7 @@
   [config project-config]
   (if (= :project (:source project-config))
     {:config (types/map->Config {:checks (:checks project-config)
-                                 :ignore "ignore"})
+                                 :ignore (:ignore project-config)})
      :check-dir ""}
     {:config (conf/fetch-or-create! config)
      :check-dir (sys/check-dir config)}))
@@ -123,7 +123,7 @@
         {:keys [config check-dir]} (load-config-and-dir config project-config)
 
         project-ignore (if skip-ignore #{} (:ignore project-config))
-        project-ignore-issues (if skip-ignore [] (:ignore-issues project-config))
+        project-ignore-issues (if skip-ignore #{} (:ignore-issues project-config))
 
         updated-options (assoc options
                               :config config

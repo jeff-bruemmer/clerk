@@ -109,8 +109,8 @@
      (v/type-check ":ignore" set? "a set"))
 
    :ignore-issues
-   (v/with-default []
-     (v/type-check ":ignore-issues" vector? "a vector"))
+   (v/with-default #{}
+     (v/type-check ":ignore-issues" set? "a set"))
 
    :ignore-mode
    (v/with-default :extend

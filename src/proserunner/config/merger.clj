@@ -12,11 +12,11 @@
     (or project-ignore #{})))
 
 (defn- merge-ignore-issues
-  "Merges ignore-issues vectors based on ignore-mode."
+  "Merges ignore-issues sets based on ignore-mode."
   [global-ignore-issues project-ignore-issues ignore-mode]
   (if (= ignore-mode :extend)
-    (vec (concat (or global-ignore-issues []) (or project-ignore-issues [])))
-    (or project-ignore-issues [])))
+    (into (or global-ignore-issues #{}) (or project-ignore-issues #{}))
+    (or project-ignore-issues #{})))
 
 (defn merge-configs
   "Merges global and project configurations based on project settings.

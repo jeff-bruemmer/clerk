@@ -168,7 +168,8 @@
 (defn handle-add-ignore
   "Handler for adding a specimen to ignore list."
   [{:keys [add-ignore] :as opts}]
-  (let [{:keys [msg-context alt-msg]} (get-target-context opts {:include-alt-msg true})]
+  (let [{:keys [msg-context alt-msg]} (get-target-context opts {:include-alt-msg true
+                                                                  :use-determine-target? true})]
     {:effects [[:ignore/add add-ignore opts]]
      :messages [(format "Added to %s ignore list: %s" msg-context add-ignore)
                 alt-msg]}))

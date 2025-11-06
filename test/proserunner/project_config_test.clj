@@ -117,21 +117,21 @@
       (is (= :extend (:ignore-mode parsed))) ; default
       (is (= :merged (:config-mode parsed))) ; default
       (is (empty? (:ignore parsed)))
-      (is (empty? (:ignore-issues parsed)) "Should default to empty vector"))))
+      (is (empty? (:ignore-issues parsed)) "Should default to empty set"))))
 
 (deftest parse-full-manifest
   (testing "Parsing a complete manifest with all fields"
     (let [manifest {:checks ["default" "./local" "/absolute/path"]
                     :ignore #{"TODO" "FIXME"}
-                    :ignore-issues [{:file "test.md" :line-num 5 :specimen "very"}
-                                   {:file "doc.md" :line-num 10 :specimen "really"}]
+                    :ignore-issues #{{:file "test.md" :line-num 5 :specimen "very"}
+                                     {:file "doc.md" :line-num 10 :specimen "really"}}
                     :ignore-mode :replace
                     :config-mode :project-only}
           parsed (manifest/parse manifest)]
       (is (= 3 (count (:checks parsed))))
       (is (= #{"TODO" "FIXME"} (:ignore parsed)))
       (is (= 2 (count (:ignore-issues parsed))))
-      (is (= "test.md" (:file (first (:ignore-issues parsed)))))
+      (is (contains? (:ignore-issues parsed) {:file "test.md" :line-num 5 :specimen "very"}))
       (is (= :replace (:ignore-mode parsed)))
       (is (= :project-only (:config-mode parsed))))))
 
@@ -187,13 +187,13 @@
          (manifest/parse {:checks ["default"]
                                          :ignore ["TODO" "FIXME"]})))))
 
-(deftest parse-manifest-validates-ignore-issues-is-vector
-  (testing "Validation fails when :ignore-issues is not a vector"
+(deftest parse-manifest-validates-ignore-issues-is-set
+  (testing "Validation fails when :ignore-issues is not a set"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
-         #"ignore-issues.*vector"
+         #"ignore-issues.*set"
          (manifest/parse {:checks ["default"]
-                         :ignore-issues #{{:file "test.md" :line-num 1 :specimen "foo"}}})))))
+                         :ignore-issues [{:file "test.md" :line-num 1 :specimen "foo"}]})))))
 
 (deftest parse-manifest-multiple-errors
   (testing "Collects and reports all validation errors"

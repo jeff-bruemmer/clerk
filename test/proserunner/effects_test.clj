@@ -281,26 +281,26 @@
 
 (deftest load-ignore-map-for-filtering-test
   (testing "Returns empty map when skip-ignore is true"
-    (let [payload {:project-ignore #{"foo"} :project-ignore-issues [{:file "test.md"}]}
+    (let [payload {:project-ignore #{"foo"} :project-ignore-issues #{{:file "test.md"}}}
           ignore-map (#'effects/load-ignore-map-for-filtering payload {:skip-ignore true})]
-      (is (= {:ignore #{} :ignore-issues []} ignore-map))))
+      (is (= {:ignore #{} :ignore-issues #{}} ignore-map))))
 
   (testing "Loads ignore map from payload when skip-ignore is false"
-    (let [payload {:project-ignore #{"foo"} :project-ignore-issues [{:file "test.md"}]}
+    (let [payload {:project-ignore #{"foo"} :project-ignore-issues #{{:file "test.md"}}}
           ignore-map (#'effects/load-ignore-map-for-filtering payload {})]
-      (is (= {:ignore #{"foo"} :ignore-issues [{:file "test.md"}]} ignore-map))))
+      (is (= {:ignore #{"foo"} :ignore-issues #{{:file "test.md"}}} ignore-map))))
 
   (testing "Provides empty collections when payload lacks ignore data"
     (let [payload {}
           ignore-map (#'effects/load-ignore-map-for-filtering payload {})]
-      (is (= {:ignore #{} :ignore-issues []} ignore-map)))))
+      (is (= {:ignore #{} :ignore-issues #{}} ignore-map)))))
 
 (deftest select-and-validate-issue-numbers-test
   (testing "Filters issues by numbers and validates"
     (let [issues [{:file "test.md" :line-num 1 :col-num 5}
                   {:file "test.md" :line-num 2 :col-num 10}
                   {:file "test.md" :line-num 3 :col-num 15}]
-          ignore-map {:ignore #{} :ignore-issues []}
+          ignore-map {:ignore #{} :ignore-issues #{}}
           result (#'effects/select-and-validate-issue-numbers issues ignore-map [1 3])]
       (is (= 2 (count (:selected-issues result))))
       (is (= #{1 2 3} (:valid-nums result)))

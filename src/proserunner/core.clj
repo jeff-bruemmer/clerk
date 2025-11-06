@@ -65,6 +65,7 @@
 
   Now uses pure command handlers and effect execution for better testability."
   [args]
+  (conf/ensure-global-config!)
   (let [opts (cli/parse-opts args options :summary-fn fmt/summary)
         {:keys [options errors]} opts
         expanded-options (conf/default (merge opts options))]

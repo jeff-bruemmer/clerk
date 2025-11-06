@@ -68,3 +68,31 @@
                    :config-mode :merged}
           merged (merger/merge-configs global project)]
       (is (= ["default" {:directory "checks"}] (:checks merged))))))
+
+(deftest merge-ignore-issues-extend
+  (testing "Merges ignore-issues in extend mode as set union"
+    (let [global {:ignore-issues #{{:file "a.md" :specimen "x"}}}
+          project {:ignore-issues #{{:file "b.md" :specimen "y"}}
+                   :ignore-mode :extend}
+          merged (merger/merge-configs global project)]
+      (is (= #{{:file "a.md" :specimen "x"}
+               {:file "b.md" :specimen "y"}}
+             (:ignore-issues merged)))))
+
+  (testing "Handles duplicate ignore-issues entries across global and project"
+    (let [issue {:file "a.md" :specimen "test"}
+          global {:ignore-issues #{issue}}
+          project {:ignore-issues #{issue}
+                   :ignore-mode :extend}
+          merged (merger/merge-configs global project)]
+      (is (= 1 (count (:ignore-issues merged))))
+      (is (= #{issue} (:ignore-issues merged))))))
+
+(deftest merge-ignore-issues-replace
+  (testing "Replaces ignore-issues in replace mode"
+    (let [global {:ignore-issues #{{:file "a.md" :specimen "x"}}}
+          project {:ignore-issues #{{:file "b.md" :specimen "y"}}
+                   :ignore-mode :replace}
+          merged (merger/merge-configs global project)]
+      (is (= #{{:file "b.md" :specimen "y"}}
+             (:ignore-issues merged))))))

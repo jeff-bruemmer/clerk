@@ -178,14 +178,21 @@
                                     (map #(str base-path sep % ".edn") files))) checks)
         ;; Load all checks, collecting Results
         load-results (map load-edn! all-check-paths)
-        ;; Extract successful checks
+        ;; Extract successful checks and failed ones
         loaded-checks (keep (fn [r] (when (result/success? r) (:value r))) load-results)
+        failed-checks (keep-indexed (fn [idx r]
+                                       (when (result/failure? r)
+                                         {:path (nth all-check-paths idx)
+                                          :error (:error r)}))
+                                     load-results)
         filtered-checks (mapv #(apply-ignore-filter % project-ignore) loaded-checks)
-        failed-count (- (count all-check-paths) (count loaded-checks))]
+        failed-count (count failed-checks)]
 
     ;; Log warnings for partial failures
     (when (pos? failed-count)
-      (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped.")))
+      (println (str "\nWarning: " failed-count " check(s) failed to load and will be skipped."))
+      (doseq [{:keys [path error]} failed-checks]
+        (println (str "  - " path ": " error))))
 
     ;; Return Failure if no checks loaded successfully
     (if (empty? filtered-checks)
