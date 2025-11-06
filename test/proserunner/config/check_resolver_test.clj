@@ -107,3 +107,24 @@
           check-entries [{:directory (str "." File/separator "empty")}]
           resolved (check-resolver/resolve-check-entries check-entries [] project-root)]
       (is (empty? resolved)))))
+
+(deftest missing-global-check-directories
+  (testing "Identifies missing downloadable global check directories"
+    (let [check-entries ["default" "custom" {:directory "checks"}]
+          global-checks [{:name "custom" :directory "custom" :files ["style"]}]]
+      (is (= #{"default"} (check-resolver/missing-global-check-directories check-entries global-checks)))))
+
+  (testing "Returns empty set when all checks exist"
+    (let [check-entries ["default"]
+          global-checks [{:name "default" :directory "default" :files ["cliches"]}]]
+      (is (empty? (check-resolver/missing-global-check-directories check-entries global-checks)))))
+
+  (testing "Ignores non-downloadable check types"
+    (let [check-entries [{:directory "checks"} {:directory "custom"}]
+          global-checks []]
+      (is (empty? (check-resolver/missing-global-check-directories check-entries global-checks)))))
+
+  (testing "Only identifies 'default' and 'custom' as downloadable"
+    (let [check-entries ["default" "custom" "other-string-ref"]
+          global-checks []]
+      (is (= #{"default" "custom"} (check-resolver/missing-global-check-directories check-entries global-checks))))))

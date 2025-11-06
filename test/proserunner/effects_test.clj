@@ -5,7 +5,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [proserunner.effects :as effects]
             [proserunner.result :as result]
-            [proserunner.scope :as scope]
             [proserunner.test-helpers :refer [with-system-property]]))
 
 (defmacro silently
@@ -246,7 +245,7 @@
       (is (map? opts))))
 
   (testing "update-ignores-by-scope! respects scope option"
-    (let [update-fn identity
+    (let [_update-fn identity
           project-opts {:project true :start-dir "/tmp/test"}
           global-opts {:project false}]
       ;; Verify options structure

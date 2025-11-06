@@ -1,9 +1,9 @@
 (ns proserunner.storage-test
-  (:require [clojure.test :as t :refer [deftest is testing]]
-            [clojure.java.io :as io]
-            [proserunner.storage :as storage]
+  (:require [clojure.java.io :as io]
+            [clojure.test :as t :refer [deftest is testing]]
             [proserunner.result :as result]
-            [proserunner.test-helpers :refer [with-temp-dir silently]])
+            [proserunner.storage :as storage]
+            [proserunner.test-helpers :refer [with-temp-dir]])
   (:import java.io.File
            java.util.concurrent.CountDownLatch))
 
@@ -118,7 +118,7 @@
 
 (deftest save-cache-success
   (testing "save! returns Success and writes cache file"
-    (with-temp-dir [temp-dir "storage-test"]
+    (with-temp-dir [_temp-dir "storage-test"]
       (let [test-result (storage/map->Result
                          {:lines []
                           :lines-hash 123
@@ -170,7 +170,7 @@
 
 (deftest load-cache-success
   (testing "inventory returns cached result for valid cache"
-    (with-temp-dir [temp-dir "storage-test"]
+    (with-temp-dir [_temp-dir "storage-test"]
       ;; We need to set up the cache directory structure properly
       ;; This test requires deeper integration with the caching system
       ;; Skipping for now as it's more of an integration test

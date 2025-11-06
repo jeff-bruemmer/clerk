@@ -1,6 +1,7 @@
 (ns proserunner.result-test
   "Tests for the Result type."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string]
+            [clojure.test :refer [deftest is testing]]
             [proserunner.result :as result]))
 
 (deftest success-creation-test

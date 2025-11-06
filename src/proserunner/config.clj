@@ -7,6 +7,7 @@
              [system :as sys]]
             [proserunner.config.loader :as loader]
             [proserunner.config.manifest :as manifest]
+            [proserunner.config.merger :as merger]
             [proserunner.config.types :refer [map->Config]]
             [proserunner.config.check-resolver :as check-resolver]
             [proserunner.project-config :as project-config]
@@ -280,14 +281,48 @@
       (assoc options :config new-config)
       options)))
 
+(defn- ensure-checks-exist!
+  "Ensures that checks directories referenced by config exist.
+   Downloads default checks if missing and referenced.
+
+   Returns Result<nil> on success, or Failure with error details."
+  [check-entries global-checks]
+  (let [missing (check-resolver/missing-global-check-directories check-entries global-checks)]
+    (if (seq missing)
+      (if (contains? missing "default")
+        (do
+          (println "Default checks not found. Downloading...")
+          (let [default-config (sys/filepath ".proserunner" "config.edn")
+                init-result (initialize-proserunner default-config)]
+            (if (result/success? init-result)
+              (result/ok nil)
+              init-result)))
+        ;; For now, only handle "default". "custom" would need similar logic
+        (result/ok nil))
+      (result/ok nil))))
+
 (defn- load-project-based-config
   "Loads project configuration, merging with global config as appropriate.
+   Ensures referenced check directories exist, downloading if necessary.
 
    Returns Result with Config record on success, or Failure with error details."
   [current-dir]
-  (if-let [project-cfg (project-config/load current-dir)]
-    (result/ok (map->Config {:checks (:checks project-cfg)
-                             :ignore (:ignore project-cfg)}))
+  ;; First, find and read the manifest to get raw check entries
+  (if-let [{:keys [manifest-path]} (manifest/find current-dir)]
+    (let [project-manifest (manifest/read manifest-path)
+          global-cfg (project-config/load-global-config)
+          ;; Merge configs to get final check entries list
+          merged (merger/merge-configs global-cfg project-manifest)
+          check-entries (:checks merged)
+          global-checks (or (:checks global-cfg) [])
+          ;; Ensure checks exist before proceeding
+          ensure-result (ensure-checks-exist! check-entries global-checks)]
+      (if (result/success? ensure-result)
+        ;; Now load the full config (which will resolve checks)
+        (let [project-cfg (project-config/load current-dir)]
+          (result/ok (map->Config {:checks (:checks project-cfg)
+                                   :ignore (:ignore project-cfg)})))
+        ensure-result))
     (result/err "Failed to load project configuration. Check .proserunner/config.edn for errors."
                 {:current-dir current-dir})))
 

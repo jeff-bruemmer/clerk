@@ -2,6 +2,7 @@
   "Resolves check entries (strings/maps) to check definitions."
   (:gen-class)
   (:require [clojure.java.io :as io]
+            [clojure.set :as set]
             [clojure.string :as string]
             [proserunner.config.manifest :as manifest]
             [proserunner.file-utils :as file-utils]
@@ -126,3 +127,18 @@
        (map #(resolve-check-entry % global-checks project-root))
        (remove nil?)
        vec))
+
+(defn missing-global-check-directories
+  "Returns set of missing global check directory names referenced by string entries.
+   Only checks for 'default' and 'custom' as these are downloadable.
+   Map entries (project-local checks) are ignored."
+  [check-entries global-checks]
+  (let [downloadable #{"default" "custom"}
+        string-refs (->> check-entries
+                        (filter string?)
+                        (filter downloadable)
+                        set)
+        existing-dirs (->> global-checks
+                          (map :directory)
+                          set)]
+    (set/difference string-refs existing-dirs)))

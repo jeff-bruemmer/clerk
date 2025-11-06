@@ -1,9 +1,8 @@
 (ns proserunner.checks-test
-  (:require  [proserunner.checks :as check]
-             [proserunner.result :as result]
-             [proserunner.test-helpers :refer [with-temp-dir silently]]
-             [clojure.java.io :as io]
-             [clojure.test :as t :refer [deftest is testing use-fixtures]])
+  (:require [clojure.test :as t :refer [deftest is testing]]
+            [proserunner.checks :as check]
+            [proserunner.result :as result]
+            [proserunner.test-helpers :refer [with-temp-dir silently]])
   (:import java.io.File))
 
 (deftest path

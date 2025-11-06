@@ -95,11 +95,13 @@
    :parallel-lines? (not sequential-lines)})
 
 (defn- load-config-and-dir
-  "Loads configuration and check directory, preferring project config if available."
+  "Loads configuration and check directory, preferring project config if available.
+   Ensures checks are downloaded if needed before loading."
   [config project-config]
   (if (= :project (:source project-config))
-    {:config (types/map->Config {:checks (:checks project-config)
-                                 :ignore (:ignore project-config)})
+    ;; For project config, still need to ensure checks exist via fetch-or-create
+    ;; This triggers auto-download if default checks are missing
+    {:config (conf/fetch-or-create! nil)
      :check-dir ""}
     {:config (conf/fetch-or-create! config)
      :check-dir (sys/check-dir config)}))
