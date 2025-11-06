@@ -10,7 +10,6 @@
              [storage :as store]
              [system :as sys]
              [text :as text]]
-            [proserunner.config.types :as types]
             [clojure.java.io :as io]))
 
 (set! *warn-on-reflection* true)
@@ -106,49 +105,140 @@
     {:config (conf/fetch-or-create! config)
      :check-dir (sys/check-dir config)}))
 
-(defn make
-  "Input combines user-defined options and arguments
-  with the relevant cached results.
+(defn normalize-input-options
+  "Normalizes CLI options for input processing.
 
-  Returns Result<Input> - Success with Input record, or Failure on error."
-  [options]
-  (let [{:keys [file config output code-blocks quoted-text exclude no-cache skip-ignore]} options
-        ;; Handle exclude as vector, single string, or nil for backward compatibility
-        exclude-patterns (cond
+  Converts various option formats to standardized internal representation:
+  - Exclude patterns normalized to vector
+  - Parallel settings determined based on flags
+  - All relevant options passed through
+
+  Returns map with normalized keys."
+  [{:keys [file exclude code-blocks quoted-text output no-cache skip-ignore config check-dir] :as options}]
+  (let [exclude-patterns (cond
                            (vector? exclude) exclude
                            (string? exclude) [exclude]
                            :else [])
-        {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)
+        {:keys [parallel-files? parallel-lines?]} (determine-parallel-settings options)]
+    {:file file
+     :exclude-patterns exclude-patterns
+     :code-blocks code-blocks
+     :quoted-text quoted-text
+     :output output
+     :no-cache no-cache
+     :skip-ignore skip-ignore
+     :parallel-files? parallel-files?
+     :parallel-lines? parallel-lines?
+     :sequential-lines? (:sequential-lines options)
+     :config config
+     :check-dir check-dir}))
 
+(defn build-input-record
+  "Builds Input record from normalized options and loaded data.
+
+  Arguments:
+  - normalized: Normalized options map
+  - loaded: Map with :lines and :checks keys
+  - cached: Cached result from storage (may be nil)
+  - project-ignore: Set of ignore patterns from project config
+  - project-ignore-issues: Set of ignored issue numbers
+
+  Returns Input record."
+  [normalized loaded cached project-ignore project-ignore-issues]
+  (map->Input
+    {:file (:file normalized)
+     :lines (:lines loaded)
+     :config (:config normalized)
+     :check-dir (:check-dir normalized)
+     :checks (:checks loaded)
+     :cached-result cached
+     :output (:output normalized)
+     :no-cache (:no-cache normalized)
+     :parallel-lines (:parallel-lines? normalized)
+     :project-ignore project-ignore
+     :project-ignore-issues project-ignore-issues}))
+
+(defn combine-loaded-data
+  "Combines loaded lines and checks into Input record.
+
+  Retrieves cached results from storage and assembles the Input record.
+
+  Arguments:
+  - normalized: Normalized options map
+  - lines: Vector of Line records
+  - loaded-checks: Map with :checks key
+  - project-ignore: Set of ignore patterns from project config
+  - project-ignore-issues: Set of ignored issue numbers
+
+  Returns Input record."
+  [normalized lines loaded-checks project-ignore project-ignore-issues]
+  (let [cached (store/inventory (:file normalized))
+        loaded {:lines lines :checks (:checks loaded-checks)}]
+    (build-input-record normalized loaded cached project-ignore project-ignore-issues)))
+
+(defn prepare-input-context
+  "Prepares normalized config and ignore patterns from CLI options.
+
+  Loads project configuration and determines ignore patterns based on skip-ignore flag.
+
+  Arguments:
+  - options: Raw CLI options map
+
+  Returns context map with:
+  - :normalized - Normalized options with loaded config
+  - :project-config - Project configuration
+  - :project-ignore - Set of ignore patterns (empty if skip-ignore)
+  - :project-ignore-issues - Set of ignored issue numbers (empty if skip-ignore)"
+  [options]
+  (let [normalized (normalize-input-options options)
         current-dir (System/getProperty "user.dir")
         project-config (project-conf/load current-dir)
-        {:keys [config check-dir]} (load-config-and-dir config project-config)
+        {:keys [config check-dir]} (load-config-and-dir (:config normalized) project-config)
+        project-ignore (if (:skip-ignore normalized) #{} (:ignore project-config))
+        project-ignore-issues (if (:skip-ignore normalized) #{} (:ignore-issues project-config))
+        normalized-with-config (assoc normalized :config config :check-dir check-dir)]
+    {:normalized normalized-with-config
+     :project-config project-config
+     :project-ignore project-ignore
+     :project-ignore-issues project-ignore-issues}))
 
-        project-ignore (if skip-ignore #{} (:ignore project-config))
-        project-ignore-issues (if skip-ignore #{} (:ignore-issues project-config))
+(defn load-input-data
+  "Loads lines and checks from files.
 
-        updated-options (assoc options
-                              :config config
-                              :check-dir check-dir
-                              :project-ignore project-ignore)
-        lines-result (get-lines-from-all-files code-blocks quoted-text file exclude-patterns parallel-files?)]
-    (result/bind
-      lines-result
+  Chains two I/O operations:
+  1. Load lines from files (can fail if files don't exist or can't be read)
+  2. Load checks from config (can fail if check definitions are invalid)
+
+  Both operations return Result. If either fails, the whole operation fails.
+
+  Arguments:
+  - normalized: Normalized options map
+  - project-ignore: Set of ignore patterns from project config
+
+  Returns Result<map> with:
+  - :lines - Vector of Line records
+  - :loaded-checks - Map with :checks and :warnings keys"
+  [normalized project-ignore]
+  (let [lines-result (get-lines-from-all-files
+                       (:code-blocks normalized)
+                       (:quoted-text normalized)
+                       (:file normalized)
+                       (:exclude-patterns normalized)
+                       (:parallel-files? normalized))
+        checks-opts (assoc normalized :project-ignore project-ignore)]
+    (result/bind lines-result
       (fn [lines]
-        (let [checks-result (checks/create updated-options)]
-          (result/bind
-            checks-result
-            (fn [loaded-checks]
-              (result/ok
-                (map->Input
-                  {:file file
-                   :lines lines
-                   :config config
-                   :check-dir check-dir
-                   :checks (:checks loaded-checks)
-                   :cached-result (store/inventory file)
-                   :output output
-                   :no-cache no-cache
-                   :parallel-lines parallel-lines?
-                   :project-ignore project-ignore
-                   :project-ignore-issues project-ignore-issues})))))))))
+        (result/bind (checks/create checks-opts)
+          (fn [loaded-checks]
+            (result/ok {:lines lines :loaded-checks loaded-checks})))))))
+
+(defn make
+  "Builds Input record from CLI options.
+
+  Returns Result<Input>."
+  [options]
+  (let [{:keys [normalized project-ignore project-ignore-issues]} (prepare-input-context options)]
+    (result/fmap (load-input-data normalized project-ignore)
+      (fn [{:keys [lines loaded-checks]}]
+        (combine-loaded-data normalized lines loaded-checks
+                            project-ignore project-ignore-issues)))))

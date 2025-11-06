@@ -3,7 +3,6 @@
   (:gen-class)
   (:require [proserunner.config.types :as types]
             [proserunner.result :as result]
-            [proserunner.error :as error]
             [clojure.edn :as edn]))
 
 (set! *warn-on-reflection* true)

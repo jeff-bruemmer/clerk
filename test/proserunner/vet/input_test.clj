@@ -1,7 +1,12 @@
 (ns proserunner.vet.input-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [proserunner.vet.input :as input]
+            [proserunner.checks]
+            [proserunner.config]
+            [proserunner.project-config]
             [proserunner.result :as result]
+            [proserunner.storage]
+            [proserunner.system]
             [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently with-system-property]]
             [clojure.java.io :as io]
             [clojure.string]
@@ -244,7 +249,7 @@
             ;; Verify correct ignore patterns loaded
             (is (= #{"adverb" "cliche"} (-> input :config :ignore)))
             ;; Verify project-ignore also populated
-            (is (= #{"adverb" "cliche"} (:project-ignore input))))))))
+            (is (= #{"adverb" "cliche"} (:project-ignore input)))))))))
 
 (deftest load-config-and-dir-calls-fetch-or-create-test
   (testing "load-config-and-dir should call fetch-or-create! for both project and global configs"
@@ -297,4 +302,220 @@
         (let [non-project-config (assoc mock-project-config :source :global)]
           (#'input/load-config-and-dir "custom-config" non-project-config)
           (is (= "custom-config" @config-arg)
-              "Should pass config arg through for non-project configs")))))))
+              "Should pass config arg through for non-project configs"))))))
+
+;;; Tests for normalize-input-options (pure function extracted from make)
+
+(deftest normalize-input-options-test
+  (testing "normalizes vector exclude patterns"
+    (let [opts {:exclude ["*.log" "temp/**"]}
+          normalized (input/normalize-input-options opts)]
+      (is (= ["*.log" "temp/**"] (:exclude-patterns normalized)))))
+
+  (testing "normalizes string exclude to vector"
+    (let [opts {:exclude "*.log"}
+          normalized (input/normalize-input-options opts)]
+      (is (= ["*.log"] (:exclude-patterns normalized)))))
+
+  (testing "handles nil exclude"
+    (let [opts {}
+          normalized (input/normalize-input-options opts)]
+      (is (= [] (:exclude-patterns normalized)))))
+
+  (testing "handles nil exclude with other options"
+    (let [opts {:file "test.md"}
+          normalized (input/normalize-input-options opts)]
+      (is (= [] (:exclude-patterns normalized)))))
+
+  (testing "determines parallel settings correctly - both enabled"
+    (let [opts {:parallel-files true :sequential-lines false}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:parallel-files? normalized)))
+      (is (false? (:sequential-lines? normalized)))))
+
+  (testing "sequential-lines disables parallel-lines"
+    (let [opts {:sequential-lines true}
+          normalized (input/normalize-input-options opts)]
+      (is (false? (:parallel-lines? normalized)))))
+
+  (testing "parallel-files without sequential-lines enables both"
+    (let [opts {:parallel-files true}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:parallel-files? normalized)))
+      (is (true? (:parallel-lines? normalized))
+          "parallel-lines should default to true")))
+
+  (testing "preserves file option"
+    (let [opts {:file "test.md"}
+          normalized (input/normalize-input-options opts)]
+      (is (= "test.md" (:file normalized)))))
+
+  (testing "preserves code-blocks option"
+    (let [opts {:code-blocks true}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:code-blocks normalized)))))
+
+  (testing "preserves quoted-text option"
+    (let [opts {:quoted-text true}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:quoted-text normalized)))))
+
+  (testing "preserves output option"
+    (let [opts {:output "json"}
+          normalized (input/normalize-input-options opts)]
+      (is (= "json" (:output normalized)))))
+
+  (testing "preserves no-cache option"
+    (let [opts {:no-cache true}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:no-cache normalized)))))
+
+  (testing "preserves skip-ignore option"
+    (let [opts {:skip-ignore true}
+          normalized (input/normalize-input-options opts)]
+      (is (true? (:skip-ignore normalized)))))
+
+  (testing "preserves all options together"
+    (let [opts {:file "test.md" :code-blocks true :quoted-text true
+                :output "json" :no-cache true :skip-ignore true
+                :exclude ["*.log"] :parallel-files true :sequential-lines false
+                :config {:checks []} :check-dir "/path/to/checks"}
+          normalized (input/normalize-input-options opts)]
+      (is (= "test.md" (:file normalized)))
+      (is (true? (:code-blocks normalized)))
+      (is (true? (:quoted-text normalized)))
+      (is (= "json" (:output normalized)))
+      (is (true? (:no-cache normalized)))
+      (is (true? (:skip-ignore normalized)))
+      (is (= ["*.log"] (:exclude-patterns normalized)))
+      (is (true? (:parallel-files? normalized)))
+      (is (false? (:sequential-lines? normalized)))
+      (is (= {:checks []} (:config normalized)))
+      (is (= "/path/to/checks" (:check-dir normalized))))))
+
+;;; Tests for build-input-record (pure function extracted from make)
+
+(deftest build-input-record-test
+  (testing "builds Input record from normalized options and loaded data"
+    (let [normalized {:file "test.md" :output "group" :no-cache false
+                     :parallel-lines? true :config {:checks []}
+                     :check-dir "/checks"}
+          loaded {:lines [{:text "line1"}] :checks [{:name "check1"}]}
+          cached {:some "cache"}
+          project-ignore #{"ignore1"}
+          project-ignore-issues #{1 2 3}
+          input (input/build-input-record normalized loaded cached
+                                         project-ignore project-ignore-issues)]
+      (is (= "test.md" (:file input)))
+      (is (= [{:text "line1"}] (:lines input)))
+      (is (= [{:name "check1"}] (:checks input)))
+      (is (= {:some "cache"} (:cached-result input)))
+      (is (= "group" (:output input)))
+      (is (false? (:no-cache input)))
+      (is (true? (:parallel-lines input)))
+      (is (= #{"ignore1"} (:project-ignore input)))
+      (is (= #{1 2 3} (:project-ignore-issues input)))))
+
+  (testing "handles nil cached result"
+    (let [normalized {:file "test.md" :output "json" :no-cache true
+                     :parallel-lines? false :config {:checks []}
+                     :check-dir "/checks"}
+          loaded {:lines [] :checks []}
+          input (input/build-input-record normalized loaded nil #{} #{})]
+      (is (nil? (:cached-result input)))
+      (is (= "test.md" (:file input)))
+      (is (= [] (:lines input)))
+      (is (= [] (:checks input)))))
+
+  (testing "preserves config and check-dir from normalized options"
+    (let [normalized {:file "test.md" :config {:checks ["check1"]}
+                     :check-dir "/custom/checks" :output "verbose"
+                     :no-cache false :parallel-lines? true}
+          loaded {:lines [{:text "test"}] :checks [{:name "check1"}]}
+          input (input/build-input-record normalized loaded nil #{} #{})]
+      (is (= {:checks ["check1"]} (:config input)))
+      (is (= "/custom/checks" (:check-dir input)))))
+
+  (testing "handles empty ignore sets"
+    (let [normalized {:file "test.md" :output "group" :no-cache false
+                     :parallel-lines? true :config {} :check-dir ""}
+          loaded {:lines [] :checks []}
+          input (input/build-input-record normalized loaded nil #{} #{})]
+      (is (= #{} (:project-ignore input)))
+      (is (= #{} (:project-ignore-issues input)))))
+
+  (testing "preserves all fields correctly"
+    (let [normalized {:file "doc.md" :output "json" :no-cache true
+                     :parallel-lines? false :config {:checks ["a" "b"]}
+                     :check-dir "/path"}
+          loaded {:lines [{:text "l1"} {:text "l2"}]
+                 :checks [{:name "c1"} {:name "c2"}]}
+          cached {:result "cached"}
+          project-ignore #{"ign1" "ign2"}
+          project-ignore-issues #{5 10 15}
+          input (input/build-input-record normalized loaded cached
+                                         project-ignore project-ignore-issues)]
+      (is (= "doc.md" (:file input)))
+      (is (= [{:text "l1"} {:text "l2"}] (:lines input)))
+      (is (= {:checks ["a" "b"]} (:config input)))
+      (is (= "/path" (:check-dir input)))
+      (is (= [{:name "c1"} {:name "c2"}] (:checks input)))
+      (is (= {:result "cached"} (:cached-result input)))
+      (is (= "json" (:output input)))
+      (is (true? (:no-cache input)))
+      (is (false? (:parallel-lines input)))
+      (is (= #{"ign1" "ign2"} (:project-ignore input)))
+      (is (= #{5 10 15} (:project-ignore-issues input))))))
+
+;;; Tests for combine-loaded-data (helper extracted from make)
+
+(deftest combine-loaded-data-test
+  (testing "combines lines and checks into Input record"
+    (let [normalized {:file "test.md" :config {:checks []} :check-dir "/checks"
+                     :output "group" :no-cache false :parallel-lines? true}
+          lines [{:text "line1" :number 1}]
+          loaded-checks {:checks [{:name "check1"}] :warnings []}
+          project-ignore #{"ignore1"}
+          project-ignore-issues #{1 2}
+          input (input/combine-loaded-data normalized lines loaded-checks
+                                          project-ignore project-ignore-issues)]
+      (is (= "test.md" (:file input)))
+      (is (= [{:text "line1" :number 1}] (:lines input)))
+      (is (= [{:name "check1"}] (:checks input)))
+      (is (= #{"ignore1"} (:project-ignore input)))
+      (is (= #{1 2} (:project-ignore-issues input)))))
+
+  (testing "handles empty lines and checks"
+    (let [normalized {:file "empty.md" :config {} :check-dir ""
+                     :output "json" :no-cache true :parallel-lines? false}
+          lines []
+          loaded-checks {:checks [] :warnings []}
+          input (input/combine-loaded-data normalized lines loaded-checks #{} #{})]
+      (is (= [] (:lines input)))
+      (is (= [] (:checks input)))
+      (is (= #{} (:project-ignore input)))
+      (is (= #{} (:project-ignore-issues input)))))
+
+  (testing "preserves all normalized config fields"
+    (let [normalized {:file "doc.md" :config {:checks ["a"]} :check-dir "/custom"
+                     :output "verbose" :no-cache true :parallel-lines? false}
+          lines [{:text "test"}]
+          loaded-checks {:checks [{:name "c"}] :warnings []}
+          input (input/combine-loaded-data normalized lines loaded-checks
+                                          #{"ign"} #{5})]
+      (is (= {:checks ["a"]} (:config input)))
+      (is (= "/custom" (:check-dir input)))
+      (is (= "verbose" (:output input)))
+      (is (true? (:no-cache input)))
+      (is (false? (:parallel-lines input)))))
+
+  (testing "retrieves cached result from storage"
+    (let [normalized {:file "cached.md" :config {} :check-dir ""
+                     :output "group" :no-cache false :parallel-lines? true}
+          lines []
+          loaded-checks {:checks [] :warnings []}]
+      (with-redefs [proserunner.storage/inventory (fn [file]
+                                                    (is (= "cached.md" file))
+                                                    {:cached "result"})]
+        (let [input (input/combine-loaded-data normalized lines loaded-checks #{} #{})]
+          (is (= {:cached "result"} (:cached-result input))))))))

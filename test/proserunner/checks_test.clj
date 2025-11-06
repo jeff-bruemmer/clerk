@@ -2,7 +2,7 @@
   (:require [clojure.test :as t :refer [deftest is testing]]
             [proserunner.checks :as check]
             [proserunner.result :as result]
-            [proserunner.test-helpers :refer [with-temp-dir silently]])
+            [proserunner.test-helpers :refer [with-temp-dir]])
   (:import java.io.File))
 
 (deftest path

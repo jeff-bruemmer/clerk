@@ -17,7 +17,6 @@
             [proserunner.ignore.audit :as ignore-audit]
             [proserunner.output.format :as output-fmt]
             [proserunner.result :as result]
-            [clojure.java.io :as io]
             [clojure.string :as str]))
 
 (defn project-exists?

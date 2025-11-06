@@ -81,9 +81,8 @@
                 effect-result (effects/execute-command-result command-result)]
             ;; Return options for follow-up activity (like printing time)
             ;; Use result-or-exit to handle failures consistently
-            (do
-              (result/result-or-exit effect-result 1)
-              expanded-options)))))))
+            (result/result-or-exit effect-result 1)
+            expanded-options))))))
 
 (defn run
   "For development; same as main, except `run` doesn't shutdown agents."

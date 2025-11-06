@@ -326,6 +326,42 @@
     (result/err "Failed to load project configuration. Check .proserunner/config.edn for errors."
                 {:current-dir current-dir})))
 
+(defn determine-config-strategy
+  "Determines config loading strategy based on inputs.
+
+  Returns strategy keyword: :custom | :project | :update-stale | :global | :initialize
+
+  Arguments (all booleans):
+  - using-default?: Is the default config path being used?
+  - custom-exists?: Does the custom config file exist?
+  - in-project?: Is the current directory in a project?
+  - config-exists?: Does the global config file exist?
+  - checks-stale?: Are the default checks outdated?
+
+  Project directory takes precedence over stale checks to ensure project-specific
+  config is used even when global checks are outdated."
+  [using-default? custom-exists? in-project? config-exists? checks-stale?]
+  (cond
+    ;; Custom config file specified via -c
+    (and (not using-default?) custom-exists?)
+    :custom
+
+    ;; In project directory (must come before stale check)
+    (and using-default? in-project?)
+    :project
+
+    ;; Using default config and checks need updating
+    (and using-default? config-exists? checks-stale?)
+    :update-stale
+
+    ;; Global config exists
+    config-exists?
+    :global
+
+    ;; First-time initialization
+    :else
+    :initialize))
+
 (defn fetch-or-create!
   "Fetches or creates config file. Will exit on failure.
    Automatically checks for updates to default checks.
@@ -346,25 +382,14 @@
     (when (and using-default? (not checks-dir-exists?))
       (result/result-or-exit (initialize-proserunner default-config)))
 
-    ;; Now that checks exist, determine which config to load
-    (let [config-exists? (.exists (io/file default-config))]
-      (cond
-        ;; Custom config file specified via -c flag
-        (and (not using-default?) (.exists (io/file config-filepath)))
-        (result/result-or-exit (loader/load-config-from-file config-filepath))
-
-        ;; In a project directory - load project config (merges with global)
-        (and using-default? in-project?)
-        (result/result-or-exit (load-project-based-config current-dir))
-
-        ;; Using default config and checks need updating
-        (and using-default? config-exists? (checks-stale?))
-        (update-default-checks default-config)
-
-        ;; Global config exists
-        config-exists?
-        (result/result-or-exit (loader/load-config-from-file default-config))
-
-        ;; Fallback
-        :else
-        (result/result-or-exit (loader/load-config-from-file default-config))))))
+    ;; Determine strategy and execute
+    (let [config-exists? (.exists (io/file default-config))
+          custom-exists? (and config-filepath (.exists (io/file config-filepath)))
+          strategy (determine-config-strategy using-default? custom-exists? in-project?
+                                             config-exists? (checks-stale?))]
+      (case strategy
+        :custom (result/result-or-exit (loader/load-config-from-file config-filepath))
+        :project (result/result-or-exit (load-project-based-config current-dir))
+        :update-stale (update-default-checks default-config)
+        :global (result/result-or-exit (loader/load-config-from-file default-config))
+        :initialize (result/result-or-exit (loader/load-config-from-file default-config))))))
