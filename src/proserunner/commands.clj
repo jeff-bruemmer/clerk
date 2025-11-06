@@ -12,9 +12,9 @@
 
   The effects namespace executes these descriptions."
   (:gen-class)
-  (:require [proserunner.ignore :as ignore]
+  (:require [proserunner.ignore.audit :as ignore-audit]
+            [proserunner.output.format :as output-fmt]
             [proserunner.result :as result]
-            [proserunner.shipping :as ship]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -75,13 +75,16 @@
 
 ;;;; Issue number parsing utilities
 
+(def ^:private positive-number-error
+  "Issue numbers must be positive")
+
 (defn- parse-single-number
   "Parses a single issue number string. Returns the number if valid (positive integer).
   Throws ex-info if invalid."
   [s]
   (let [num (Integer/parseInt (str/trim s))]
     (when (< num 1)
-      (throw (ex-info "Issue numbers must be positive" {:number num})))
+      (throw (ex-info positive-number-error {:number num})))
     num))
 
 (defn- parse-range
@@ -95,9 +98,9 @@
           start-num (Integer/parseInt (str/trim start))
           end-num (Integer/parseInt (str/trim end))]
       (when (< start-num 1)
-        (throw (ex-info "Issue numbers must be positive" {:number start-num})))
+        (throw (ex-info positive-number-error {:number start-num})))
       (when (< end-num 1)
-        (throw (ex-info "Issue numbers must be positive" {:number end-num})))
+        (throw (ex-info positive-number-error {:number end-num})))
       (when (> start-num end-num)
         (throw (ex-info (str "Invalid range '" s "' - start must be less than or equal to end")
                        {:start start-num :end end-num})))
@@ -181,7 +184,7 @@
   "Handler for listing all ignored specimens."
   [opts]
   {:effects [[:ignore/list opts]]
-   :format-fn ship/format-ignored-list})
+   :format-fn output-fmt/ignored-list})
 
 (defn handle-clear-ignored
   "Handler for clearing all ignored specimens."
@@ -219,7 +222,7 @@
   "Handler for auditing ignore entries to find stale ones."
   [opts]
   {:effects [[:ignore/audit opts]]
-   :format-fn ignore/format-audit-report})
+   :format-fn ignore-audit/format-report})
 
 (defn handle-clean-ignores
   "Handler for cleaning stale ignore entries."
@@ -238,7 +241,7 @@
   "Handler for initializing project configuration."
   [_opts]
   {:effects [[:project/init]]
-   :format-fn ship/format-init-project})
+   :format-fn output-fmt/init-project})
 
 (defn handle-add-checks
   "Handler for adding custom checks from a directory."

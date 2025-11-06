@@ -128,22 +128,6 @@
                   {:exception e
                    :exception-type (class e)})))))
 
-;; Conditional construction
-(defn when-result
-  "Returns Success if condition is true, Failure otherwise."
-  [condition value error-msg]
-  (if condition
-    (ok value)
-    (err error-msg)))
-
-(defn validate
-  "Validates a value with a predicate.
-  Returns Success if valid, Failure with error-msg if invalid."
-  [value pred error-msg]
-  (if (pred value)
-    (ok value)
-    (err error-msg {:value value})))
-
 ;; Output helpers
 (defn print-failure
   "Prints failure details without exiting."

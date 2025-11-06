@@ -130,29 +130,6 @@
       (is (= "/tmp/test.txt" (-> r :context :file)))
       (is (= :read (-> r :context :operation))))))
 
-(deftest when-result-test
-  (testing "when-result returns success when condition is true"
-    (let [r (result/when-result true 42 "Should not fail")]
-      (is (result/success? r))
-      (is (= 42 (:value r)))))
-
-  (testing "when-result returns failure when condition is false"
-    (let [r (result/when-result false 42 "Condition failed")]
-      (is (result/failure? r))
-      (is (= "Condition failed" (:error r))))))
-
-(deftest validate-test
-  (testing "validate returns success for valid value"
-    (let [r (result/validate 10 pos? "Must be positive")]
-      (is (result/success? r))
-      (is (= 10 (:value r)))))
-
-  (testing "validate returns failure for invalid value"
-    (let [r (result/validate -5 pos? "Must be positive")]
-      (is (result/failure? r))
-      (is (= "Must be positive" (:error r)))
-      (is (= -5 (-> r :context :value))))))
-
 (deftest chaining-test
   (testing "Complex chaining scenario"
     (let [parse-int (fn [s]

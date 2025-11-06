@@ -56,6 +56,6 @@
 (defn proofread
   [line check]
   (let [{:keys [expressions]} check]
-    (if (empty? expressions)
-      line
-      (reduce #(apply-expression %1 %2 check) line expressions))))
+    (if (seq expressions)
+      (reduce #(apply-expression %1 %2 check) line expressions)
+      line)))

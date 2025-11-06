@@ -30,6 +30,6 @@
                        (partition-by identity)
                        (filter #(> (count %) 1)))
         words (filter #(re-find #"\w" (apply str %)) specimens)]
-    (if (empty? words)
-      line
-      (find-index line check words))))
+    (if (seq words)
+      (find-index line check words)
+      line)))

@@ -289,3 +289,56 @@
   (testing "returns error for zero"
     (let [result (cmd/parse-issue-numbers "0,1,2")]
       (is (result/failure? result)))))
+
+(deftest parse-issue-numbers-determinism-test
+  (testing "parse-issue-numbers is deterministic"
+    (let [test-inputs ["1,2,3" "1-5" "5,1-3,7" "1,1,1" "  1 , 2 , 3  "]]
+      (doseq [input test-inputs]
+        (let [result1 (cmd/parse-issue-numbers input)
+              result2 (cmd/parse-issue-numbers input)]
+          (is (= result1 result2)
+              (str "Parse should be deterministic for: " input))))))
+
+  (testing "Sorted output is consistent across identical unsorted inputs"
+    (let [result1 (cmd/parse-issue-numbers "5,3,1,4,2")
+          result2 (cmd/parse-issue-numbers "3,5,2,1,4")
+          result3 (cmd/parse-issue-numbers "1,2,3,4,5")]
+      (is (= (:value result1) (:value result2) (:value result3) [1 2 3 4 5])))))
+
+(deftest parse-issue-numbers-error-context-test
+  (testing "Error context contains operation metadata"
+    (let [result (cmd/parse-issue-numbers "foo")]
+      (is (result/failure? result))
+      (is (= :parse-issue-numbers (-> result :context :operation)))))
+
+  (testing "Error context distinguishes exception types"
+    (is (= :number-format
+           (-> (cmd/parse-issue-numbers "abc") :context :exception-type)))
+    (is (= :validation
+           (-> (cmd/parse-issue-numbers "5-1") :context :exception-type))))
+
+  (testing "Error context includes input for debugging"
+    (let [result (cmd/parse-issue-numbers "bad-input")]
+      (is (= "bad-input" (-> result :context :input))))))
+
+(deftest parse-single-number-error-messages-test
+  (testing "Negative number uses standard error message"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+          #"Issue numbers must be positive"
+          (#'cmd/parse-single-number "-1"))))
+
+  (testing "Zero uses standard error message"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+          #"Issue numbers must be positive"
+          (#'cmd/parse-single-number "0")))))
+
+(deftest parse-range-error-messages-test
+  (testing "Zero range start uses standard error message"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+          #"Issue numbers must be positive"
+          (#'cmd/parse-range "0-5"))))
+
+  (testing "Zero range end uses standard error message"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+          #"Issue numbers must be positive"
+          (#'cmd/parse-range "5-0")))))

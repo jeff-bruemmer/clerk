@@ -10,13 +10,19 @@
              [commands :as cmd]
              [config :as conf]
              [custom-checks :as custom]
-             [ignore :as ignore]
-             #_{:clj-kondo/ignore [:unused-namespace]}
-             [process :as process]  ; Required for AOT compilation (loaded via requiring-resolve at line 97)
+             [process :as process]
              [project-config :as project-conf]
              [result :as result]
-             [shipping :as ship]
-             [version :as ver]]
+             [scope :as scope]
+             [version :as ver]
+             [vet :as vet]]
+            [proserunner.ignore.audit :as ignore-audit]
+            [proserunner.ignore.context :as ignore-context]
+            [proserunner.ignore.core :as ignore-core]
+            [proserunner.ignore.file :as ignore-file]
+            [proserunner.output.checks :as output-checks]
+            [proserunner.output.prep :as prep]
+            [proserunner.output.usage :as output-usage]
             [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
@@ -47,19 +53,22 @@
 
 ;;; Helper functions for ignore effects
 
+(defn- get-project-root
+  "Returns project root directory from opts or system property."
+  [opts]
+  (or (:start-dir opts) (System/getProperty "user.dir")))
+
 (defn- run-vet-and-get-issues
   "Runs vetting and returns flat list of prepped issues.
    Returns Result with vector of issues or propagates vet failure."
   [opts]
-  (let [vet (requiring-resolve 'proserunner.vet/compute-or-cached)
-        ship (requiring-resolve 'proserunner.shipping/prep)
-        vet-result (vet opts)]
+  (let [vet-result (vet/compute-or-cached opts)]
     (if (result/failure? vet-result)
       vet-result
       (let [payload (:value vet-result)
             results-record (:results payload)
             lines-with-issues (:results results-record)
-            all-prepped-issues (mapcat ship lines-with-issues)]
+            all-prepped-issues (mapcat prep/prep lines-with-issues)]
         (result/ok (vec all-prepped-issues))))))
 
 (defn- read-ignores-by-scope
@@ -67,23 +76,23 @@
    Returns map with :ignore (set) and :ignore-issues (vector)."
   [opts]
   (if (:project opts)
-    (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+    (let [project-root (get-project-root opts)
           config (project-conf/read project-root)]
       {:ignore (or (:ignore config) #{})
        :ignore-issues (or (:ignore-issues config) [])})
-    (ignore/read-ignore-file)))
+    (ignore-file/read)))
 
 (defn- write-ignores-by-scope!
   "Writes ignores map to project or global scope.
    Takes map with :ignore (set) and :ignore-issues (vector)."
   [ignores opts]
   (if (:project opts)
-    (let [project-root (or (:start-dir opts) (System/getProperty "user.dir"))
+    (let [project-root (get-project-root opts)
           config (project-conf/read project-root)]
       (project-conf/write! project-root (assoc config
                                                 :ignore (:ignore ignores)
                                                 :ignore-issues (:ignore-issues ignores))))
-    (ignore/write-ignore-file! ignores)))
+    (ignore-file/write! ignores)))
 
 (defn update-ignores-by-scope!
   "Applies an update function to ignores in project or global scope.
@@ -106,20 +115,13 @@
     (write-ignores-by-scope! updated-ignores opts)
     updated-ignores))
 
-(defn- get-target-info
-  "Returns map with :target keyword and :msg-context string for display."
-  [opts]
-  (let [target (if (:project opts) :project :global)]
-    {:target target
-     :msg-context (if (= target :project) "project" "global")}))
 
 (defn- extract-prepped-issues
   "Extracts and preps issues from vet result payload."
   [payload]
-  (let [ship-prep (requiring-resolve 'proserunner.shipping/prep)
-        results-record (:results payload)
+  (let [results-record (:results payload)
         lines-with-issues (:results results-record)]
-    (mapcat ship-prep lines-with-issues)))
+    (mapcat prep/prep lines-with-issues)))
 
 (defn- load-ignore-map-for-filtering
   "Loads ignore map for filtering, matching what the user saw in output.
@@ -136,7 +138,7 @@
   [all-issues ignore-map issue-nums]
   (let [filtered-issues (if (and (empty? (:ignore ignore-map)) (empty? (:ignore-issues ignore-map)))
                           all-issues
-                          (ignore/filter-issues all-issues ignore-map))
+                          (ignore-core/filter-issues all-issues ignore-map))
         sorted-issues (sort-by (juxt :file :line-num :col-num) filtered-issues)
         total-issues (count sorted-issues)
         selected-issues (cmd/filter-issues-by-numbers sorted-issues issue-nums)
@@ -159,8 +161,8 @@
   [[_ specimen opts]]
   (effect-wrapper
    #(do
-      (ignore/add-to-ignore! specimen opts)
-      (merge {:specimen specimen} (get-target-info opts)))
+      (ignore-context/add! specimen opts)
+      (merge {:specimen specimen} (scope/get-target-info opts)))
    :ignore/add
    {:specimen specimen}))
 
@@ -168,15 +170,15 @@
   [[_ specimen opts]]
   (effect-wrapper
    #(do
-      (ignore/remove-from-ignore! specimen opts)
-      (merge {:specimen specimen} (get-target-info opts)))
+      (ignore-context/remove! specimen opts)
+      (merge {:specimen specimen} (scope/get-target-info opts)))
    :ignore/remove
    {:specimen specimen}))
 
 (defmethod execute-effect :ignore/list
   [[_ opts]]
   (effect-wrapper
-   #(ignore/list-ignored opts)
+   #(ignore-context/list opts)
    :ignore/list
    {}))
 
@@ -184,8 +186,8 @@
   [[_ opts]]
   (effect-wrapper
    #(do
-      (ignore/clear-ignore! opts)
-      (get-target-info opts))
+      (ignore-context/clear! opts)
+      (scope/get-target-info opts))
    :ignore/clear
    {}))
 
@@ -197,13 +199,13 @@
        (if (result/failure? issues-result)
          issues-result
          (let [issues (:value issues-result)
-               ignore-entries (ignore/issues->ignore-entries issues {:granularity :line})
+               ignore-entries (ignore-core/issues->entries issues {:granularity :line})
                _ (update-ignores-by-scope!
                   (fn [ignores]
                     (update ignores :ignore-issues
                             #(vec (concat % ignore-entries))))
                   opts)
-               {:keys [msg-context] :as target-info} (get-target-info opts)]
+               {:keys [msg-context] :as target-info} (scope/get-target-info opts)]
            (println (format "Added %d contextual ignore(s) to %s ignore list."
                            (count ignore-entries)
                            msg-context))
@@ -215,8 +217,7 @@
   [[_ issue-nums opts]]
   (effect-wrapper
    (fn []
-     (let [vet (requiring-resolve 'proserunner.vet/compute-or-cached)
-           vet-result (vet opts)]
+     (let [vet-result (vet/compute-or-cached opts)]
        (if (result/failure? vet-result)
          vet-result
          (let [payload (:value vet-result)
@@ -224,13 +225,13 @@
                ignore-map (load-ignore-map-for-filtering payload opts)
                {:keys [selected-issues total-issues valid-nums invalid-nums]}
                (select-and-validate-issue-numbers all-prepped-issues ignore-map issue-nums)
-               ignore-entries (ignore/issues->ignore-entries selected-issues {:granularity :line})
+               ignore-entries (ignore-core/issues->entries selected-issues {:granularity :line})
                _ (update-ignores-by-scope!
                   (fn [ignores]
                     (update ignores :ignore-issues
                             #(vec (concat % ignore-entries))))
                   opts)
-               {:keys [msg-context] :as target-info} (get-target-info opts)]
+               {:keys [msg-context] :as target-info} (scope/get-target-info opts)]
            ;; Provide feedback
            (when (seq invalid-nums)
              (println (format "Warning: Issue numbers out of range (1-%d): %s"
@@ -256,7 +257,7 @@
   [[_ opts]]
   (effect-wrapper
    #(let [ignores (read-ignores-by-scope opts)
-          audit-result (ignore/audit-ignores ignores)]
+          audit-result (ignore-audit/audit ignores)]
       audit-result)
    :ignore/audit
    {}))
@@ -265,10 +266,10 @@
   [[_ opts]]
   (effect-wrapper
    #(let [ignores (read-ignores-by-scope opts)
-          cleaned-ignores (ignore/remove-stale-ignores ignores)
+          cleaned-ignores (ignore-audit/remove-stale ignores)
           removed-count (- (count (:ignore-issues ignores))
                            (count (:ignore-issues cleaned-ignores)))
-          {:keys [msg-context] :as target-info} (get-target-info opts)]
+          {:keys [msg-context] :as target-info} (scope/get-target-info opts)]
       ;; Write cleaned ignores
       (write-ignores-by-scope! cleaned-ignores opts)
       (println (format "Removed %d stale ignore(s) from %s ignore list."
@@ -310,7 +311,7 @@
   [[_ config]]
   (effect-wrapper
    #(do
-      (ship/print-checks config)
+      (output-checks/print config)
       {:config config})
    :checks/print
    {}))
@@ -319,8 +320,7 @@
 (defmethod execute-effect :file/process
   [[_ opts]]
   (effect-wrapper
-   #(let [process-fn (requiring-resolve 'proserunner.process/proserunner)]
-      (process-fn opts))
+   #(process/proserunner opts)
    :file/process
    {}))
 
@@ -329,8 +329,8 @@
   [[_ opts & [title]]]
   (result/ok
    (if title
-     (ship/print-usage opts title)
-     (ship/print-usage opts))))
+     (output-usage/print opts title)
+     (output-usage/print opts))))
 
 (defmethod execute-effect :version/print
   [[_]]

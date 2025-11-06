@@ -1,6 +1,7 @@
 (ns proserunner.custom-checks-test
   (:require [proserunner.custom-checks :as custom]
-            [proserunner.ignore :as ignore]
+            [proserunner.ignore.context :as ignore-context]
+            [proserunner.ignore.file :as ignore-file]
             [proserunner.project-config :as project-config]
             [proserunner.system :as sys]
             [proserunner.test-helpers :refer [delete-recursively temp-dir-path silently]]
@@ -312,8 +313,8 @@
 
 (deftest add-ignore-to-global-default
   (testing "Adding ignore to global when no project exists"
-    (let [_ (ignore/add-to-ignore! "hopefully" {})
-          ignored (ignore/read-ignore-file)]
+    (let [_ (ignore-context/add! "hopefully" {})
+          ignored (ignore-file/read)]
       (is (contains? (:ignore ignored) "hopefully")))))
 
 (deftest add-ignore-to-project-when-exists
@@ -324,7 +325,7 @@
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
-          _ (ignore/add-to-ignore! "TODO" {:start-dir project-root})
+          _ (ignore-context/add! "TODO" {:start-dir project-root})
 
           ;; Verify added to project config
           config (edn/read-string (slurp manifest-path))]
@@ -338,10 +339,10 @@
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"] :ignore #{} :ignore-mode :extend :config-mode :merged}")
 
-          _ (ignore/add-to-ignore! "FIXME" {:global true :start-dir project-root})
+          _ (ignore-context/add! "FIXME" {:global true :start-dir project-root})
 
           ;; Verify added to global, not project
-          global-ignored (ignore/read-ignore-file)
+          global-ignored (ignore-file/read)
           config (edn/read-string (slurp manifest-path))]
       (is (contains? (:ignore global-ignored) "FIXME"))
       (is (not (contains? (:ignore config) "FIXME"))))))
@@ -351,7 +352,7 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
          #"No project configuration found"
-         (ignore/add-to-ignore! "term" {:project true :start-dir @test-project-root})))))
+         (ignore-context/add! "term" {:project true :start-dir @test-project-root})))))
 
 (deftest remove-ignore-from-project
   (testing "Removing ignore from project config"
@@ -361,7 +362,7 @@
           _ (.mkdirs (io/file proserunner-dir))
           _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
 
-          _ (ignore/remove-from-ignore! "TODO" {:start-dir project-root})
+          _ (ignore-context/remove! "TODO" {:start-dir project-root})
 
           ;; Verify removed from project
           config (edn/read-string (slurp manifest-path))]
@@ -377,10 +378,10 @@
           _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\"} :ignore-mode :extend :config-mode :merged}")
 
           ;; Add to global
-          _ (ignore/add-to-ignore! "global-term" {:global true})
+          _ (ignore-context/add! "global-term" {:global true})
 
           ;; List from project context
-          result (ignore/list-ignored {:start-dir project-root})]
+          result (ignore-context/list {:start-dir project-root})]
 
       ;; Should show both global and project ignores when in :extend mode
       (is (contains? (:ignore result) "global-term"))
@@ -395,7 +396,7 @@
           _ (spit manifest-path "{:checks [\"default\"] :ignore #{\"TODO\" \"FIXME\"} :ignore-mode :extend :config-mode :merged}")
 
           ;; Clear project ignores
-          _ (ignore/clear-ignore! {:start-dir project-root})
+          _ (ignore-context/clear! {:start-dir project-root})
 
           ;; Verify project ignores cleared
           config (edn/read-string (slurp manifest-path))]

@@ -5,8 +5,8 @@
   core.clj to avoid circular dependencies with the effects system."
   (:gen-class)
   (:require [proserunner
+             [output :as output]
              [result :as result]
-             [shipping :as ship]
              [vet :as vet]]))
 
 (set! *warn-on-reflection* true)
@@ -16,24 +16,17 @@
 
   Returns Result with output or Failure on error."
   [options]
-  (try
-    (let [result (vet/compute-or-cached options)]
-      (if (result/failure? result)
-        (do
-          (println "Error:" (:error result))
-          (when (seq (:context result))
-            (println "Context:" (:context result)))
-          (System/exit 1))
-        (ship/out (:value result))))
-    (catch java.util.regex.PatternSyntaxException e
-      (println "Error: Invalid regex pattern in check definition.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))
-    (catch java.io.IOException e
-      (println "Error: File I/O operation failed.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))
-    (catch Exception e
-      (println "Error: An unexpected error occurred during processing.")
-      (println "Details:" (.getMessage e))
-      (System/exit 1))))
+  (result/try-result-with-context
+   (fn []
+     (let [vet-result (vet/compute-or-cached options)]
+       (if (result/failure? vet-result)
+         ;; Propagate vet failure
+         vet-result
+         ;; Process successful vet result
+         (let [output-result (output/out (:value vet-result))]
+           ;; output/out may return Result or nil
+           (if (or (nil? output-result) (result/success? output-result))
+             (result/ok output-result)
+             output-result)))))
+   {:operation :process-file
+    :options options}))

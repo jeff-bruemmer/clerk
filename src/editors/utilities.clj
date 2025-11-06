@@ -74,12 +74,10 @@
   (fn
     [line
      {:keys [file kind specimens message name]}]
-    (if (empty? specimens)
-      line
+    (if (seq specimens)
       (let [re-core (string/join "|" specimens)
             matches (seek (:text line) re-core case-sensitive?)]
-        (if (empty? matches)
-          line
+        (if (seq matches)
           (reduce
            (fn [l match] (add-issue {:file file
                                     :line l
@@ -88,7 +86,9 @@
                                     :kind kind
                                     :message message}))
            line
-           matches))))))
+           matches)
+          line))
+      line)))
 
 (defn create-recommender
   "Returns a function that accepts a boolean to determine whether the
@@ -96,13 +96,11 @@
   [case-sensitive?]
   (fn [line check]
     (let [{:keys [recommendations name kind]} check]
-      (if (empty? recommendations)
-        line
+      (if (seq recommendations)
         (reduce (fn [line {:keys [prefer avoid]}]
                   (let [{:keys [file text]} line
                         matches (seek text avoid case-sensitive?)]
-                    (if (empty? matches)
-                      line
+                    (if (seq matches)
                       (reduce (fn [l match] (add-issue {:file file
                                                        :line l
                                                        :specimen match
@@ -110,12 +108,11 @@
                                                        :kind kind
                                                        :message (str "Prefer: " prefer)}))
                               line
-                              matches))))
+                              matches)
+                      line)))
                 line
-                recommendations)))))
-
-;;; Editor Factory
-;;; Unified creation of all parameterized editors to eliminate duplication
+                recommendations)
+        line))))
 
 (def ^:private editor-specs
   "Specifications for creating standard editors.

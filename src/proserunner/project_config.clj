@@ -9,6 +9,7 @@
             [proserunner.config.check-resolver :as check-resolver]
             [proserunner.edn-utils :as edn-utils]
             [proserunner.file-utils :as file-utils]
+            [proserunner.ignore.file :as ignore-file]
             [proserunner.result :as result]
             [proserunner.system :as sys]))
 
@@ -50,9 +51,7 @@
             global-proserunner-dir (sys/filepath ".proserunner" "")
             normalized-checks (mapv #(normalize-check-entry global-proserunner-dir %)
                                    (:checks parsed-config-map))
-            _ (require 'proserunner.ignore)
-            read-ignore-file (resolve 'proserunner.ignore/read-ignore-file)
-            {:keys [ignore ignore-issues]} (read-ignore-file)]
+            {:keys [ignore ignore-issues]} (ignore-file/read)]
         {:checks normalized-checks
          :ignore ignore
          :ignore-issues ignore-issues})

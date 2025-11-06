@@ -7,8 +7,8 @@
              [effects :as effects]
              [error :as error]
              [fmt :as fmt]
+             [output :as output]
              [result :as result]
-             [shipping :as ship]
              [text :as text]]
             [clojure.string :as str]
             [clojure.tools.cli :as cli]))
@@ -91,7 +91,7 @@
   [& args]
   (let [start-time (System/currentTimeMillis)
         options (assoc (reception args) :start-time start-time)]
-    (ship/time-elapsed options)))
+    (output/time-elapsed options)))
 
 (defn -main
   "Sends args to reception for dispatch, then shuts down agents and prints the time."
@@ -99,6 +99,6 @@
   (let [start-time (System/currentTimeMillis)
         options (assoc (reception args) :start-time start-time)]
     (shutdown-agents)
-    (ship/time-elapsed options)))
+    (output/time-elapsed options)))
 
 

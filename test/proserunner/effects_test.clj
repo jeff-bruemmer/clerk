@@ -4,7 +4,9 @@
   Tests effect execution machinery and effect description structures."
   (:require [clojure.test :refer [deftest is testing]]
             [proserunner.effects :as effects]
-            [proserunner.result :as result]))
+            [proserunner.result :as result]
+            [proserunner.scope :as scope]
+            [proserunner.test-helpers :refer [with-system-property]]))
 
 (defmacro silently
   "Suppresses stdout/stderr during test execution."
@@ -250,3 +252,69 @@
       ;; Verify options structure
       (is (true? (:project project-opts)))
       (is (false? (:project global-opts))))))
+
+(deftest get-project-root-test
+  (testing "Uses :start-dir from opts when present"
+    (is (= "/custom/path" (#'effects/get-project-root {:start-dir "/custom/path"}))))
+
+  (testing "Falls back to user.dir when :start-dir absent"
+    (with-system-property "user.dir" "/fallback/dir"
+      (fn []
+        (is (= "/fallback/dir" (#'effects/get-project-root {}))))))
+
+  (testing "Prefers :start-dir over user.dir when both present"
+    (with-system-property "user.dir" "/system/dir"
+      (fn []
+        (is (= "/custom/dir" (#'effects/get-project-root {:start-dir "/custom/dir"})))))))
+
+(deftest extract-prepped-issues-test
+  (testing "Extracts and preps issues from vet payload"
+    (let [mock-issue {:file "test.md" :name "test-check" :message "Test issue"
+                     :kind :error :specimen "foo" :col-num 5}
+          mock-line-with-issues {:file "test.md" :line-num 1 :text "This is test text"
+                                 :col-num 5 :issues [mock-issue]}
+          payload {:results {:results [mock-line-with-issues]}}
+          issues (#'effects/extract-prepped-issues payload)]
+      (is (seq issues))
+      (is (every? map? issues))
+      (is (= "test.md" (:file (first issues)))))))
+
+(deftest load-ignore-map-for-filtering-test
+  (testing "Returns empty map when skip-ignore is true"
+    (let [payload {:project-ignore #{"foo"} :project-ignore-issues [{:file "test.md"}]}
+          ignore-map (#'effects/load-ignore-map-for-filtering payload {:skip-ignore true})]
+      (is (= {:ignore #{} :ignore-issues []} ignore-map))))
+
+  (testing "Loads ignore map from payload when skip-ignore is false"
+    (let [payload {:project-ignore #{"foo"} :project-ignore-issues [{:file "test.md"}]}
+          ignore-map (#'effects/load-ignore-map-for-filtering payload {})]
+      (is (= {:ignore #{"foo"} :ignore-issues [{:file "test.md"}]} ignore-map))))
+
+  (testing "Provides empty collections when payload lacks ignore data"
+    (let [payload {}
+          ignore-map (#'effects/load-ignore-map-for-filtering payload {})]
+      (is (= {:ignore #{} :ignore-issues []} ignore-map)))))
+
+(deftest select-and-validate-issue-numbers-test
+  (testing "Filters issues by numbers and validates"
+    (let [issues [{:file "test.md" :line-num 1 :col-num 5}
+                  {:file "test.md" :line-num 2 :col-num 10}
+                  {:file "test.md" :line-num 3 :col-num 15}]
+          ignore-map {:ignore #{} :ignore-issues []}
+          result (#'effects/select-and-validate-issue-numbers issues ignore-map [1 3])]
+      (is (= 2 (count (:selected-issues result))))
+      (is (= #{1 2 3} (:valid-nums result)))
+      (is (= 3 (:total-issues result)))
+      (is (empty? (:invalid-nums result)))))
+
+  (testing "Identifies invalid issue numbers"
+    (let [issues [{:file "test.md" :line-num 1 :col-num 5}]
+          ignore-map {:ignore #{} :ignore-issues []}
+          result (#'effects/select-and-validate-issue-numbers issues ignore-map [1 5 10])]
+      (is (= [5 10] (:invalid-nums result)))))
+
+  (testing "Handles empty ignore-map correctly"
+    (let [issues [{:file "test.md" :line-num 1 :col-num 5}]
+          ignore-map {:ignore #{} :ignore-issues []}
+          result (#'effects/select-and-validate-issue-numbers issues ignore-map [1])]
+      (is (= 1 (count (:selected-issues result)))))))
