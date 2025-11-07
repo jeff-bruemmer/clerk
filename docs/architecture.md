@@ -8,7 +8,7 @@ Fast prose linter in Clojure. Modular, functional, data-driven.
 2. **Extensibility**: Checks are data, registry is pluggable
 3. **Speed**: Parallel processing, smart caching, hash-based detection
 4. **Safety**: Result monad everywhere
-5. **UX**: Numbered issues, contextual ignores, deterministic output
+5. **UX**: Numbered issues, contextual ignores, consistent output
 
 ## How it works
 
@@ -109,7 +109,7 @@ Three types:
 
 Ignores remember context. Only suppress exact issue you saw. Move text, ignore stays at old location. Keeps list clean.
 
-**Deterministic numbering**: Issues get stable numbers. Sorted by file:line:col, so [1] is always the same until you fix it. Makes `--ignore-issues 1,3,5` reliable across runs.
+**Issue numbering**: Numbers are sequential display IDs for the current run only. Not preserved across runs. When you ignore issue [56], the system stores the location (file:line:col:specimen), not the number. Next run renumbers remaining issues sequentially.
 
 ### Error handling
 

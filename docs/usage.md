@@ -150,6 +150,8 @@ proserunner --file document.md --ignore-issues 1-5,8  # Ranges work
 proserunner --file document.md --ignore-all           # Ignore everything shown
 ```
 
+Issue numbers are only valid for the current run. The system stores the actual location (file:line:col:specimen), so the next run will renumber remaining issues.
+
 **Scope:**
 - Default: project if `.proserunner/` exists, else global
 - Force with `--global` or `--project`
