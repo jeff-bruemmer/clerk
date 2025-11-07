@@ -25,7 +25,7 @@ $ proserunner --file document.md --ignore-issues 2,3
 ```
 document.md
 [1]  3:13   "quick as lightning" -> A tired phrase.
-[4]  13:8   "Female booksalesman" -> Sexist or ridiculous term.
+[2]  13:8   "Female booksalesman" -> Sexist or ridiculous term.
 ```
 
 ## Quick start
@@ -37,12 +37,12 @@ proserunner --init-project         # Set up project config
 
 ## Why it's useful
 
-- **Numbered issues** - Ignore specific problems by number: `--ignore-issues 1,3,5`. Numbers stay consistent.
+- **Numbered issues** - Ignore specific problems by number: `--ignore-issues 1,3,5`. Numbers are for the current run.
 - **Customizable** - Add checks as EDN files. Toggle them on/off without touching code.
 - **Fast** - Parallel processing, smart caching.
 - **Flexible** - Output formats: table, JSON, EDN, verbose.
 - **Smart ignores** - Run it, fix what matters, ignore the rest by number. Ignores remember location.
-- **Team friendly** - Commit ignore files. Everyone sees the same issue numbers.
+- **Project friendly** - Commit ignore files and custom checks. Everyone sees the same issues.
 
 ## What it checks
 
