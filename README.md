@@ -49,7 +49,7 @@ proserunner --init-project         # Set up project config
 Ships with 22 checks (run `proserunner --checks` to see yours):
 
 | Name               | Kind        | Explanation                                                                                     |
-|--------------------|-------------|-------------------------------------------------------------------------------------------------|
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
 | Annotations        | Case        | Typical markers used to signal problem sites in the text.                                       |
 | Archaisms          | Existence   | Outmoded word or phrase.                                                                        |
 | Clichés            | Existence   | An overused phrase or opinion that betrays a lack of original thought.                          |
@@ -75,7 +75,27 @@ Ships with 22 checks (run `proserunner --checks` to see yours):
 
 [See check definitions →](https://github.com/jeff-bruemmer/proserunner-default-checks)
 
-Add your own as EDN files.
+## Customizing checks
+
+**Turn off checks** - Edit `~/.proserunner/config.edn`:
+
+```clojure
+{:checks
+ [{:name "default"
+   :directory "default"
+   :files ["cliches"
+           ;; "jargon"      ; disabled
+           "corporate-speak"]}]}
+```
+
+**Add custom checks** - Drop `.edn` files in:
+
+- Global: `~/.proserunner/custom/`
+- Project: `.proserunner/checks/`
+
+Or use: `proserunner --add-checks ~/my-checks`
+
+See [Usage docs](docs/usage.md#custom-checks) for check examples.
 
 ## Docs
 
