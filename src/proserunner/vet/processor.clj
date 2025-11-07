@@ -1,5 +1,23 @@
 (ns proserunner.vet.processor
-  "Core check processing engine."
+  "Core check processing engine for applying checks to lines of text.
+
+   Processing flow:
+   1. For each line, apply all checks sequentially via reduce
+   2. Each check dispatches to its registered editor (see editors.registry)
+   3. Editors return the line with any issues attached
+   4. Filter to only lines where issues were found
+
+   Parallel processing:
+   - When parallel? is true, uses pmap to process lines concurrently
+   - Each line processed independently (no shared state)
+   - Good for large files with many lines
+
+   Error handling:
+   - safe-dispatch catches editor errors and logs warnings
+   - Failed checks don't break the entire vetting process
+   - Line is returned unchanged if editor throws exception
+
+   See: editors.registry for editor registration and dispatch mechanism."
   (:gen-class)
   (:require [editors.registry :as registry]))
 

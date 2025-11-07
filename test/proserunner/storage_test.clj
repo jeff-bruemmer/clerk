@@ -272,3 +272,40 @@
               "Should return Failure for corrupted cache")
           (is (= :corrupted-cache (get-in result [:context :type]))
               "Failure context should indicate corrupted cache"))))))
+
+(deftest get-cached-result-is-pure-no-logging
+  (testing "get-cached-result should not print to stdout (pure function)"
+    (with-temp-dir [cache-dir "test-pure"]
+      (.mkdirs (io/file cache-dir))
+
+      ;; Create a corrupted cache file
+      (let [cache-file-path (str cache-dir "/file" (storage/stable-hash "test.md") ".edn")]
+        (spit cache-file-path "{invalid edn syntax")
+
+        ;; Capture stdout to verify no println calls
+        (let [output (with-out-str
+                       (storage/get-cached-result "test.md" {:cache-dir cache-dir}))]
+          (is (empty? output)
+              "Should not print to stdout - function should be pure"))))))
+
+(deftest handle-corrupted-cache-file-returns-context-map
+  (testing "handle-corrupted-cache-file returns detailed context about corruption"
+    (with-temp-dir [cache-dir "test-handler"]
+      (.mkdirs (io/file cache-dir))
+
+      (let [cache-file-path (str cache-dir "/corrupt.edn")
+            cache-file (io/file cache-file-path)
+            _ (spit cache-file-path "{invalid}")
+            read-error {:error "Parse error" :context {}}
+            result (#'storage/handle-corrupted-cache-file cache-file cache-file-path read-error)]
+
+        (is (map? result)
+            "Should return a map with context")
+        (is (= :corrupted-cache (:type result))
+            "Should have :corrupted-cache type")
+        (is (string? (:file result))
+            "Should include file path")
+        (is (boolean? (:deleted? result))
+            "Should include deletion status as boolean")
+        (is (= "Parse error" (:original-error result))
+            "Should include original error")))))

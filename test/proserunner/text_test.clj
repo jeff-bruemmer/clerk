@@ -33,6 +33,13 @@
         (is (text/contains-quoted-text? line-mixed)
             "Mixed curly quotes should be detected as quoted text")))))
 
+(deftest max-file-size-bytes-constant
+  (testing "max-file-size-bytes constant is defined with correct value"
+    (is (= 10000000 text/max-file-size-bytes)
+        "Should be 10,000,000 bytes (10MB in decimal)")
+    (is (= (* 10 1000 1000) text/max-file-size-bytes)
+        "Should be 10 million bytes")))
+
 (deftest file-validation-should-accept-directories
   (testing "File validation should accept both files and directories"
     (let [temp-dir (str (System/getProperty "java.io.tmpdir")
