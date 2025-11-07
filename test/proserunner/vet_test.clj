@@ -66,12 +66,13 @@
         (is (result/success? r1) "First run should succeed"))
 
       ;; Verify cache file exists after first run
-      (let [inventory-result (storage/inventory file)]
-        (is (some? inventory-result)
-            (str "Cache should be created after first run. Got: " (type inventory-result) " = " (pr-str inventory-result))))
+      (let [inventory-result (storage/get-cached-result file opts)]
+        (is (result/success? inventory-result)
+            (str "Cache should be created after first run. Got: " (pr-str inventory-result))))
 
       ;; Second run without no-cache - should use cache
-      (let [cached-data (storage/inventory file)
+      (let [cached-result (storage/get-cached-result file opts)
+            cached-data (when (result/success? cached-result) (:value cached-result))
             result2-res (vet/compute-or-cached opts)
             result2 (:value result2-res)]
         (is (result/success? result2-res) "Second run should succeed")

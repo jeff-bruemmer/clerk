@@ -8,7 +8,7 @@ proserunner.build_artifacts.txt
 .clj-kondo
 .lsp
 .calva
-proserunner
+/proserunner
 
 # Build artifacts
 default.iprof

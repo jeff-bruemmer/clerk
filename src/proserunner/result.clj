@@ -15,8 +15,12 @@
 (set! *warn-on-reflection* true)
 
 ;; Result type definitions
-(defrecord Success [value])
-(defrecord Failure [error context])
+(defrecord Success
+  [value])                    ; Any successful computation result
+
+(defrecord Failure
+  [^String error              ; Human-readable error message
+   context])                  ; Map with additional context (e.g., {:file "x.md" :operation :read})
 
 ;; Constructor functions
 (defn ok

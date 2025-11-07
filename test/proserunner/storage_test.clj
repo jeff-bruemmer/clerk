@@ -73,44 +73,47 @@
 
 ;;; Error handling tests
 
-(deftest mk-tmp-dir-success
-  (testing "mk-tmp-dir! returns Success with directory for new directory"
+(deftest mk-cache-dir-success
+  (testing "mk-cache-dir! returns Success with cache directory"
     (with-temp-dir [parent-dir "storage-test-parent"]
-      (let [new-path (str parent-dir "/new-cache-dir")
-            result (storage/mk-tmp-dir! new-path)]
+      (let [cache-path (str parent-dir "/new-cache-dir")
+            opts {:cache-dir cache-path}
+            result (storage/mk-cache-dir! opts)]
 
         (is (result/success? result)
             "Should return Success when directory is created")
-        (is (instance? File (:value result))
-            "Should return File object")
-        (is (.exists (:value result))
+        (is (string? (:value result))
+            "Should return cache directory path as string")
+        (is (.exists (io/file (:value result)))
             "Directory should exist")
-        (is (.isDirectory (:value result))
+        (is (.isDirectory (io/file (:value result)))
             "Should be a directory")))))
 
-(deftest mk-tmp-dir-already-exists
-  (testing "mk-tmp-dir! returns Success for existing directory"
+(deftest mk-cache-dir-already-exists
+  (testing "mk-cache-dir! returns Success for existing directory"
     (with-temp-dir [temp-dir "storage-test"]
-      (let [result (storage/mk-tmp-dir! temp-dir)]
+      (let [opts {:cache-dir temp-dir}
+            result (storage/mk-cache-dir! opts)]
 
         (is (result/success? result)
             "Should return Success when directory already exists")
-        (is (.exists (:value result))
+        (is (.exists (io/file (:value result)))
             "Directory should exist")))))
 
-(deftest mk-tmp-dir-error-structure
-  (testing "mk-tmp-dir! returns Results with proper structure"
+(deftest mk-cache-dir-error-structure
+  (testing "mk-cache-dir! returns Results with proper structure"
     ;; NOTE: Testing actual permission errors is platform-dependent and unreliable.
     ;; The error handling is verified through code inspection and manual testing.
     ;; Here we verify the function returns proper Result types.
     (with-temp-dir [temp-dir "storage-test"]
       (let [valid-path (str temp-dir "/test-cache")
-            result (storage/mk-tmp-dir! valid-path)]
+            opts {:cache-dir valid-path}
+            result (storage/mk-cache-dir! opts)]
 
         (is (result/success? result)
             "Should return Success for valid path")
-        (is (instance? File (:value result))
-            "Success value should be a File object")
+        (is (string? (:value result))
+            "Success value should be a string path")
 
         ;; Verify error Results have proper structure when they occur
         ;; (actual error scenarios tested in integration/manual testing)
@@ -128,7 +131,7 @@
                           :check-hash 101112
                           :output :simple
                           :results []})
-            save-result (storage/save! test-result)]
+            save-result (storage/save! test-result {})]
 
         (is (result/success? save-result)
             "Should return Success on successful save")))))
@@ -156,9 +159,9 @@
                           :check-hash 101112
                           :output :simple
                           :results []})
-            ;; Mock mk-tmp-dir! to return our read-only directory
-            save-result (with-redefs [storage/mk-tmp-dir! (fn [_] (result/ok cache-dir))]
-                          (storage/save! test-result))]
+            ;; Mock mk-cache-dir! to return our read-only directory
+            save-result (with-redefs [storage/mk-cache-dir! (fn [_] (result/ok cache-dir))]
+                          (storage/save! test-result {}))]
 
         ;; Restore permissions for cleanup
         (.setWritable cache-dir true)
@@ -217,3 +220,92 @@
 
       (is (not (storage/valid-config? cached-result {:mode :permissive}))
           "Should return false for different config hashes"))))
+
+(deftest get-cached-result-returns-failure-on-cache-miss
+  (testing "Returns Failure with :cache-miss when cache doesn't exist"
+    (with-temp-dir [cache-dir "test-cache-miss"]
+      (.mkdirs (io/file cache-dir))
+      (let [result (storage/get-cached-result "nonexistent.md" {:cache-dir cache-dir})]
+        (is (result/failure? result)
+            "Should return Failure for non-existent cache")
+        (is (= :cache-miss (get-in result [:context :type]))
+            "Failure context should indicate cache miss")))))
+
+(deftest get-cached-result-returns-success-on-valid-cache
+  (testing "Returns Success with cached data when cache exists and is valid"
+    (with-temp-dir [cache-dir "test-cache-valid"]
+      (.mkdirs (io/file cache-dir))
+
+      ;; Create a valid cached result with proper file-hash
+      (let [file-name "test.md"
+            file-hash (storage/stable-hash file-name)
+            test-result {:file file-name
+                        :file-hash file-hash
+                        :lines-hash 789012
+                        :config-hash 345678
+                        :check-hash 901234
+                        :output :simple
+                        :results []}
+            _ (storage/save! test-result {:cache-dir cache-dir})
+
+            ;; Try to retrieve it
+            result (storage/get-cached-result file-name {:cache-dir cache-dir})]
+
+        (is (result/success? result)
+            "Should return Success for existing valid cache")
+        (is (map? (:value result))
+            "Success value should be a map")
+        (is (= file-name (:file (:value result)))
+            "Cached result should contain original file data")))))
+
+(deftest get-cached-result-returns-failure-on-corrupted-cache
+  (testing "Returns Failure with :corrupted-cache when cache file is invalid"
+    (with-temp-dir [cache-dir "test-cache-corrupt"]
+      (.mkdirs (io/file cache-dir))
+
+      ;; Create a corrupted cache file (invalid EDN)
+      (let [cache-file-path (str cache-dir "/file" (storage/stable-hash "corrupt.md") ".edn")]
+        (spit cache-file-path "{this is not valid edn")
+
+        (let [result (storage/get-cached-result "corrupt.md" {:cache-dir cache-dir})]
+          (is (result/failure? result)
+              "Should return Failure for corrupted cache")
+          (is (= :corrupted-cache (get-in result [:context :type]))
+              "Failure context should indicate corrupted cache"))))))
+
+(deftest get-cached-result-is-pure-no-logging
+  (testing "get-cached-result should not print to stdout (pure function)"
+    (with-temp-dir [cache-dir "test-pure"]
+      (.mkdirs (io/file cache-dir))
+
+      ;; Create a corrupted cache file
+      (let [cache-file-path (str cache-dir "/file" (storage/stable-hash "test.md") ".edn")]
+        (spit cache-file-path "{invalid edn syntax")
+
+        ;; Capture stdout to verify no println calls
+        (let [output (with-out-str
+                       (storage/get-cached-result "test.md" {:cache-dir cache-dir}))]
+          (is (empty? output)
+              "Should not print to stdout - function should be pure"))))))
+
+(deftest handle-corrupted-cache-file-returns-context-map
+  (testing "handle-corrupted-cache-file returns detailed context about corruption"
+    (with-temp-dir [cache-dir "test-handler"]
+      (.mkdirs (io/file cache-dir))
+
+      (let [cache-file-path (str cache-dir "/corrupt.edn")
+            cache-file (io/file cache-file-path)
+            _ (spit cache-file-path "{invalid}")
+            read-error {:error "Parse error" :context {}}
+            result (#'storage/handle-corrupted-cache-file cache-file cache-file-path read-error)]
+
+        (is (map? result)
+            "Should return a map with context")
+        (is (= :corrupted-cache (:type result))
+            "Should have :corrupted-cache type")
+        (is (string? (:file result))
+            "Should include file path")
+        (is (boolean? (:deleted? result))
+            "Should include deletion status as boolean")
+        (is (= "Parse error" (:original-error result))
+            "Should include original error")))))

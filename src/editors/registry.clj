@@ -1,5 +1,23 @@
 (ns editors.registry
-  "Dynamic editor registry for extensibility."
+  "Dynamic editor registry for extensible check processing.
+
+   Editors are functions that apply checks to lines of text. Each editor
+   handles a specific check 'kind' (e.g., 'existence', 'regex', 'repetition').
+
+   Registration lifecycle:
+   1. Editor function created with signature: [line check] -> line
+   2. Registered via register-editor! with unique kind string
+   3. Dispatched at runtime via dispatch function based on check's :kind
+
+   Thread safety:
+   - Uses atom for concurrent read/write access
+   - Safe to register editors and dispatch simultaneously
+   - Typically editors registered at startup (see proserunner.vet)
+
+   Extensibility:
+   - Add new check types by registering new editors
+   - No changes to core processing logic required
+   - See existing editors in editors.* namespaces for examples"
   (:gen-class))
 
 (set! *warn-on-reflection* true)

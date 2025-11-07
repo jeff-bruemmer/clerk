@@ -15,29 +15,16 @@
 (set! *warn-on-reflection* true)
 
 (defrecord Input
-  [files
-   lines
-   config
-   checks
-   cached-result
-   output
-   no-cache
-   parallel-lines
-   project-ignore
-   project-ignore-issues])
-
-;; Input data structure for vetting operations.
-;; Fields:
-;; - files: Path to file(s) being vetted
-;; - lines: Vector of Line records to vet
-;; - config: Config record with checks and ignore settings
-;; - checks: Vector of Check records to apply
-;; - cached-result: Previously cached Result for incremental computation
-;; - output: Output format specification
-;; - no-cache: Boolean flag to bypass cache
-;; - parallel-lines: Boolean flag for parallel line processing
-;; - project-ignore: Set of project-specific simple ignore patterns
-;; - project-ignore-issues: Set of contextual ignore maps
+  [^String files                ; Path to file(s) being vetted
+   lines                        ; Vector of Line records to vet
+   config                       ; Config record with checks and ignore settings
+   checks                       ; Vector of Check records to apply
+   cached-result                ; Previously cached Result for incremental computation (or nil)
+   ^String output               ; Output format specification ("group", "table", "json", "edn", "verbose")
+   ^Boolean no-cache            ; true to bypass cache and force re-processing
+   ^Boolean parallel-lines      ; true to process lines concurrently using pmap
+   project-ignore               ; Set of project-specific simple ignore patterns (strings)
+   project-ignore-issues])      ; Set of contextual ignore maps with :file, :line-num, :specimen keys
 
 (defn build-ignore-patterns
   "Merges ignore patterns from CLI flags and .proserunnerignore file for consistent filtering."
@@ -77,8 +64,15 @@
   "Get lines from all files, optionally processing files in parallel.
    When parallel? is true, files are processed concurrently using pmap.
 
+   Options map keys:
+   - :code-blocks - Include code blocks when checking
+   - :check-quoted-text - Include quoted text when checking
+   - :file - File or directory path to check
+   - :exclude-patterns - Vector of glob patterns to exclude
+   - :parallel? - Process files concurrently
+
    Returns Result<lines> - Success with all lines, or Failure on error."
-  [code-blocks check-quoted-text file exclude-patterns parallel?]
+  [{:keys [code-blocks check-quoted-text file exclude-patterns parallel?]}]
   (let [ignore-info (build-ignore-patterns file exclude-patterns)
         files-result (filter-valid-files file ignore-info)]
     (if (result/failure? files-result)
@@ -136,15 +130,15 @@
 (defn build-input-record
   "Builds Input record from normalized options and loaded data.
 
-  Arguments:
-  - normalized: Normalized options map
-  - loaded: Map with :lines and :checks keys
-  - cached: Cached result from storage (may be nil)
-  - project-ignore: Set of ignore patterns from project config
-  - project-ignore-issues: Set of ignored issue numbers
+  Context map keys:
+  - :normalized - Normalized options map
+  - :loaded - Map with :lines and :checks keys
+  - :cached - Cached result from storage (may be nil)
+  - :project-ignore - Set of ignore patterns from project config
+  - :project-ignore-issues - Set of ignored issue numbers
 
   Returns Input record."
-  [normalized loaded cached project-ignore project-ignore-issues]
+  [{:keys [normalized loaded cached project-ignore project-ignore-issues]}]
   (map->Input
     {:file (:file normalized)
      :lines (:lines loaded)
@@ -162,6 +156,7 @@
   "Combines loaded lines and checks into Input record.
 
   Retrieves cached results from storage and assembles the Input record.
+  Logs warnings if cache is corrupted.
 
   Arguments:
   - normalized: Normalized options map
@@ -172,9 +167,19 @@
 
   Returns Input record."
   [normalized lines loaded-checks project-ignore project-ignore-issues]
-  (let [cached (store/inventory (:file normalized))
+  (let [cached-result (store/get-cached-result (:file normalized) normalized)
+        ;; Log corruption warnings
+        _ (when (and (result/failure? cached-result)
+                    (= :corrupted-cache (get-in cached-result [:context :type])))
+            (println (str "Warning: Corrupted cache detected for file '" (:file normalized) "'"))
+            (println "Clearing corrupted cache and recomputing..."))
+        cached (result/get-value cached-result)
         loaded {:lines lines :checks (:checks loaded-checks)}]
-    (build-input-record normalized loaded cached project-ignore project-ignore-issues)))
+    (build-input-record {:normalized normalized
+                         :loaded loaded
+                         :cached cached
+                         :project-ignore project-ignore
+                         :project-ignore-issues project-ignore-issues})))
 
 (defn prepare-input-context
   "Prepares normalized config and ignore patterns from CLI options.
@@ -220,11 +225,11 @@
   - :loaded-checks - Map with :checks and :warnings keys"
   [normalized project-ignore]
   (let [lines-result (get-lines-from-all-files
-                       (:code-blocks normalized)
-                       (:quoted-text normalized)
-                       (:file normalized)
-                       (:exclude-patterns normalized)
-                       (:parallel-files? normalized))
+                       {:code-blocks (:code-blocks normalized)
+                        :check-quoted-text (:quoted-text normalized)
+                        :file (:file normalized)
+                        :exclude-patterns (:exclude-patterns normalized)
+                        :parallel? (:parallel-files? normalized)})
         checks-opts (assoc normalized :project-ignore project-ignore)]
     (result/bind lines-result
       (fn [lines]

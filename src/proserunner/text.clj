@@ -9,31 +9,29 @@
 (set! *warn-on-reflection* true)
 
 (defrecord Line
-  [file text line-num code? quoted? issue? issues])
+  [^String file           ; Path to source file (relative to working directory)
+   ^String text           ; Text content of the line
+   ^long line-num         ; Line number in the source file (1-indexed)
+   ^Boolean code?         ; true if line is within a code block
+   ^Boolean quoted?       ; true if line contains quoted text
+   ^Boolean issue?        ; true if any issues were found on this line
+   issues])               ; Vector of Issue records found on this line
 
 (defrecord Issue
-  [file name kind specimen col-num message])
-
-;; Line represents a line of text to be vetted.
-;; Fields:
-;; - file: Path to source file (relative to working directory)
-;; - text: Text content of the line
-;; - line-num: Line number in the source file
-;; - code?: Boolean indicating if line is within a code block
-;; - quoted?: Boolean indicating if line contains quoted text
-;; - issue?: Boolean indicating if any issues were found
-;; - issues: Vector of Issue records found on this line
-
-;; Issue represents a prose issue found during vetting.
-;; Fields:
-;; - file: Path to source file where issue was found
-;; - name: Name of the check that identified this issue
-;; - kind: Kind of check (e.g., existence, substitution, conditional)
-;; - specimen: The problematic text that triggered the issue
-;; - col-num: Column number where issue starts (0-indexed)
-;; - message: Human-readable message describing the issue
+  [^String file           ; Path to source file where issue was found
+   ^String name           ; Name of the check that identified this issue
+   ^String kind           ; Kind of check (e.g., "existence", "recommender", "regex")
+   ^String specimen       ; The problematic text that triggered the issue
+   ^long col-num          ; Column number where issue starts (0-indexed)
+   ^String message])      ; Human-readable message describing the issue
 
 (def supported-files (sorted-set "txt" "tex" "md" "markdown" "org"))
+
+(def max-file-size-bytes
+  "Maximum individual file size in bytes. Uses decimal MB (1MB = 1,000,000 bytes).
+   Directories are exempt from this limit."
+  10000000) ; 10 million bytes = 10MB
+
 (def file-error-msg "file must exist.")
 (def file-size-msg "individual files must be less than 10MB.")
 (def file-type-msg "file must be a txt, md, tex, or org file.")
@@ -49,7 +47,7 @@
   [filepath]
   (let [f (io/file filepath)]
     (or (.isDirectory f)
-        (< (.length f) 10000001))))
+        (< (.length f) (inc max-file-size-bytes)))))
 
 (defn supported-file-type?
   "File should be a text, markdown, tex, or org file."

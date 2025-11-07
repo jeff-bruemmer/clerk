@@ -95,7 +95,12 @@
           _ (.mkdirs (io/file temp-dir))
           _ (spit (str temp-dir File/separator "file1.md") "Line 1")
           _ (spit (str temp-dir File/separator "file2.md") "Line 2")
-          lines-result (#'input/get-lines-from-all-files false false temp-dir [] true)]
+          lines-result (#'input/get-lines-from-all-files
+                        {:code-blocks false
+                         :check-quoted-text false
+                         :file temp-dir
+                         :exclude-patterns []
+                         :parallel? true})]
       (is (result/success? lines-result))
       (let [lines (:value lines-result)]
         (is (= 2 (count lines)))))))
@@ -105,7 +110,12 @@
     (let [temp-dir @test-temp-dir
           _ (.mkdirs (io/file temp-dir))
           _ (spit (str temp-dir File/separator "file1.md") "Line 1")
-          lines-result (#'input/get-lines-from-all-files false false temp-dir [] false)]
+          lines-result (#'input/get-lines-from-all-files
+                        {:code-blocks false
+                         :check-quoted-text false
+                         :file temp-dir
+                         :exclude-patterns []
+                         :parallel? false})]
       (is (result/success? lines-result))
       (let [lines (:value lines-result)]
         (is (= 1 (count lines)))))))
@@ -404,8 +414,12 @@
           cached {:some "cache"}
           project-ignore #{"ignore1"}
           project-ignore-issues #{1 2 3}
-          input (input/build-input-record normalized loaded cached
-                                         project-ignore project-ignore-issues)]
+          input (input/build-input-record
+                  {:normalized normalized
+                   :loaded loaded
+                   :cached cached
+                   :project-ignore project-ignore
+                   :project-ignore-issues project-ignore-issues})]
       (is (= "test.md" (:file input)))
       (is (= [{:text "line1"}] (:lines input)))
       (is (= [{:name "check1"}] (:checks input)))
@@ -421,7 +435,12 @@
                      :parallel-lines? false :config {:checks []}
                      :check-dir "/checks"}
           loaded {:lines [] :checks []}
-          input (input/build-input-record normalized loaded nil #{} #{})]
+          input (input/build-input-record
+                  {:normalized normalized
+                   :loaded loaded
+                   :cached nil
+                   :project-ignore #{}
+                   :project-ignore-issues #{}})]
       (is (nil? (:cached-result input)))
       (is (= "test.md" (:file input)))
       (is (= [] (:lines input)))
@@ -432,7 +451,12 @@
                      :check-dir "/custom/checks" :output "verbose"
                      :no-cache false :parallel-lines? true}
           loaded {:lines [{:text "test"}] :checks [{:name "check1"}]}
-          input (input/build-input-record normalized loaded nil #{} #{})]
+          input (input/build-input-record
+                  {:normalized normalized
+                   :loaded loaded
+                   :cached nil
+                   :project-ignore #{}
+                   :project-ignore-issues #{}})]
       (is (= {:checks ["check1"]} (:config input)))
       (is (= "/custom/checks" (:check-dir input)))))
 
@@ -440,7 +464,12 @@
     (let [normalized {:file "test.md" :output "group" :no-cache false
                      :parallel-lines? true :config {} :check-dir ""}
           loaded {:lines [] :checks []}
-          input (input/build-input-record normalized loaded nil #{} #{})]
+          input (input/build-input-record
+                  {:normalized normalized
+                   :loaded loaded
+                   :cached nil
+                   :project-ignore #{}
+                   :project-ignore-issues #{}})]
       (is (= #{} (:project-ignore input)))
       (is (= #{} (:project-ignore-issues input)))))
 
@@ -453,8 +482,12 @@
           cached {:result "cached"}
           project-ignore #{"ign1" "ign2"}
           project-ignore-issues #{5 10 15}
-          input (input/build-input-record normalized loaded cached
-                                         project-ignore project-ignore-issues)]
+          input (input/build-input-record
+                  {:normalized normalized
+                   :loaded loaded
+                   :cached cached
+                   :project-ignore project-ignore
+                   :project-ignore-issues project-ignore-issues})]
       (is (= "doc.md" (:file input)))
       (is (= [{:text "l1"} {:text "l2"}] (:lines input)))
       (is (= {:checks ["a" "b"]} (:config input)))
@@ -514,8 +547,9 @@
                      :output "group" :no-cache false :parallel-lines? true}
           lines []
           loaded-checks {:checks [] :warnings []}]
-      (with-redefs [proserunner.storage/inventory (fn [file]
-                                                    (is (= "cached.md" file))
-                                                    {:cached "result"})]
+      (with-redefs [proserunner.storage/get-cached-result
+                    (fn [file _opts]
+                      (is (= "cached.md" file))
+                      (proserunner.result/ok {:cached "result"}))]
         (let [input (input/combine-loaded-data normalized lines loaded-checks #{} #{})]
           (is (= {:cached "result"} (:cached-result input))))))))

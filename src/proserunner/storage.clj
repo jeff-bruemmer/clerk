@@ -2,6 +2,7 @@
   "Functions used for storing and retrieving cached results."
   (:gen-class)
   (:require [proserunner
+             [cache-config :as cache-config]
              [checks :as checks]
              [edn-utils :as edn-utils]
              [file-utils :as file-utils]
@@ -13,63 +14,57 @@
 (set! *warn-on-reflection* true)
 
 (defrecord Result
-  [lines
-   lines-hash
-   file-hash
-   config
-   config-hash
-   check-hash
-   output
-   results])
+  [lines                      ; Vector of Line records that were vetted
+   ^String lines-hash         ; SHA-256 hash of lines for cache invalidation
+   ^String file-hash          ; SHA-256 hash of file path for cache identification
+   config                     ; Config record used for vetting (for reference)
+   ^String config-hash        ; SHA-256 hash of config for cache invalidation
+   ^String check-hash         ; SHA-256 hash of checks for cache invalidation
+   ^String output             ; Output format specification ("group", "table", "json", "edn", "verbose")
+   results])                  ; Vector of Line records with issues found (only lines with :issue? true)
 
-;; Cached result structure for storing vetting outcomes.
-;; Fields:
-;; - lines: Vector of Line records that were vetted
-;; - lines-hash: Hash of lines for cache validation
-;; - file-hash: Hash of file path for cache identification
-;; - config: Config record used for vetting
-;; - config-hash: Hash of config for cache validation
-;; - check-hash: Hash of checks for cache validation
-;; - output: Output format specification
-;; - results: Vector of Line records with issues found
+(defn resolve-cache-dir
+  "Resolves cache directory from options.
 
-(defn mk-tmp-dir!
-  "Makes dir in tmp directory to store cached results.
+   Delegates to cache-config for all resolution logic."
+  [opts]
+  (cache-config/resolve-cache-dir-from-opts opts))
 
-  Returns Result<File> - Success with the directory File object, or Failure with error details."
-  [path]
+(defn mk-cache-dir!
+  "Creates cache directory if needed.
+
+   Returns Result with cache directory path string."
+  [opts]
   (result/try-result-with-context
     (fn []
-      (let [p (io/file (file-utils/join-path (System/getProperty "java.io.tmpdir") path))]
+      (let [cache-dir (resolve-cache-dir opts)
+            p (io/file cache-dir)]
         (when-not (.exists p)
           (when-not (.mkdirs p)
-            (throw (ex-info (str "Failed to create cache directory: " (.getPath p))
-                           {:path (.getPath p)
+            (throw (ex-info (str "Failed to create cache directory: " cache-dir)
+                           {:path cache-dir
                             :exists (.exists p)
                             :writable (when (.exists (.getParentFile p))
                                        (.canWrite (.getParentFile p)))}))))
-        p))
-    {:operation :mk-tmp-dir
-     :path path}))
-
-(defn ^:private filepath
-  "Builds filepath to cached results."
-  [dir result]
-  (io/file dir (str "file" (:file-hash result) ".edn")))
+        cache-dir))
+    {:operation :mk-cache-dir}))
 
 (defn save!
-  "Creates a storage directory in the OS's temp directory (if it hasn't already),
-  and writes the result to that storage directory.
+  "Creates cache directory and writes result to cache file.
 
-  Returns Result<Path> - Success with the path to the cached file, or Failure with error details."
-  [result]
+   Takes result (Result record) and opts map (may contain :cache-dir).
+   Returns Result<Path> - Success with path to cached file, or Failure."
+  [result opts]
   (result/bind
-    (mk-tmp-dir! "proserunner-storage")
-    (fn [dir]
+    (mk-cache-dir! opts)
+    (fn [cache-dir]
       (result/try-result-with-context
         (fn []
-          (let [storage-file (filepath dir result)]
-            (file-utils/atomic-spit storage-file (pr-str result))))
+          (let [cache-file (cache-config/make-cache-file-path
+                             cache-dir
+                             (:file-hash result))]
+            (file-utils/atomic-spit cache-file (pr-str result))
+            cache-file))
         {:operation :save-cache
          :file-hash (:file-hash result)}))))
 
@@ -90,31 +85,51 @@
   [data]
   (hash (pr-str data)))
 
-(defn inventory
-  "Checks the storage directory for revelant cached results.
-   Returns false if cache doesn't exist or is corrupted."
-  [file]
-  (let [fp (str (file-utils/join-path (System/getProperty "java.io.tmpdir")
-                                       "proserunner-storage"
-                                       "file")
-                (stable-hash file) ".edn")
-        cache-file (io/file fp)
-        use-cache? (.exists cache-file)]
-    (if use-cache?
-      (let [read-result (edn-utils/read-edn-file-with-readers fp edn-readers)]
+(defn- handle-corrupted-cache-file
+  "Attempts to delete corrupted cache file.
+
+   Arguments:
+   - cache-file: File object for the corrupted cache
+   - file-path: String path to cache file
+   - read-error: Result containing the read error details
+
+   Returns map with:
+   - :type :corrupted-cache
+   - :file cache-file-path
+   - :deleted? boolean indicating if deletion succeeded
+   - :original-error error from read attempt"
+  [^java.io.File cache-file file-path read-error]
+  (let [deleted? (try
+                   (.delete cache-file)
+                   true
+                   (catch Exception _
+                     false))]
+    {:type :corrupted-cache
+     :file file-path
+     :deleted? deleted?
+     :original-error (:error read-error)}))
+
+(defn get-cached-result
+  "Retrieves cached result for file if exists and valid.
+
+   Takes file path and opts map (may contain :cache-dir).
+   Returns Result:
+   - Success with cached record if valid cache exists
+   - Failure with :cache-miss if no cache file
+   - Failure with :corrupted-cache (includes :deleted? status) if unreadable"
+  [file opts]
+  (let [cache-dir (resolve-cache-dir opts)
+        cache-file-path (cache-config/make-cache-file-path
+                          cache-dir
+                          (stable-hash file))
+        cache-file (io/file cache-file-path)]
+    (if-not (.exists cache-file)
+      (result/err "No cache" {:type :cache-miss})
+      (let [read-result (edn-utils/read-edn-file-with-readers cache-file-path edn-readers)]
         (if (result/success? read-result)
-          (:value read-result)
-          (do
-            (println (str "Warning: Corrupted cache detected for file '" file "': " (:error read-result)))
-            (println "Clearing corrupted cache and recomputing...")
-            ;; Delete corrupted cache file
-            (try
-              (.delete cache-file)
-              (catch Exception _del-e
-                ;; Silently ignore deletion errors
-                nil))
-            false)))
-      false)))
+          (result/ok (:value read-result))
+          (result/err "Corrupted cache"
+                     (handle-corrupted-cache-file cache-file cache-file-path read-result)))))))
 
 ;;;; Predicate functions for validating cached results by comparing hashes.
 
@@ -141,4 +156,3 @@
   (=
    (:config-hash cached-result)
    (stable-hash config)))
-

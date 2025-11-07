@@ -55,10 +55,14 @@
   (io/copy stream out-file))
 
 (defn ^:private unzip-file!
-  "Uncompress zip archive.
-    `input` - name of zip archive to be uncompressed.
-    `output` - name of target directory"
-  [input output old-name new-name]
+  "Uncompress zip archive, renaming entries from old-name to new-name.
+
+   Options map keys:
+   - :input - Zip archive content (byte array or input stream source)
+   - :output - Target directory path
+   - :old-name - String to replace in entry names
+   - :new-name - Replacement string for entry names"
+  [{:keys [input output old-name new-name]}]
   (with-open [stream (-> input io/input-stream java.util.zip.ZipInputStream.)]
     (loop [entry (.getNextEntry stream)]
       (when entry
@@ -124,7 +128,10 @@
        (if (result/failure? zip-result)
          (throw (ex-info (:error zip-result) (:context zip-result)))
          (do
-           (unzip-file! (:value zip-result) (sys/home-dir) "proserunner-default-checks-main" ".proserunner")
+           (unzip-file! {:input (:value zip-result)
+                         :output (sys/home-dir)
+                         :old-name "proserunner-default-checks-main"
+                         :new-name ".proserunner"})
            ;; Save the version after successful download
            (when-let [version (get-remote-version)]
              (write-local-version! version))
@@ -331,16 +338,16 @@
 
   Returns strategy keyword: :custom | :project | :update-stale | :global | :initialize
 
-  Arguments (all booleans):
-  - using-default?: Is the default config path being used?
-  - custom-exists?: Does the custom config file exist?
-  - in-project?: Is the current directory in a project?
-  - config-exists?: Does the global config file exist?
-  - checks-stale?: Are the default checks outdated?
+  Context map keys:
+  - :using-default? - Is the default config path being used?
+  - :custom-exists? - Does the custom config file exist?
+  - :in-project? - Is the current directory in a project?
+  - :config-exists? - Does the global config file exist?
+  - :checks-stale? - Are the default checks outdated?
 
   Project directory takes precedence over stale checks to ensure project-specific
   config is used even when global checks are outdated."
-  [using-default? custom-exists? in-project? config-exists? checks-stale?]
+  [{:keys [using-default? custom-exists? in-project? config-exists? checks-stale?]}]
   (cond
     ;; Custom config file specified via -c
     (and (not using-default?) custom-exists?)
@@ -385,8 +392,12 @@
     ;; Determine strategy and execute
     (let [config-exists? (.exists (io/file default-config))
           custom-exists? (and config-filepath (.exists (io/file config-filepath)))
-          strategy (determine-config-strategy using-default? custom-exists? in-project?
-                                             config-exists? (checks-stale?))]
+          strategy (determine-config-strategy
+                     {:using-default? using-default?
+                      :custom-exists? custom-exists?
+                      :in-project? in-project?
+                      :config-exists? config-exists?
+                      :checks-stale? (checks-stale?)})]
       (case strategy
         :custom (result/result-or-exit (loader/load-config-from-file config-filepath))
         :project (result/result-or-exit (load-project-based-config current-dir))

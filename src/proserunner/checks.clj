@@ -13,9 +13,22 @@
 
 (set! *warn-on-reflection* true)
 
-(defrecord Recommendation [prefer avoid])
-(defrecord Expression [re message])
-(defrecord Check [name specimens message kind explanation recommendations expressions])
+(defrecord Recommendation
+  [^String prefer             ; Preferred alternative text to use
+   ^String avoid])            ; Text pattern to avoid
+
+(defrecord Expression
+  [^String re                 ; Regular expression pattern to match
+   ^String message])          ; Message to display when pattern matches
+
+(defrecord Check
+  [^String name               ; Unique identifier for this check (e.g., "passive-voice")
+   specimens                  ; Vector of strings to match (for "existence" and "case" kinds)
+   ^String message            ; Error message to display when check fails (optional for recommenders)
+   ^String kind               ; Check type: "existence", "case", "recommender", "case-recommender", "regex", "repetition"
+   ^String explanation        ; Optional detailed explanation of why this is an issue
+   recommendations            ; Vector of Recommendation records (for "recommender" kinds)
+   expressions])              ; Vector of Expression records (for "regex" kind)
 
 (defn missing-or-empty?
   "Used during check validation to ensure required fields have content."
@@ -82,7 +95,7 @@
   (str check-dir filename ".edn"))
 
 (defn parse-check-edn
-  "Pure function: parses EDN string into a Check record.
+  "Parses EDN string into a Check record.
    Throws on invalid check definition."
   [edn-string]
   (->> edn-string

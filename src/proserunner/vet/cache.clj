@@ -1,5 +1,22 @@
 (ns proserunner.vet.cache
-  "Caching validation and incremental computation."
+  "Caching validation and incremental computation for prose checking.
+
+   Provides three-level caching strategy to minimize redundant work:
+
+   1. Full cache hit - No changes to file, checks, or config
+      → Reuse entire cached result (valid-result?)
+
+   2. Partial cache hit - Only file content changed, checks/config unchanged
+      → Incremental recompute: process only changed lines (compute-changed)
+      → Reuse cached results for unchanged lines
+
+   3. Cache miss - Checks or config changed
+      → Full recompute required
+
+   Line matching uses text content as key, allowing cache to survive line
+   number shifts when lines are inserted/deleted elsewhere in the file.
+
+   See: proserunner.storage for cache persistence."
   (:gen-class)
   (:require [proserunner.storage :as storage]))
 
