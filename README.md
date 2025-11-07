@@ -1,41 +1,52 @@
 # P R O S E R U N N E R
 
-A fast, customizable prose linter.
+Fast prose linter. Finds writing issues, lets you ignore what you don't care about.
+
+## Example
+
+```bash
+$ proserunner --file document.md
+```
 
 ```
-$ proserunner -f resources/drivel.md
+document.md
+[1]  3:13   "quick as lightning" -> A tired phrase.
+[2]  7:15   "software program" -> Pleonastic phrase.
+[3]  11:49  "hopefully" -> Skunked term: consider rephrasing.
+[4]  13:8   "Female booksalesman" -> Sexist or ridiculous term.
+```
 
-3:13	"quick as lightning" -> A tired phrase.
-7:15	"software program" -> Pleonastic phrase.
-11:49	"hopefully" -> Skunked term: consider rephrasing.
-13:8	"Female booksalesman" -> Sexist or ridiculous term.
+Fix what matters, ignore the rest by number:
+
+```bash
+$ proserunner --file document.md --ignore-issues 2,3
+```
+
+```
+document.md
+[1]  3:13   "quick as lightning" -> A tired phrase.
+[4]  13:8   "Female booksalesman" -> Sexist or ridiculous term.
 ```
 
 ## Quick start
 
 ```bash
-# Check a file or directory
-proserunner -f document.md
-
-# Check with output format
-proserunner -f document.md --output json
-
-# Initialize project configuration
-proserunner --init-project
+proserunner --file document.md    # Check a file
+proserunner --init-project         # Set up project config
 ```
 
-## Features
+## Why it's useful
 
-- **Numbered issues** - Every issue gets a number. Ignore specific problems by number with `--ignore-issues 1,3,5`. Deterministic numbering ensures reproducibility.
-- **Customizable** - Add your own checks as EDN data files. Toggle checks on/off without modifying source code.
-- **Fast** - Parallel processing with intelligent caching.
-- **Flexible** - Multiple output formats: table, JSON, EDN, verbose.
-- **Smart ignores** - Contextual ignores remember file+line location. Perfect workflow: run, fix what matters, ignore the rest by number.
-- **Version control friendly** - Commit ignore files to share with your team. Everyone sees the same issue numbers.
+- **Numbered issues** - Ignore specific problems by number: `--ignore-issues 1,3,5`. Numbers stay consistent.
+- **Customizable** - Add checks as EDN files. Toggle them on/off without touching code.
+- **Fast** - Parallel processing, smart caching.
+- **Flexible** - Output formats: table, JSON, EDN, verbose.
+- **Smart ignores** - Run it, fix what matters, ignore the rest by number. Ignores remember location.
+- **Team friendly** - Commit ignore files. Everyone sees the same issue numbers.
 
-Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as data in [separate repo](https://github.com/jeff-bruemmer/proserunner-default-checks).
+## What it checks
 
-## Default checks
+Ships with 22 checks (run `proserunner --checks` to see yours):
 
 | Name               | Kind        | Explanation                                                                                     |
 |--------------------|-------------|-------------------------------------------------------------------------------------------------|
@@ -46,7 +57,9 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 | Corporate-speak    | Existence   | Words and phrases that make you sound like an automaton.                                        |
 | Hedging            | Existence   | Say, or say not. There is no hedging.                                                           |
 | Jargon             | Existence   | Phrases infected with bureaucracy.                                                              |
+| Meta-discourse     | Existence   | Self-referential phrases that add no value.                                                     |
 | Needless-variant   | Recommender | Prefer the more common term.                                                                    |
+| Nominalization     | Recommender | Convert weak noun phrases back to strong verbs.                                                 |
 | Non-words          | Recommender | Identifies sequences of letters masquerading as words, and suggests an actual word.             |
 | Not the negative.  | Recommender | Prefer the word to the negation of the word's opposite.                                         |
 | Overused-adverbs   | Existence   | Use of adverbs that are weak or redundant. Consider using a stronger verb instead.              |
@@ -54,53 +67,18 @@ Inspired by [Proselint](https://github.com/amperser/proselint). Checks stored as
 | Phrasal adjectives | Recommender | Hyphenate phrasal adjectives.                                                                   |
 | Pompous-diction    | Recommender | Pompous diction: use simpler words. From Style: Toward Clarity and Grace by Joseph M. Williams. |
 | Redundancies       | Existence   | Avoid phrases that say the same thing more than once.                                           |
+| Regex              | Regex       | Raw regular expressions.                                                                        |
 | Repetition         | Repetition  | Catches consecutive repetition of words, like _the the_.                                        |
 | Sexism             | Existence   | Sexist or ridiculous terms (like _mail person_ instead of _mail carrier_).                      |
 | Skunked-terms      | Existence   | Words with controversial correct usage that are best avoided.                                   |
+| Weasel-words       | Existence   | Vague phrases that avoid commitment and precision.                                              |
 
-## Documentation
+[See check definitions →](https://github.com/jeff-bruemmer/proserunner-default-checks)
 
-- [Installation](docs/installation.md) - Build and install native binary
-- [Usage](docs/checks.md) - Configuring checks, custom checks, ignoring specimens
-- [Benchmarks](docs/benchmarks.md) - Performance testing
+Add your own as EDN files.
 
-## Basic usage
+## Docs
 
-```bash
-# Check files (output includes numbered issues)
-proserunner -f /path/to/file
-# Output:
-#  document.md
-# [1]  10:5   "utilize" -> Consider using "use" instead.
-# [2]  15:12  "leverage" -> Consider using "use" instead.
-
-# Ignore specific issues by number (creates contextual ignores)
-proserunner -f document.md --ignore-issues 1,3
-proserunner -f document.md -J 1-3,5    # Supports ranges
-# Smart default: uses project config if .proserunner/ exists, else global
-
-# Ignore all current findings (also uses smart default)
-proserunner -f document.md --ignore-all
-proserunner -f document.md -Z --global  # Force global config
-
-# Ignore specific words globally
-proserunner --add-ignore "hopefully"
-
-# Audit and clean up stale ignores
-proserunner --audit-ignores
-proserunner --clean-ignores
-
-# Check quoted text
-proserunner -f document.md --quoted-text
-
-# Exclude files and directories (can specify multiple times or use comma-separated values)
-proserunner -f docs/ --exclude "drafts/*"
-proserunner -f docs/ --exclude "drafts/*" --exclude "*.backup" --exclude "temp.md"
-proserunner -f docs/ --exclude "drafts/*,*.backup,temp.md"
-
-# Exclude multiple patterns with wildcards
-proserunner -f . --exclude "node_modules/*" --exclude "build/*" --exclude "*.log"
-proserunner -f . --exclude "node_modules/*,build/*,*.log"
-```
-
-See [full checks documentation](docs/checks.md).
+- [Installation](docs/installation.md) - Build and install
+- [Usage](docs/usage.md) - Checks, config, ignores
+- [Architecture](docs/architecture.md) - How it works

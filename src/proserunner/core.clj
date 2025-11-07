@@ -18,47 +18,47 @@
 (def options
   "CLI option configuration. See:
   https://github.com/clojure/tools.cli"
-  [["-b" "--code-blocks" "Include code blocks when checking. By default, code blocks are skipped." :default false]
+  [["-b" "--code-blocks" "Include code blocks when checking. Default: skip them." :default false]
    ["-C" "--checks" "List all enabled checks with their types and descriptions."]
-   ["-c" "--config CONFIG" "Use a specific configuration file temporarily, overriding global and project configs." :default nil]
-   ["-q" "--quoted-text" "Include quoted text when checking. By default, quoted text is skipped." :default false]
-   ["-e" "--exclude PATTERN" "Exclude files/dirs matching glob pattern. Can be specified multiple times or as comma-separated values. Example: --exclude \"*.log,temp/**\""
+   ["-c" "--config CONFIG" "Use specific config file, overriding global and project configs." :default nil]
+   ["-q" "--quoted-text" "Include quoted text when checking. Default: skip it." :default false]
+   ["-e" "--exclude PATTERN" "Exclude files/dirs matching glob pattern. Can be used multiple times or comma-separated. Example: --exclude \"*.log,temp/**\""
     :default []
     :assoc-fn (fn [m k v]
                 (let [patterns (if (re-find #"," v)
                                  (str/split v #",\s*")
                                  [v])]
                   (update m k (fnil into []) patterns)))]
-   ["-f" "--file FILE" "File or directory to check. Directories are processed recursively."
+   ["-f" "--file FILE" "File or directory to check. Directories processed recursively."
     :default nil
     :validate [text/file-exists? text/file-error-msg
                text/less-than-10-MB? text/file-size-msg]]
-   ["-h" "--help" "Print this help message with detailed command descriptions."]
-   ["-i" "--ignore IGNORE" "Name of ignore file (default: 'ignore'). Stores specimens to skip during checks." :default "ignore"]
-   ["-n" "--no-cache" "Force re-processing without using cached results. Useful when check definitions change." :default false]
-   ["-s" "--skip-ignore" "Temporarily skip all ignore lists (global and project) for this run." :default false]
-   ["-o" "--output FORMAT" "Output format: 'group' (default, grouped by file), 'edn' (Clojure data), 'json' (JSON data), 'table' (formatted table), 'verbose' (detailed markdown)."
+   ["-h" "--help" "Show this help."]
+   ["-i" "--ignore IGNORE" "Ignore file name (default: 'ignore')." :default "ignore"]
+   ["-n" "--no-cache" "Skip cache, force re-processing." :default false]
+   ["-s" "--skip-ignore" "Skip all ignore lists for this run." :default false]
+   ["-o" "--output FORMAT" "Output format: 'group' (default), 'edn', 'json', 'table', 'verbose'."
     :default "group"]
-   ["-p" "--parallel-files" "Process multiple files concurrently for better performance on large codebases."
+   ["-p" "--parallel-files" "Process files concurrently."
     :default false]
-   ["-S" "--sequential-lines" "Process lines one at a time instead of in parallel. Use for debugging or deterministic results."
+   ["-S" "--sequential-lines" "Process lines sequentially (for debugging)."
     :default false]
-   ["-t" "--timer" "Print elapsed time after completion." :default false]
-   ["-v" "--version" "Print version number."]
-   ["-A" "--add-ignore SPECIMEN" "Add a specimen to the simple ignore list (applies everywhere in all files)."]
-   ["-R" "--remove-ignore SPECIMEN" "Remove a specimen from the simple ignore list."]
-   ["-L" "--list-ignored" "List all ignored specimens (both simple ignores and contextual file+line ignores)."]
-   ["-X" "--clear-ignored" "Remove all ignored specimens from the ignore list. Use with caution."]
-   ["-Z" "--ignore-all" "Ignore all current findings by creating contextual ignores (file+line+specimen specific)."]
-   ["-J" "--ignore-issues NUMBERS" "Ignore specific issues by their number from the output. Supports ranges: 1,3,5-7. Requires --file."]
-   ["-U" "--audit-ignores" "Check for stale ignores (specimens that no longer appear in any checked files)."]
-   ["-W" "--clean-ignores" "Remove stale ignores (specimens that no longer appear in any checked files)."]
-   ["-D" "--restore-defaults" "Download and restore the default check definitions from GitHub."]
-   ["-a" "--add-checks SOURCE" "Import custom check definitions from a local directory. Copies .edn files to your checks directory."]
-   ["-N" "--name NAME" "Custom name for the imported checks directory (used with --add-checks)."]
-   ["-G" "--global" "Apply operation to global config in ~/.proserunner/ (user-wide settings)."]
-   ["-P" "--project" "Apply operation to project config in .proserunner/ (repository-specific settings)."]
-   ["-I" "--init-project" "Initialize a .proserunner/ directory in the current directory with default project configuration."]])
+   ["-t" "--timer" "Print elapsed time." :default false]
+   ["-v" "--version" "Show version."]
+   ["-A" "--add-ignore SPECIMEN" "Add specimen to ignore list (applies everywhere)."]
+   ["-R" "--remove-ignore SPECIMEN" "Remove specimen from ignore list."]
+   ["-L" "--list-ignored" "List all ignored specimens."]
+   ["-X" "--clear-ignored" "Clear all ignored specimens. Use with caution."]
+   ["-Z" "--ignore-all" "Ignore all current findings (creates contextual ignores)."]
+   ["-J" "--ignore-issues NUMBERS" "Ignore issues by number. Supports ranges: 1,3,5-7. Requires --file."]
+   ["-U" "--audit-ignores" "Find stale ignores."]
+   ["-W" "--clean-ignores" "Remove stale ignores."]
+   ["-D" "--restore-defaults" "Download fresh default checks from GitHub."]
+   ["-a" "--add-checks SOURCE" "Import checks from directory."]
+   ["-N" "--name NAME" "Custom name for imported checks (use with --add-checks)."]
+   ["-G" "--global" "Apply to global config (~/.proserunner/)."]
+   ["-P" "--project" "Apply to project config (.proserunner/)."]
+   ["-I" "--init-project" "Create .proserunner/ with default config."]])
 
 (defn reception
   "Parses command line `args` and applies the relevant function.

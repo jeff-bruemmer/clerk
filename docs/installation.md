@@ -1,8 +1,8 @@
 # Installation
 
-## Native binary (recommended)
+## Native binary (fastest)
 
-Build and install the native binary for fastest startup (~50ms):
+Builds a ~20MB binary with ~50ms startup:
 
 ```bash
 git clone https://github.com/jeff-bruemmer/proserunner.git
@@ -10,35 +10,35 @@ cd proserunner
 bb install  # Builds and installs to ~/.local/bin
 ```
 
-**Requirements:**
+**You'll need:**
 
 - Babashka
 - GraalVM 25+ with native-image
-- Minimum 8GB RAM
+- 8GB RAM for building
 
-See [building.md](building.md) for detailed setup instructions.
-
-**System-wide installation**
+**Build commands:**
 
 ```bash
-bb install-system  # Installs to /usr/local/bin (requires sudo)
+bb build             # Build native binary
+bb install           # Build + install to ~/.local/bin
+bb install-system    # Install to /usr/local/bin (needs sudo)
 ```
 
 ## Run without installing
 
-Use Clojure CLI directly:
+Just use Clojure directly:
 
 ```bash
 git clone https://github.com/jeff-bruemmer/proserunner.git
 cd proserunner
-clojure -M:run -f /path/to/file.md
+clojure -M:run --file /path/to/file.md
 ```
 
-**Requirements:**
+**You'll need:**
 
 - Java
 - Clojure CLI
 
-## Pre-built Binaries
+## Pre-built binaries
 
-Download from [releases](https://github.com/jeff-bruemmer/proserunner/releases), make executable, move to PATH.
+Grab one from [releases](https://github.com/jeff-bruemmer/proserunner/releases), make it executable, toss it in your PATH.
