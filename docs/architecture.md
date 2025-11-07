@@ -34,12 +34,14 @@ Options → Validate → Input → Vet (cached) → Output
 4. **Output** ([output.clj](../src/proserunner/output.clj)): Format and display
 
 **Key data structures:**
+
 - `Issue` - Single finding (file, line, col, specimen, message)
 - `Line` - Text line with issues attached
 - `Result` - Success/Failure wrapper
 - `Config` - Merged config with enabled checks
 
 **Performance** - two strategies (pick one):
+
 - Default: parallel files, sequential lines (best for many files)
 - `--parallel-lines --sequential-files`: parallel lines, sequential files (best for one big file)
 
@@ -81,6 +83,7 @@ Layered system (project overrides global):
 First run downloads default checks from GitHub.
 
 **Storage:**
+
 - `~/.proserunner/checks/` - Global checks
 - `~/.proserunner/config.edn` - Global config
 - `~/.proserunner/ignore.edn` - Global ignores

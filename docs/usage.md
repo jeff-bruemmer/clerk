@@ -42,7 +42,7 @@ Ships with 18 checks. See what's enabled: `proserunner --checks`
 Full list: [github.com/jeff-bruemmer/proserunner-default-checks](https://github.com/jeff-bruemmer/proserunner-default-checks)
 
 | Name               | Kind        | Explanation                                                                                     |
-|--------------------|-------------|-------------------------------------------------------------------------------------------------|
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
 | Annotations        | Case        | Typical markers used to signal problem sites in the text.                                       |
 | Archaisms          | Existence   | Outmoded word or phrase.                                                                        |
 | Clichés            | Existence   | An overused phrase or opinion that betrays a lack of original thought.                          |
@@ -66,25 +66,27 @@ Full list: [github.com/jeff-bruemmer/proserunner-default-checks](https://github.
 
 Checks are EDN files. Different types do different things:
 
-| Type             | What it does                        |
-| :--------------- | :---------------------------------- |
-| existence        | Flag specific words/phrases         |
-| case             | Same but case-sensitive             |
+| Type             | What it does                              |
+| :--------------- | :---------------------------------------- |
+| existence        | Flag specific words/phrases               |
+| case             | Same but case-sensitive                   |
 | recommender      | Suggest replacements (avoid X → prefer Y) |
-| case-recommender | Recommender but case-sensitive      |
-| repetition       | Catch "the the" style duplication   |
-| regex            | Custom regex patterns               |
+| case-recommender | Recommender but case-sensitive            |
+| repetition       | Catch "the the" style duplication         |
+| regex            | Custom regex patterns                     |
 
 ## Quoted text
 
 By default, quoted text gets skipped. Checks your narrative, ignores dialogue.
 
 Example:
+
 ```
 She said "obviously this is wrong" and walked away.
 ```
 
 Gets checked as:
+
 ```
 She said                         and walked away.
 ```
@@ -153,6 +155,7 @@ proserunner --file document.md --ignore-all           # Ignore everything shown
 Issue numbers are only valid for the current run. The system stores the actual location (file:line:col:specimen), so the next run will renumber remaining issues.
 
 **Scope:**
+
 - Default: project if `.proserunner/` exists, else global
 - Force with `--global` or `--project`
 
@@ -166,12 +169,14 @@ proserunner --clean-ignores  # Remove them
 ### Edit manually
 
 Global (`~/.proserunner/ignore.edn`):
+
 ```clojure
 ["hopefully"  ; Simple
  {:file "docs/api.md" :line-num 42 :specimen "utilize"}]  ; Contextual
 ```
 
 Project (`.proserunner/config.edn`):
+
 ```clojure
 {:ignore #{"project-term"
            {:file "docs/internal.md" :line-num 5 :specimen "utilize"}}
@@ -219,23 +224,28 @@ Creates `.proserunner/` with `config.edn` and `checks/`.
 ```
 
 **check-sources:**
+
 - `"default"` - Global checks (`~/.proserunner/default/`)
 - `"checks"` - Project checks (`.proserunner/checks/`)
 - Or any path (relative/absolute)
 
 **ignore:**
+
 - Strings to ignore everywhere
 - Case-insensitive
 
 **ignore-issues:**
+
 - Specific file/line/specimen combos
 - Auto-created by `--ignore-issues`
 
 **ignore-mode:**
+
 - `:extend` - Merge with global
 - `:replace` - Project only
 
 **config-mode:**
+
 - `:merged` - Merge with global
 - `:project-only` - Project only
 
@@ -254,12 +264,14 @@ Proserunner caches results for speed. Only re-checks files when content, config,
 **Location:** `~/.proserunner/cache/`
 
 **Clear cache:**
+
 ```bash
 proserunner --file document.md --no-cache  # Skip cache for this run
 rm -rf ~/.proserunner/cache/               # Delete cache manually
 ```
 
 **Cache invalidation triggers:**
+
 - File content changes
 - Config changes (enabled checks, settings)
 - Check definitions change
@@ -275,6 +287,7 @@ proserunner --add-checks ./checks --name style  # Custom name
 ```
 
 Or drop `.edn` files in:
+
 - Global: `~/.proserunner/custom/`
 - Project: `.proserunner/checks/`
 
