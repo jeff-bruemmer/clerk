@@ -514,8 +514,9 @@
                      :output "group" :no-cache false :parallel-lines? true}
           lines []
           loaded-checks {:checks [] :warnings []}]
-      (with-redefs [proserunner.storage/inventory (fn [file]
-                                                    (is (= "cached.md" file))
-                                                    {:cached "result"})]
+      (with-redefs [proserunner.storage/get-cached-result
+                    (fn [file _opts]
+                      (is (= "cached.md" file))
+                      (proserunner.result/ok {:cached "result"}))]
         (let [input (input/combine-loaded-data normalized lines loaded-checks #{} #{})]
           (is (= {:cached "result"} (:cached-result input))))))))

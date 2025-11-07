@@ -21,6 +21,10 @@
   [["-b" "--code-blocks" "Include code blocks when checking. Default: skip them." :default false]
    ["-C" "--checks" "List all enabled checks with their types and descriptions."]
    ["-c" "--config CONFIG" "Use specific config file, overriding global and project configs." :default nil]
+   ["-d" "--cache-dir DIR" "Cache directory location. Priority: CLI > $PROSERUNNER_CACHE_DIR > $XDG_CACHE_HOME/proserunner > $TMPDIR/proserunner-storage"
+    :default nil
+    :validate [(fn [s] (and s (not (str/blank? s))))
+               "Cache directory cannot be empty"]]
    ["-q" "--quoted-text" "Include quoted text when checking. Default: skip it." :default false]
    ["-e" "--exclude PATTERN" "Exclude files/dirs matching glob pattern. Can be used multiple times or comma-separated. Example: --exclude \"*.log,temp/**\""
     :default []
@@ -98,5 +102,3 @@
         options (assoc (reception args) :start-time start-time)]
     (shutdown-agents)
     (output/time-elapsed options)))
-
-

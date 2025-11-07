@@ -172,7 +172,8 @@
 
   Returns Input record."
   [normalized lines loaded-checks project-ignore project-ignore-issues]
-  (let [cached (store/inventory (:file normalized))
+  (let [cached-result (store/get-cached-result (:file normalized) normalized)
+        cached (when (result/success? cached-result) (:value cached-result))
         loaded {:lines lines :checks (:checks loaded-checks)}]
     (build-input-record normalized loaded cached project-ignore project-ignore-issues)))
 

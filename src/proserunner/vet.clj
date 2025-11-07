@@ -42,9 +42,9 @@
                       :results (processor/process checks lines parallel-lines)}))
 
 (defn- compute-and-store
-  [inputs]
+  [inputs options]
   (let [result (compute inputs)]
-    (store/save! result)
+    (store/save! result options)
     result))
 
 (defn compute-or-cached
@@ -60,16 +60,16 @@
             results
             (cond
               (:no-cache inputs)
-              (compute-and-store inputs)
+              (compute-and-store inputs options)
 
               (cache/valid-result? inputs)
               (assoc cached-result :output output)
 
               (cache/valid-checks? inputs)
               (let [result (cache/compute-changed inputs processor/process)]
-                (store/save! result)
+                (store/save! result options)
                 result)
 
               :else
-              (compute-and-store inputs))]
+              (compute-and-store inputs options))]
         (result/ok (assoc inputs :results results))))))
