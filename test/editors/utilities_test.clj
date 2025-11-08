@@ -109,6 +109,36 @@
       (is (false? (:issue? result)))
       (is (empty? (:issues result))))))
 
+(deftest test-column-numbering
+  (testing "Column numbers point to the start of specimens"
+    (let [text "You should utilize this hopefully dead artifact again."
+          line (text/map->Line {:file "test.md"
+                                :text text
+                                :line-num 1
+                                :code? false
+                                :quoted? false
+                                :issue? false
+                                :issues []})
+          recommender (util/create-recommender false)
+          check {:name "test-recommender"
+                 :kind "recommender"
+                 :recommendations [{:avoid "utilize"
+                                    :prefer "use"}
+                                   {:avoid "hopefully"
+                                    :prefer "perhaps"}]}
+          result (recommender line check)]
+      (is (:issue? result))
+      (is (= 2 (count (:issues result))))
+      ;; Find the utilize issue
+      (let [utilize-issue (first (filter #(= "utilize" (:specimen %)) (:issues result)))
+            hopefully-issue (first (filter #(= "hopefully" (:specimen %)) (:issues result)))]
+        ;; "utilize" starts at position 11 (0-indexed)
+        (is (= 11 (:col-num utilize-issue))
+            (str "Expected 'utilize' at column 11, got " (:col-num utilize-issue)))
+        ;; "hopefully" starts at position 24 (0-indexed)
+        (is (= 24 (:col-num hopefully-issue))
+            (str "Expected 'hopefully' at column 24, got " (:col-num hopefully-issue)))))))
+
 (deftest test-create-recommender
   (testing "Recommender finds and suggests replacements"
     (let [recommender (util/create-recommender false)
@@ -127,8 +157,8 @@
       (is (:issue? result))
       (is (pos? (count (:issues result))))
       (let [issue (first (:issues result))]
-        ;; Specimen may include boundary characters
-        (is (re-find #"utilize" (:specimen issue)))
+        ;; Specimen should be exactly "utilize" without boundary characters
+        (is (= "utilize" (:specimen issue)))
         (is (re-find #"Prefer: use" (:message issue))))))
 
   (testing "Recommender with no matches"

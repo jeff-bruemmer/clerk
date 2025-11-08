@@ -19,7 +19,7 @@
             (let [{:keys [file name specimen col-num message kind]} issue]
               (conj l {:file file
                        :line-num line-num
-                       :col-num col-num
+                       :col-num (inc col-num)
                        :specimen (string/trim specimen)
                        :line-text (string/trim text)
                        :name (string/capitalize (string/replace name "-" " "))

@@ -34,7 +34,7 @@
       []
       (let [matches (re-seq p text)]
         (if matches
-          (into [] (map first matches))
+          (into [] (map second matches))
           [])))))
 
 (defn find-column-position
