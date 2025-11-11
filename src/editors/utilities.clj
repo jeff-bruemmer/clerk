@@ -12,7 +12,7 @@
    Returns nil if pattern is invalid."
   [re-payload case-sensitive?]
   (try
-    (let [ignore-chars "[^\\[\\#-_]"
+    (let [ignore-chars "(?:^|[^\\[\\#-_])"
           boundary "\\b("
           leftb (if case-sensitive?
                   ;; Ignore matches in markdown/org links
